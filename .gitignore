@@ -1,0 +1,9 @@
+Archive
+.DS_Store
+/.gradle/
+/build/
+/cnf/cache/
+/generated/
+generated/
+bin/
+bin_test/
