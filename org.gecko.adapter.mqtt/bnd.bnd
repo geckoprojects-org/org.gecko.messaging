@@ -1,0 +1,20 @@
+-buildpath: \
+	org.gecko.osgi.messaging;version=project,\
+	org.eclipse.paho.client.mqttv3;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.gecko.core.pushstream;version=latest,\
+	org.osgi.framework
+
+-testpath: \
+	${junit}
+
+javac.source: 1.8
+javac.target: 1.8
+
+Bundle-Version: 1.0.5.SNAPSHOT
+Private-Package: org.gecko.adapter.mqtt
+Bundle-Vendor: Data In Motion Consulting
+Bundle-Name: MQTT Messaging Implementation
+Bundle-License: Eclipse Public License v1.0
+Bundle-Copyright: Data In Motion Consulting (c) 2017

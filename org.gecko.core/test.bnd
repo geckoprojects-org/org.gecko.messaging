@@ -1,0 +1,4 @@
+Bundle-Version: 2.1.0-SNAPSHOT
+Export-Package: org.gecko.core.tests
+Bundle-Name: Gecko Core Test
+Bundle-Description: Test additions for integration testing in Gecko

@@ -1,0 +1,15 @@
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.event;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.converter;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.service.component;version=latest,\
+	org.gecko.core.pushstream;version=latest,\
+	org.gecko.osgi.messaging;version=project
+
+Bundle-Version: 3.1.0.SNAPSHOT
+
+Provide-Capability: osgi.service;objectClass:List<String>="org.osgi.util.pushstream.PushStream"

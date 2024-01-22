@@ -1,0 +1,6 @@
+Private-Package: \
+	org.gecko.adapter.amqp.pubsub,\
+	org.gecko.adapter.amqp.pubsub.consumer,\
+	org.gecko.adapter.amqp.consumer
+Bundle-Name: Gecko AMQP message adapter message Publish and Subscribe expension
+Bundle-Description: Message adapter implementation for the AMQP protocol

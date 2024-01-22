@@ -1,0 +1,17 @@
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	com.rabbitmq.client;version=latest,\
+	org.gecko.osgi.messaging;version=latest,\
+	org.gecko.core.pushstream;version=latest,\
+	org.gecko.core.api;version=latest
+
+Bundle-Version: 2.2.0.SNAPSHOT
+
+Bundle-Copyright: Data In Motion Consulting GmbH
+Bundle-License: Eclipse Public License v1.0
+Bundle-Vendor: Data In Motion Consulting GmbH
+-sub: *.bnd
