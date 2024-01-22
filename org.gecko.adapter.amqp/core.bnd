@@ -1,0 +1,10 @@
+Bundle-Name: Gecko AMQP message adapter
+Bundle-Description: Message adapter implementation for the AMQP protocol
+
+
+Private-Package: \
+	org.gecko.adapter.amqp,\
+	org.gecko.adapter.amqp.consumer
+Export-Package: \
+	org.gecko.adapter.amqp.client,\
+	org.gecko.adapter.amqp.jmx

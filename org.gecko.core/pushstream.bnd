@@ -1,0 +1,8 @@
+Bundle-Version: 1.1.0.SNAPSHOT
+Export-Package: \
+	org.gecko.core.pushstream,\
+	org.gecko.core.pushstream.policy,\
+	org.gecko.core.pushstream.source,\
+	org.gecko.core.pushstream.distributed
+Bundle-Name: Gecko Core Pushstreams
+Bundle-Description: Pushstream additions for Gecko

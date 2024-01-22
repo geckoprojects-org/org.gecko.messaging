@@ -1,0 +1,6 @@
+Bundle-Version: 1.0.1.SNAPSHOT
+Export-Package: \
+	org.gecko.core.resources,\
+	org.gecko.core.resources.file
+Bundle-Name: Gecko Core Resource
+Bundle-Description: Additional resource handling for watching files and folders

@@ -115,9 +115,16 @@ org.osgi:osgi.cmpn:7.0.0
 
 org.slf4j:slf4j-simple:1.7.36
 org.slf4j:slf4j-api:1.7.36
+com.fasterxml.jackson.core:jackson-core:2.13.2
+com.fasterxml.jackson.core:jackson-databind:2.13.2
+com.fasterxml.jackson.core:jackson-annotations:2.13.2
 
 org.geckoprojects.bnd:org.gecko.bnd.dimc.library:1.4.4
 org.geckoprojects.bnd:org.gecko.bnd.jacoco.library:1.4.4
 org.geckoprojects.bnd:org.gecko.bnd.osgitest.library:1.4.4
+org.geckoprojects.emf:org.gecko.emf.osgi.bnd.library.workspace:6.0.0
 
 org.bndtools:org.bndtools.templates.osgi:6.4.0
+org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5
+org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5
+com.rabbitmq:amqp-client:5.20.0

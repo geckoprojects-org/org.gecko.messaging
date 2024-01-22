@@ -1,0 +1,6 @@
+Export-Package: \
+	org.gecko.core.api.concurrent,\
+	org.gecko.core.api.jmx,\
+	org.gecko.core.api,\
+	org.gecko.core.api.connection
+Bundle-Version: 1.1.0.SNAPSHOT
