@@ -1,10 +1,11 @@
 package org.gecko.adapter.amqp.tests;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.util.Dictionary;
@@ -19,17 +20,19 @@ import org.gecko.adapter.amqp.client.AMQPContextBuilder;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.MessagingService;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Filter;
-import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
+import org.osgi.service.cm.annotations.RequireConfigurationAdmin;
+import org.osgi.test.common.annotation.InjectBundleContext;
+import org.osgi.test.junit5.context.BundleContextExtension;
 import org.osgi.util.tracker.ServiceTracker;
 
 /**
@@ -37,7 +40,9 @@ import org.osgi.util.tracker.ServiceTracker;
  * @author mark
  * @since 27.11.2018
  */
-@RunWith(MockitoJUnitRunner.class)
+@RequireConfigurationAdmin
+@ExtendWith(MockitoExtension.class)
+@ExtendWith(BundleContextExtension.class)
 public class AMQPComponentPublishTest {
 
 	private String amqpHost = System.getProperty("amqp.host", "devel.data-in-motion.biz");
@@ -47,14 +52,15 @@ public class AMQPComponentPublishTest {
 	public static final String PUBLISH_DIR_TOPIC = "test_pdir";
 	private AMQPClient checkClient;
 	private Configuration clientConfig = null;
-	private final BundleContext context = FrameworkUtil.getBundle(AMQPComponentPublishTest.class).getBundleContext();
+	@InjectBundleContext
+	BundleContext context;
 
-	@Before
+	@BeforeEach
 	public void setup() throws Exception {
 		checkClient = new AMQPClient(amqpHost);
 	}
 
-	@After
+	@AfterEach
 	public void teardown() throws Exception {
 		checkClient.purgeChannel(PUBLISH_TOPIC);
 		checkClient.disconnect();
