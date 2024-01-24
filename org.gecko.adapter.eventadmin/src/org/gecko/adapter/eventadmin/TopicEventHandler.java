@@ -24,12 +24,12 @@ import java.util.logging.Logger;
 
 import org.gecko.adapter.eventadmin.context.EventAdminMessagingContext;
 import org.gecko.adapter.eventadmin.context.EventAdminMessagingContextBuilder;
-import org.gecko.core.pushstream.PushStreamContext;
-import org.gecko.core.pushstream.PushStreamHelper;
-import org.gecko.core.pushstream.source.CallBackEventSource;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.SimpleMessage;
+import org.gecko.util.pushstream.PushStreamContext;
+import org.gecko.util.pushstream.PushStreamHelper;
+import org.gecko.util.pushstream.source.CallBackEventSource;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.PrototypeServiceFactory;

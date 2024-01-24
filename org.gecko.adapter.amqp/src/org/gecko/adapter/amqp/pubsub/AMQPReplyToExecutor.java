@@ -25,13 +25,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.gecko.adapter.amqp.client.AMQPContext.RoutingType;
-import org.gecko.adapter.amqp.pubsub.consumer.AMQPPubOnSubManyConsumer;
 import org.gecko.adapter.amqp.client.AMQPMessage;
-import org.gecko.core.api.PropertyHelper;
-import org.gecko.core.api.concurrent.NamedThreadFactory;
-import org.gecko.core.pushstream.PushStreamContext;
-import org.gecko.core.pushstream.PushStreamHelper;
+import org.gecko.adapter.amqp.pubsub.consumer.AMQPPubOnSubManyConsumer;
 import org.gecko.osgi.messaging.MessagingRPCPubOnSub;
+import org.gecko.util.common.PropertyHelper;
+import org.gecko.util.common.concurrent.NamedThreadFactory;
+import org.gecko.util.pushstream.PushStreamContext;
+import org.gecko.util.pushstream.PushStreamHelper;
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.service.cm.ConfigurationException;
 import org.osgi.service.component.annotations.Activate;

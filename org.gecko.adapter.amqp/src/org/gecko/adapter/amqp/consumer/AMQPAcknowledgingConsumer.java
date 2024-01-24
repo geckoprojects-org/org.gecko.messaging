@@ -20,11 +20,11 @@ import java.util.logging.Logger;
 
 import org.gecko.adapter.amqp.client.AMQPMessage;
 import org.gecko.adapter.amqp.jmx.AMQPConsumerMetric;
-import org.gecko.core.pushstream.PushStreamHelper;
-import org.gecko.core.pushstream.SimplePushEventSourceContext;
-import org.gecko.core.pushstream.source.AcknowledgingEventSource;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingContext;
+import org.gecko.util.pushstream.PushStreamHelper;
+import org.gecko.util.pushstream.SimplePushEventSourceContext;
+import org.gecko.util.pushstream.source.AcknowledgingEventSource;
 import org.osgi.util.function.Predicate;
 import org.osgi.util.pushstream.PushEvent;
 import org.osgi.util.pushstream.PushStream;

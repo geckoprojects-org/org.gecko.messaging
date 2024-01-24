@@ -19,8 +19,8 @@ import java.util.logging.Logger;
 
 import org.gecko.adapter.amqp.client.AMQPMessage;
 import org.gecko.adapter.amqp.consumer.AMQPMessageImpl;
-import org.gecko.core.pushstream.PushStreamContext;
-import org.gecko.core.pushstream.PushStreamHelper;
+import org.gecko.util.pushstream.PushStreamContext;
+import org.gecko.util.pushstream.PushStreamHelper;
 import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.SimplePushEventSource;

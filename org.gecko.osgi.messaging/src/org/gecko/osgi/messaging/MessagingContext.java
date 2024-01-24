@@ -11,7 +11,7 @@
  */
 package org.gecko.osgi.messaging;
 
-import org.gecko.core.pushstream.PushStreamContext;
+import org.gecko.util.pushstream.PushStreamContext;
 
 /**
  * Context object that can be used to provide additional configuration to the adapter

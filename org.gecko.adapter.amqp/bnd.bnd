@@ -6,8 +6,8 @@
 	org.osgi.util.pushstream;version=latest,\
 	com.rabbitmq.client;version=latest,\
 	org.gecko.osgi.messaging;version=latest,\
-	org.gecko.core.pushstream;version=latest,\
-	org.gecko.core.api;version=latest
+	org.gecko.util.pushstream;version=latest,\
+	org.gecko.util.common;version=latest
 
 Bundle-Version: 2.2.0.SNAPSHOT
 

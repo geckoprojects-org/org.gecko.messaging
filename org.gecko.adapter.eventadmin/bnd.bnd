@@ -7,7 +7,7 @@
 	org.osgi.util.converter;version=latest,\
 	org.osgi.service.cm;version=latest,\
 	org.osgi.service.component;version=latest,\
-	org.gecko.core.pushstream;version=latest,\
+	org.gecko.util.pushstream;version=latest,\
 	org.gecko.osgi.messaging;version=project
 
 Bundle-Version: 3.1.0.SNAPSHOT
