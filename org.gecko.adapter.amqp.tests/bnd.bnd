@@ -1,0 +1,45 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+
+-library: enableOSGi-Test
+
+# Build dependencies 
+-buildpath: \
+	org.gecko.adapter.amqp;version=project,\
+	org.gecko.osgi.messaging;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	org.gecko.core.pushstream;version=latest
+
+-runbundles: \
+	org.osgi.util.function;version='[1.1.0,1.1.1)',\
+	org.osgi.util.promise;version='[1.1.0,1.1.1)',\
+	slf4j.api;version='[1.7.25,1.7.26)',\
+	slf4j.simple;version='[1.7.25,1.7.26)',\
+	ch.qos.logback.core;version='[1.2.3,1.2.4)',\
+	org.apache.felix.configadmin;version='[1.9.10,1.9.11)',\
+	org.apache.felix.scr;version='[2.1.14,2.1.15)',\
+	org.osgi.util.pushstream;version='[1.0.1,1.0.2)',\
+	org.gecko.adapter.amqp;version='[2.1.0,2.1.1)',\
+	org.gecko.adapter.amqp.pubusb;version='[2.1.0,2.1.1)',\
+	org.gecko.osgi.messaging;version='[3.1.0,3.1.1)',\
+	com.rabbitmq.client;version='[5.9.0,5.9.1)',\
+	org.gecko.core.api;version='[1.0.5,1.0.6)',\
+	org.gecko.core.pushstream;version='[1.1.0,1.1.1)'
+
+Bundle-Version: 1.0.4.SNAPSHOT
+Private-Package: org.gecko.adapter.amqp.tests
+
+Bundle-Name: AMQP Adapter Tests
+Bundle-Description: Integration tests for the AMQP message adapter implementation
+-runrequires: \
+	bnd.identity;id='org.apache.felix.scr',\
+	bnd.identity;id='org.apache.felix.configadmin',\
+	bnd.identity;version='latest';id='org.gecko.osgi.messaging',\
+	bnd.identity;id='com.rabbitmq.client',\
+	bnd.identity;id='slf4j.api',\
+	bnd.identity;id='slf4j.simple',\
+	bnd.identity;version='2.0.0.SNAPSHOT';id='org.gecko.adapter.amqp',\
+	bnd.identity;id='org.gecko.adapter.amqp.pubusb'
+-runee: JavaSE-1.8
+-runprogramargs: -Damqp.host=devel.data-in-motion.biz
+
+amqp.host: devel.data-in-motion.biz

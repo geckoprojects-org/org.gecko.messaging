@@ -16,7 +16,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BiConsumer;
 
-import org.gecko.core.pushstream.PushStreamContext;
+import org.gecko.util.pushstream.PushStreamContext;
 import org.osgi.util.function.Consumer;
 import org.osgi.util.function.Predicate;
 import org.osgi.util.pushstream.PushEvent;

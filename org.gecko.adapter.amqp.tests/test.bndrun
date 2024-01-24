@@ -1,0 +1,17 @@
+-library: enableOSGi-Test
+
+-runrequires: \
+	bnd.identity;id='org.gecko.adapter.amqp.tests',\
+	bnd.identity;id='org.gecko.adapter.amqp.pubsub',\
+	bnd.identity;id='org.gecko.adapter.amqp'
+	
+-runbundles.test: \
+	org.gecko.adapter.amqp.tests;version=snapshot
+
+-runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
+
+-runee: JavaSE-11
+
+-runprogramargs: -Damqp.host=devel.data-in-motion.biz
+
+amqp.host: devel.data-in-motion.biz

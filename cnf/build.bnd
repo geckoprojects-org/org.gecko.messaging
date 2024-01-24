@@ -4,6 +4,7 @@
 #	Jacoco Support - gecko-jacoco
 -library: \
 	geckoDIMC,\
+	geckoUtil,\
 	geckoOSGi-Test,\
 	geckoEMF,\
 	geckoJacoco
@@ -11,8 +12,9 @@
 # Needed because we enabled library 'gecko-dimc'
 # Activate baselining
 dimcBaselining: true
+mavenCentral: true
 github-project: org.gecko.messaging
-base-version: 1.0.0
+base-version: 1.1.0
 
 # Maven Central Group-Id
 # For Geckoprojects the groupid must start with org.geckoprojects

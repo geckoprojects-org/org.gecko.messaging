@@ -18,8 +18,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.gecko.core.pushstream.SimplePushEventSourceContext;
 import org.gecko.osgi.messaging.Message;
+import org.gecko.util.pushstream.SimplePushEventSourceContext;
 import org.osgi.util.function.Predicate;
 
 import com.rabbitmq.client.AMQP.BasicProperties;
