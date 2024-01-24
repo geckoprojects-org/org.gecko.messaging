@@ -1,10 +1,10 @@
 package org.gecko.adapter.amqp.tests;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Dictionary;
@@ -18,43 +18,46 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.gecko.adapter.amqp.client.AMQPClient;
 import org.gecko.adapter.amqp.client.AMQPContextBuilder;
-import org.gecko.core.pushstream.PushStreamConstants;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.MessagingService;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.gecko.util.pushstream.PushStreamConstants;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Filter;
-import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
+import org.osgi.test.common.annotation.InjectBundleContext;
+import org.osgi.test.junit5.context.BundleContextExtension;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.promise.PromiseFactory;
 import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.QueuePolicyOption;
 import org.osgi.util.tracker.ServiceTracker;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
+@ExtendWith(BundleContextExtension.class)
 public class AMQPComponentSubscribeTest {
 
 	private String amqpHost = System.getProperty("amqp.host", "localhost");
 	private String brokerUrl = "amqp://demo:1234@" + amqpHost + ":5672/test";
 	private AMQPClient checkClient;
 	private Configuration clientConfig = null;
-	private final BundleContext context = FrameworkUtil.getBundle(AMQPComponentSubscribeTest.class).getBundleContext();
-
-	@Before
+	@InjectBundleContext
+	BundleContext context;
+	
+	@BeforeEach
 	public void setup() throws Exception {
 		checkClient = new AMQPClient();
 	}
 
-	@After
+	@AfterEach
 	public void teardown() throws Exception {
 		checkClient.disconnect();
 		if (clientConfig != null) {

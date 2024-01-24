@@ -9,7 +9,7 @@
 	org.gecko.util.pushstream;version=latest,\
 	org.gecko.util.common;version=latest
 
-Bundle-Version: 2.2.0.SNAPSHOT
+Bundle-Version: 2.2.0.${tstamp}-SNAPSHOT
 
 Bundle-Copyright: Data In Motion Consulting GmbH
 Bundle-License: Eclipse Public License v1.0

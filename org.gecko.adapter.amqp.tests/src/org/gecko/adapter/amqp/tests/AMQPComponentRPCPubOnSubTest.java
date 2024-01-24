@@ -1,9 +1,9 @@
 package org.gecko.adapter.amqp.tests;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.util.Dictionary;
@@ -17,35 +17,38 @@ import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingRPCPubOnSub;
 import org.gecko.osgi.messaging.MessagingRPCService;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Filter;
-import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceReference;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
+import org.osgi.test.common.annotation.InjectBundleContext;
+import org.osgi.test.junit5.context.BundleContextExtension;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.tracker.ServiceTracker;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
+@ExtendWith(BundleContextExtension.class)
 public class AMQPComponentRPCPubOnSubTest {
 
 	private String amqpHost = System.getProperty("amqp.host", "localhost");
 	private String brokerUrl = "amqp://demo:1234@" + amqpHost + ":5672/test";
 	private Configuration clientConfig = null;
 	private Configuration serverConfig = null;
-	private final BundleContext context = FrameworkUtil.getBundle(AMQPComponentRPCPubOnSubTest.class).getBundleContext();
-
-	@Before
+	@InjectBundleContext
+	BundleContext context;
+	
+	@BeforeEach
 	public void setup() throws Exception {
 	}
 
-	@After
+	@AfterEach
 	public void teardown() throws Exception {
 		if (serverConfig != null) {
 			serverConfig.delete();
