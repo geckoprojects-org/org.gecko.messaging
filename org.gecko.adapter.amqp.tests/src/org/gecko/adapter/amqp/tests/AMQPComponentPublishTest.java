@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.Filter;
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.cm.annotations.RequireConfigurationAdmin;
@@ -35,7 +34,6 @@ import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.service.ServiceAware;
 import org.osgi.test.junit5.cm.ConfigurationExtension;
 import org.osgi.test.junit5.context.BundleContextExtension;
-import org.osgi.util.tracker.ServiceTracker;
 
 /**
  * test for 
@@ -83,7 +81,7 @@ public class AMQPComponentPublishTest {
 	public void testPublishMessage(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware)throws Exception {
 
 		assertTrue(msAware.isEmpty());
-		clientConfig = getConfiguration(context, "AMQPService");
+		clientConfig = getConfiguration("AMQPService");
 		assertNotNull(clientConfig);
 
 		String publishContent = "this is an AMQP test";
@@ -127,7 +125,7 @@ public class AMQPComponentPublishTest {
 	public void testPublishFanoutMessage(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 		
 		assertTrue(msAware.isEmpty());
-		clientConfig = getConfiguration(context, "AMQPService");
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishContent = "this is an AMQP test";
 		
@@ -184,7 +182,7 @@ public class AMQPComponentPublishTest {
 	public void testPublishDirectMulticastMessage(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 		
 		assertTrue(msAware.isEmpty());
-		clientConfig = getConfiguration(context, "AMQPService");
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishContent = "this is an AMQP test";
 		
@@ -240,7 +238,7 @@ public class AMQPComponentPublishTest {
 	public void testPublishMessageEnv(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 		
 		assertTrue(msAware.isEmpty());
-		clientConfig = getConfiguration(context, "AMQPService");
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishContent = "this is an AMQP test";
 		
@@ -289,7 +287,7 @@ public class AMQPComponentPublishTest {
 	public void testPublishMessage_wrongQueue(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 		
 		assertTrue(msAware.isEmpty());
-		clientConfig = getConfiguration(context, "AMQPService");
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishTopic = "test_queue2";
 		String subscribeTopic = "test_q";
@@ -338,7 +336,7 @@ public class AMQPComponentPublishTest {
 	 * @return the configuration
 	 * @throws Exception
 	 */
-	private Configuration getConfiguration(BundleContext context, String configId) throws Exception {
+	private Configuration getConfiguration(String configId) throws Exception {
 
 		// service lookup for configuration admin service
 		Configuration clientConfig = configAdmin.getConfiguration(configId, "?");
@@ -366,17 +364,4 @@ public class AMQPComponentPublishTest {
 		});
 	}
 	
-	
-	<T> T getService(Class<T> clazz, long timeout) throws InterruptedException {
-		ServiceTracker<T, T> tracker = new ServiceTracker<>(context, clazz, null);
-		tracker.open();
-		return tracker.waitForService(timeout);
-	}
-	
-	<T> T getService(Filter filter, long timeout) throws InterruptedException {
-		ServiceTracker<T, T> tracker = new ServiceTracker<>(context, filter, null);
-		tracker.open();
-		return tracker.waitForService(timeout);
-	}
-
 }

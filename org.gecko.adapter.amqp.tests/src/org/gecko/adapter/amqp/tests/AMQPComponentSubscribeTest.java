@@ -29,28 +29,31 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.Filter;
-import org.osgi.framework.ServiceReference;
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.test.common.annotation.InjectBundleContext;
+import org.osgi.test.common.annotation.InjectService;
+import org.osgi.test.common.service.ServiceAware;
 import org.osgi.test.junit5.context.BundleContextExtension;
+import org.osgi.test.junit5.service.ServiceExtension;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.promise.PromiseFactory;
 import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.QueuePolicyOption;
-import org.osgi.util.tracker.ServiceTracker;
 
 @ExtendWith(MockitoExtension.class)
 @ExtendWith(BundleContextExtension.class)
+@ExtendWith(ServiceExtension.class)
 public class AMQPComponentSubscribeTest {
 
-	private String amqpHost = System.getProperty("amqp.host", "localhost");
+	private String amqpHost = System.getProperty("amqp.host", "devel.data-in-motion.biz");
 	private String brokerUrl = "amqp://demo:1234@" + amqpHost + ":5672/test";
 	private AMQPClient checkClient;
 	private Configuration clientConfig = null;
 	@InjectBundleContext
 	BundleContext context;
+	@InjectService
+	ConfigurationAdmin configAdmin;
 	
 	@BeforeEach
 	public void setup() throws Exception {
@@ -72,9 +75,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeMessage() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeMessage(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 
 		String publishTopic = "test_q";
 		String publishContent = "this is an AMQP test";
@@ -95,10 +98,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 
-		createLatch.await(2, TimeUnit.SECONDS);
-
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		PushStream<Message> subscribe = messagingService.subscribe(publishTopic);
 		subscribe.forEach((m) -> {
@@ -119,9 +120,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeFanout() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeFanout(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishTopic = "test_fan";
 		String publishContent = "this is an AMQP test";
@@ -143,10 +144,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 		
-		createLatch.await(2, TimeUnit.SECONDS);
-		
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		MessagingContext ctx = new AMQPContextBuilder().fanout().exchange(publishTopic, "").build();
 		PushStream<Message> subscribe01 = messagingService.subscribe(publishTopic, ctx);
@@ -175,9 +174,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeDirectMulticast() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeDirectMulticast(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishTopic = "test_dir";
 		String publishContent = "this is an AMQP test";
@@ -199,10 +198,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 		
-		createLatch.await(2, TimeUnit.SECONDS);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		
-		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
 		assertNotNull(messagingService);
 		MessagingContext ctx = new AMQPContextBuilder().durable().direct().exchange(publishTopic, "blub").build();
 		PushStream<Message> subscribe01 = messagingService.subscribe(publishTopic, ctx);
@@ -231,9 +228,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeDirectSelective() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeDirectSelective(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishTopic = "test_dir";
 		String publishContent = "this is an AMQP test";
@@ -255,10 +252,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 		
-		createLatch.await(2, TimeUnit.SECONDS);
-		
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		MessagingContext ctx = new AMQPContextBuilder().durable().direct().exchange(publishTopic, "bla").build();
 		PushStream<Message> subscribe01 = messagingService.subscribe(publishTopic, ctx);
@@ -287,9 +282,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeMessageEnv() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeMessageEnv(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishTopic = "test_q";
 		String publishContent = "this is an AMQP test";
@@ -316,10 +311,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 		
-		createLatch.await(2, TimeUnit.SECONDS);
-		
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		PushStream<Message> subscribe = messagingService.subscribe(publishTopic);
 		subscribe.forEach((m) -> {
@@ -340,9 +333,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeMessageConfigureEventSource() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeMessageConfigureEventSource(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 		
 		String publishTopic = "test_q";
 		String publishContent = "this is an AMQP test";
@@ -365,10 +358,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 		
-		createLatch.await(2, TimeUnit.SECONDS);
-		
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		PushStream<Message> subscribe = messagingService.subscribe(publishTopic);
 		subscribe.forEach((m) -> {
@@ -389,9 +380,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeMessageMany() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeMessageMany(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 
 		String publishTopic = "test_q";
 		String publishContent = "this is an AMQP test";
@@ -413,10 +404,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 
-		createLatch.await(10, TimeUnit.SECONDS);
-
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 
 		PushStream<Message> subscribe = messagingService.subscribe(publishTopic);
@@ -442,9 +431,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeManyMessageMany() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeManyMessageMany(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 
 		String publishTopic = "test_dir";
 		String publishContent = "this is an AMQP test";
@@ -465,10 +454,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 
-		createLatch.await(2, TimeUnit.SECONDS);
-
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		AMQPContextBuilder builder = new AMQPContextBuilder();
 		ExecutorService es = Executors.newCachedThreadPool();
@@ -525,9 +512,9 @@ public class AMQPComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testSubscribeMessageWrongQueue() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPService", createLatch);
+	public void testSubscribeMessageWrongQueue(@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
+		assertTrue(msAware.isEmpty());
+		clientConfig = getConfiguration("AMQPService");
 
 		String publishTopic = "test_q";
 		String publishContent = "this is an AMQP test";
@@ -548,10 +535,8 @@ public class AMQPComponentSubscribeTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 
-		createLatch.await(2, TimeUnit.SECONDS);
-
 		// check for service
-		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		MessagingService messagingService = msAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		PushStream<Message> subscribe = messagingService.subscribe(publishTopic);
 		subscribe.forEach((m) -> {
@@ -576,37 +561,11 @@ public class AMQPComponentSubscribeTest {
 	 * @return the configuration
 	 * @throws Exception
 	 */
-	private Configuration getConfiguration(BundleContext context, String configId, CountDownLatch createLatch)
+	private Configuration getConfiguration(String configId)
 			throws Exception {
-
-		// service lookup for configuration admin service
-		ServiceReference<?>[] allServiceReferences = context.getAllServiceReferences(ConfigurationAdmin.class.getName(),
-				null);
-		assertNotNull(allServiceReferences);
-		assertEquals(1, allServiceReferences.length);
-		ServiceReference<?> cmRef = allServiceReferences[0];
-		Object service = context.getService(cmRef);
-		assertNotNull(service);
-		assertTrue(service instanceof ConfigurationAdmin);
-
-		// create MQTT client configuration
-		ConfigurationAdmin cm = (ConfigurationAdmin) service;
-		Configuration clientConfig = cm.getConfiguration(configId, "?");
+		Configuration clientConfig = configAdmin.getConfiguration(configId, "?");
 		assertNotNull(clientConfig);
-
 		return clientConfig;
-	}
-
-	<T> T getService(Class<T> clazz, long timeout) throws InterruptedException {
-		ServiceTracker<T, T> tracker = new ServiceTracker<>(context, clazz, null);
-		tracker.open();
-		return tracker.waitForService(timeout);
-	}
-
-	<T> T getService(Filter filter, long timeout) throws InterruptedException {
-		ServiceTracker<T, T> tracker = new ServiceTracker<>(context, filter, null);
-		tracker.open();
-		return tracker.waitForService(timeout);
 	}
 
 }
