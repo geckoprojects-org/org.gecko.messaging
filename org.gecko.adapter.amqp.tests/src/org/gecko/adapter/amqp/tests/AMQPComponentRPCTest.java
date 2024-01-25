@@ -22,25 +22,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.Filter;
-import org.osgi.framework.ServiceReference;
 import org.osgi.service.cm.Configuration;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.test.common.annotation.InjectBundleContext;
+import org.osgi.test.common.annotation.InjectService;
+import org.osgi.test.common.service.ServiceAware;
 import org.osgi.test.junit5.context.BundleContextExtension;
+import org.osgi.test.junit5.service.ServiceExtension;
 import org.osgi.util.promise.Promise;
-import org.osgi.util.tracker.ServiceTracker;
 
 @ExtendWith(MockitoExtension.class)
 @ExtendWith(BundleContextExtension.class)
+@ExtendWith(ServiceExtension.class)
 public class AMQPComponentRPCTest {
 
-	private String amqpHost = System.getProperty("amqp.host", "localhost");
+	private String amqpHost = System.getProperty("amqp.host", "devel.data-in-motion.biz");
 	private String brokerUrl = "amqp://demo:1234@" + amqpHost + ":5672/test";
 	private AMQPClient checkClient;
 	private Configuration clientConfig = null;
 	@InjectBundleContext
 	BundleContext context;
+	@InjectService
+	ConfigurationAdmin configAdmin;
 	
 	@BeforeEach
 	public void setup() throws Exception {
@@ -61,9 +64,9 @@ public class AMQPComponentRPCTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testRPCMessage() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPRPCService", createLatch);
+	public void testRPCMessage(@InjectService(cardinality = 0) ServiceAware<MessagingRPCService> mrpcsAware) throws Exception {
+		assertTrue(mrpcsAware.isEmpty());
+		clientConfig = getConfiguration("AMQPRPCService");
 
 		String publishTopic = "test_rpc";
 		String publishContent = "this is an AMQP test";
@@ -86,10 +89,9 @@ public class AMQPComponentRPCTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 
-		createLatch.await(2, TimeUnit.SECONDS);
 
 		// check for service
-		MessagingRPCService messagingService = getService(MessagingRPCService.class, 30000l);
+		MessagingRPCService messagingService = mrpcsAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		checkClient.registerRPCEcho(publishTopic);
 		Promise<Message> subscribe = messagingService.publishRPC(publishTopic, ByteBuffer.wrap(publishContent.getBytes()));
@@ -109,9 +111,9 @@ public class AMQPComponentRPCTest {
 	 * @throws Exception
 	 */
 	@Test
-	public void testRPCMessageEnv() throws Exception {
-		final CountDownLatch createLatch = new CountDownLatch(1);
-		clientConfig = getConfiguration(context, "AMQPRPCService", createLatch);
+	public void testRPCMessageEnv(@InjectService(cardinality = 0) ServiceAware<MessagingRPCService> mrpcsAware) throws Exception {
+		assertTrue(mrpcsAware.isEmpty());
+		clientConfig = getConfiguration("AMQPRPCService");
 		
 		String publishTopic = "test_rpc";
 		String publishContent = "this is an AMQP test";
@@ -140,10 +142,8 @@ public class AMQPComponentRPCTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 		
-		createLatch.await(2, TimeUnit.SECONDS);
-		
 		// check for service
-		MessagingRPCService messagingService = getService(MessagingRPCService.class, 30000l);
+		MessagingRPCService messagingService = mrpcsAware.waitForService(2000l);
 		assertNotNull(messagingService);
 		checkClient.registerRPCEcho(publishTopic);
 		Promise<Message> subscribe = messagingService.publishRPC(publishTopic, ByteBuffer.wrap(publishContent.getBytes()));
@@ -166,35 +166,11 @@ public class AMQPComponentRPCTest {
 	 * @return the configuration
 	 * @throws Exception
 	 */
-	private Configuration getConfiguration(BundleContext context, String configId, CountDownLatch createLatch) throws Exception {
-
-		// service lookup for configuration admin service
-		ServiceReference<?>[] allServiceReferences = context.getAllServiceReferences(ConfigurationAdmin.class.getName(), null);
-		assertNotNull(allServiceReferences);
-		assertEquals(1, allServiceReferences.length);
-		ServiceReference<?> cmRef = allServiceReferences[0];
-		Object service = context.getService(cmRef);
-		assertNotNull(service);
-		assertTrue(service instanceof ConfigurationAdmin);
-
-		// create MQTT client configuration
-		ConfigurationAdmin cm = (ConfigurationAdmin) service;
-		Configuration clientConfig = cm.getConfiguration(configId, "?");
+	private Configuration getConfiguration(String configId) throws Exception {
+		Configuration clientConfig = configAdmin.getConfiguration(configId, "?");
 		assertNotNull(clientConfig);
 
 		return clientConfig;
 	}
 	
-	<T> T getService(Class<T> clazz, long timeout) throws InterruptedException {
-		ServiceTracker<T, T> tracker = new ServiceTracker<>(context, clazz, null);
-		tracker.open();
-		return tracker.waitForService(timeout);
-	}
-	
-	<T> T getService(Filter filter, long timeout) throws InterruptedException {
-		ServiceTracker<T, T> tracker = new ServiceTracker<>(context, filter, null);
-		tracker.open();
-		return tracker.waitForService(timeout);
-	}
-
 }
