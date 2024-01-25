@@ -1,4 +1,0 @@
-Bundle-Version: 1.0.1.SNAPSHOT
-Export-Package: org.gecko.core.emf
-Bundle-Name: Gecko Core EMF
-Bundle-Description: EMF additions in Gecko

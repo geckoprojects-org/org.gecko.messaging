@@ -1,4 +1,0 @@
-Bundle-Version: 1.1.0-SNAPSHOT
-Export-Package: \
-	org.gecko.core.pool,\
-	org.gecko.core.pool.exception
