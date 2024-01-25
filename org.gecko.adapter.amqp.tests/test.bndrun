@@ -6,7 +6,7 @@
 	bnd.identity;id='org.gecko.adapter.amqp.tests'
 	
 -runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
--runee: JavaSE-17
+-runee: JavaSE-11
 
 -runprogramargs: -Damqp.host=devel.data-in-motion.biz
 

@@ -5,7 +5,7 @@
 	bnd.identity;id='org.gecko.adapter.mqtt'
 	
 -runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
--runee: JavaSE-17
+-runee: JavaSE-11
 
 -runbundles: \
 	junit-jupiter-api;version='[5.10.1,5.10.2)',\
