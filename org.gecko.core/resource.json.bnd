@@ -1,4 +1,0 @@
-Bundle-Version: 1.0.1.SNAPSHOT
-Export-Package: org.gecko.core.resources.json
-Bundle-Name: Gecko Core Resource Json
-Bundle-Description: Resource handling for json files
