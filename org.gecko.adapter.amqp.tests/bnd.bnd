@@ -11,6 +11,7 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.osgi.util.promise;version=latest,\
 	org.osgi.util.function;version=latest,\
 	org.osgi.util.pushstream;version=latest,\
+	org.osgi.test.junit5.cm;version=latest,\
 	org.gecko.util.pushstream;version=latest,\
 	org.gecko.adapter.amqp;version=project,\
 	org.gecko.osgi.messaging;version=project
