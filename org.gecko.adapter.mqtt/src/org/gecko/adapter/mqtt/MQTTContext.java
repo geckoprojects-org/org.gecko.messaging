@@ -14,11 +14,11 @@ package org.gecko.adapter.mqtt;
 import org.gecko.osgi.messaging.SimpleMessagingContext;
 
 /**
- * MQTT context ot provider additional configurations
+ * MQTT context to provide additional configurations
  * @author Mark Hoffmann
  * @since 10.10.2017
  */
-class MQTTContext extends SimpleMessagingContext {
+public class MQTTContext extends SimpleMessagingContext {
 	
 	private QoS qos;
 	private boolean retained = false;
