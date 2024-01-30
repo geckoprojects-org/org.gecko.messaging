@@ -9,7 +9,7 @@
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
-package org.gecko.adapter.mqtt;
+package org.gecko.adapter.mqtt.service;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
@@ -25,6 +25,9 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.gecko.adapter.mqtt.MQTTContext;
+import org.gecko.adapter.mqtt.MQTTContextBuilder;
+import org.gecko.adapter.mqtt.QoS;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingContext;

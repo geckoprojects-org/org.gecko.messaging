@@ -13,7 +13,7 @@ javac.source: 1.8
 javac.target: 1.8
 
 Bundle-Version: 1.0.5.SNAPSHOT
-Private-Package: org.gecko.adapter.mqtt
+
 Bundle-Vendor: Data In Motion Consulting
 Bundle-Name: MQTT Messaging Implementation
 Bundle-License: Eclipse Public License v1.0
