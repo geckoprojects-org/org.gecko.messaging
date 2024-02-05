@@ -77,6 +77,8 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		String brokerUrl();
 		String username();
 		String password(); 
+		int maxInflight() default 10; 
+		
 	}		
 
 	@Activate	
@@ -89,6 +91,8 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 				if(config.password() != null && config.password().length() != 0)
 				options.setPassword(config.password().toCharArray());
 			}
+			options.setMaxInflight(config.maxInflight());
+			options.setAutomaticReconnect(true);
 			mqtt = new MqttClient(config.brokerUrl(), id);
 			mqtt.connect(options);
 			mqtt.setCallback(this);
