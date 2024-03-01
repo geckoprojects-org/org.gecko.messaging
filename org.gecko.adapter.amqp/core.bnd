@@ -7,4 +7,5 @@ Private-Package: \
 	org.gecko.adapter.amqp.consumer
 Export-Package: \
 	org.gecko.adapter.amqp.client,\
-	org.gecko.adapter.amqp.jmx
+	org.gecko.adapter.amqp.jmx,\
+	org.gecko.adapter.amqp.api

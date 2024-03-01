@@ -17,6 +17,7 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.gecko.adapter.amqp.api.WorkerFunction;
 import org.gecko.adapter.amqp.client.AMQPMessage;
 import org.gecko.adapter.amqp.consumer.AMQPMessageImpl;
 import org.gecko.util.pushstream.PushStreamContext;
@@ -48,7 +49,7 @@ public class AMQPPubOnSubConsumer extends DefaultConsumer {
 	 * Creates a new instance.
 	 * @param channel
 	 */
-	public AMQPPubOnSubConsumer(Channel channel, Function<AMQPMessage, ByteBuffer> function, PushStreamContext<AMQPMessage> psCtx) {
+	public AMQPPubOnSubConsumer(Channel channel, WorkerFunction function, PushStreamContext<AMQPMessage> psCtx) {
 		super(channel);
 		this.function = function;
 		responseStream = PushStreamHelper.createPushStream(eventSource, psCtx);

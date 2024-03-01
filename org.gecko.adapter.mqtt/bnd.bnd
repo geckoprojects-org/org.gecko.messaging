@@ -6,15 +6,5 @@
 	org.gecko.util.pushstream;version=latest,\
 	org.osgi.framework
 
--testpath: \
-	${junit}
-
-javac.source: 1.8
-javac.target: 1.8
-
 Bundle-Version: 1.0.5.SNAPSHOT
-
-Bundle-Vendor: Data In Motion Consulting
 Bundle-Name: MQTT Messaging Implementation
-Bundle-License: Eclipse Public License v1.0
-Bundle-Copyright: Data In Motion Consulting (c) 2017

@@ -6,7 +6,7 @@
 	bnd.identity;id='org.gecko.adapter.amqp.tests'
 	
 -runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
--runee: JavaSE-11
+-runee: JavaSE-17
 
 -runprogramargs: -Damqp.host=devel.data-in-motion.biz
 
@@ -39,4 +39,5 @@ amqp.host: devel.data-in-motion.biz
 	slf4j.api;version='[1.7.36,1.7.37)',\
 	slf4j.simple;version='[1.7.36,1.7.37)',\
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
-	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)'
+	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)',\
+	org.osgi.util.converter;version='[1.0.9,1.0.10)'

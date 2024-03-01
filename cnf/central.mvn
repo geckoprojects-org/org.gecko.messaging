@@ -126,6 +126,7 @@ org.geckoprojects.utils:org.gecko.util.bnd.library.workspace:1.0.0
 org.geckoprojects.emf:org.gecko.emf.osgi.bnd.library.workspace:6.0.2
 
 org.bndtools:org.bndtools.templates.osgi:6.4.0
-org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5
+biz.aQute.bnd:biz.aQute.bnd.annotation:7.0.0
+#org.eclipse.paho:org.eclipse.paho.mqttv5.client:1.2.5
 org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5
 com.rabbitmq:amqp-client:5.20.0
