@@ -7,3 +7,5 @@ Archive
 generated/
 bin/
 bin_test/
+/org.gecko.amqp.client
+/org.gecko.amqp.client.config
