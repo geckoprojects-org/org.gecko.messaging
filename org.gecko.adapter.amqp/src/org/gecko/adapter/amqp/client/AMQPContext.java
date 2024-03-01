@@ -15,6 +15,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.gecko.adapter.amqp.api.AMQPProperties;
 import org.gecko.osgi.messaging.SimpleMessagingContext;
 
 /**
@@ -31,6 +32,7 @@ public class AMQPContext extends SimpleMessagingContext {
 		HEADER
 	}
 	
+	private String exchange = null;
 	private String appId = null;
 	private String clusterId = null;
 	private String expiration = null;
@@ -49,6 +51,23 @@ public class AMQPContext extends SimpleMessagingContext {
 	private boolean exchangeMode = false;
 	private boolean autoAcknowledge = false;
 	private boolean rpc = false;
+	private AMQPProperties properties = null;
+	
+	/**
+	 * Sets the properties.
+	 * @param properties the properties to set
+	 */
+	void setProperties(AMQPProperties properties) {
+		this.properties = properties;
+	}
+	
+	/**
+	 * Returns the properties.
+	 * @return the properties
+	 */
+	public AMQPProperties getProperties() {
+		return properties;
+	}
 	
 	/**
 	 * Adds a header
@@ -97,7 +116,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @return the exchangeName
 	 */
 	public String getExchangeName() {
-		return getRoutingKey() != null ? getQueueName() : null;
+		return exchange;
 	}
 	
 	/**
@@ -105,8 +124,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @param exchangeName the exchangeName to set
 	 */
 	void setExchangeName(String exchangeName) {
-		this.setQueueName(exchangeName);
-		this.setRoutingKey(null);
+		this.exchange = exchangeName;
 	}
 
 	/**
@@ -170,7 +188,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @param queueMode the queueMode to set
 	 */
 	void setQueueMode(boolean queueMode) {
-		this.queueMode = queueMode;
+		this.queueMode = isExchangeMode() ? false : queueMode;
 	}
 
 	/**
@@ -186,7 +204,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @param exchangeMode the exchangeMode to set
 	 */
 	void setExchangeMode(boolean exchangeMode) {
-		this.exchangeMode = exchangeMode;
+		this.exchangeMode = isQueueMode() ? false : exchangeMode;
 	}
 
 	/**

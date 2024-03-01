@@ -21,6 +21,8 @@ import org.osgi.util.pushstream.PushbackPolicy;
  */
 public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 
+	private String id;
+	private String source;
 	private String queueName;
 	private String routingKey;
 	private String contentType = null;
@@ -110,6 +112,12 @@ public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 			ctx.setQueuePolicy(pushstreamContext.getQueuePolicy());
 			ctx.setQueuePolicyOption(pushstreamContext.getQueuePolicyOption());
 			ctx.setBufferQueue(pushstreamContext.getBufferQueue());
+		}
+		if (id != null) {
+			ctx.setId(id);
+		}
+		if (source != null) {
+			ctx.setSource(source);
 		}
 		return ctx;
 	}
@@ -295,6 +303,26 @@ public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 		if (context != null) {
 			this.pushstreamContext = context;
 		}
+		return this;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContextBuilder#source(java.lang.String)
+	 */
+	@Override
+	public MessagingContextBuilder source(String source) {
+		this.source = source;
+		return this;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContextBuilder#id(java.lang.String)
+	 */
+	@Override
+	public MessagingContextBuilder id(String id) {
+		this.id = id;
 		return this;
 	}
 

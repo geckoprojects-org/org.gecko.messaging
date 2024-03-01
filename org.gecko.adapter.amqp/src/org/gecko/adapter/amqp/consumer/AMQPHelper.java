@@ -11,6 +11,9 @@
  */
 package org.gecko.adapter.amqp.consumer;
 
+import static java.util.Objects.nonNull;
+
+import org.gecko.adapter.amqp.api.AMQPConfiguration;
 import org.gecko.adapter.amqp.client.AMQPContext;
 
 import com.rabbitmq.client.AMQP.BasicProperties;
@@ -21,7 +24,7 @@ import com.rabbitmq.client.AMQP.BasicProperties;
  * @since 12.12.2018
  */
 public class AMQPHelper {
-	
+
 	/**
 	 * Returns a key from the given context. This key can be used for channels, consumers
 	 * @param context the {@link AMQPContext} instance, must not be <code>null</code>
@@ -36,11 +39,11 @@ public class AMQPHelper {
 			String exchange = context.getExchangeName();
 			String routingKey = context.getRoutingKey();
 			String routingType = context.getRoutingType();
-			key = exchange + "_" + routingKey + "_" + routingType;
+			key += "_" + exchange + "_" + routingKey + "_" + routingType;
 		}
 		return key;
 	}
-	
+
 	/**
 	 * Creates the message properties from the context object
 	 * @param ctx the AMQP context instance, must not be <code>null</code> 
@@ -88,6 +91,40 @@ public class AMQPHelper {
 			builder.headers(ctx.getHeader());
 		}
 		return builder.build();
+	}
+
+	/**
+	 * Verifies if a exchange and routing key is provided in the configuration. This is at least needed for
+	 * exchange mode 
+	 * @param configuration the configuration
+	 * @return
+	 */
+	public static boolean validateExchangeConfiguration(AMQPConfiguration configuration) {
+		return nonNull(configuration) &&
+				nonNull(configuration.routingKey()) && !configuration.routingKey().isBlank() && 
+				nonNull(configuration.exchange()) && !configuration.exchange().isBlank();
+	}
+
+	/**
+	 * Verifies if a exchange and routing key is provided in the configuration. This is at least needed for
+	 * exchange mode 
+	 * @param configuration the configuration
+	 * @return
+	 */
+	public static boolean validateExchangeContext(AMQPContext context) {
+		return nonNull(context) &&
+				nonNull(context.getRoutingKey()) && !context.getRoutingKey().isBlank() && 
+				nonNull(context.getExchangeName()) && !context.getExchangeName().isBlank();
+	}
+
+	public static boolean validateQueueConfiguration(AMQPConfiguration configuration) {
+		return nonNull(configuration) &&
+				nonNull(configuration.topic()) && ! configuration.topic().isBlank();
+	}
+
+	public static boolean validateQueueContext(AMQPContext context) {
+		return nonNull(context) &&
+				nonNull(context.getQueueName()) && ! context.getQueueName().isBlank();
 	}
 
 }

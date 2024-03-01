@@ -11,6 +11,8 @@
  */
 package org.gecko.adapter.amqp.pubsub;
 
+import static java.util.Objects.nonNull;
+
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
@@ -24,6 +26,8 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.gecko.adapter.amqp.api.AMQPConfiguration;
+import org.gecko.adapter.amqp.api.WorkerFunction;
 import org.gecko.adapter.amqp.client.AMQPContext.RoutingType;
 import org.gecko.adapter.amqp.client.AMQPMessage;
 import org.gecko.adapter.amqp.pubsub.consumer.AMQPPubOnSubConsumer;
@@ -54,42 +58,26 @@ import com.rabbitmq.client.ConnectionFactory;
  * @since 15.02.2018
  */
 @Capability(namespace="gecko.messaging", name="pubOnSub", version="1.0.0", attribute= {"vendor=Gecko.io", "implementation=AMQP"})
-@Component(service=MessagingRPCPubOnSub.class, name="AMQPubOnSubService", configurationPolicy=ConfigurationPolicy.REQUIRE, immediate=true)
+@Component(name="AMQPubOnSubService", configurationPolicy=ConfigurationPolicy.REQUIRE, immediate=true)
 public class AMQPubOnSubService implements MessagingRPCPubOnSub {
 
 	private static final Logger logger = Logger.getLogger(AMQPubOnSubService.class.getName());
-	@Reference(name="ma.posFunction")
-	private Function<AMQPMessage, ByteBuffer> callbackFunction;
-	private AMQPPubOnSubConfig configuration = null;
+	@Reference(name="workerFunction")
+	private WorkerFunction callbackFunction;
+	private AMQPConfiguration configuration = null;
 	private Promise<Channel> connectionPromise;
 	private AMQPPubOnSubConsumer consumer = null;
 	private Map<String, Object> properties;
-	
-	@ObjectClassDefinition
-	@interface AMQPPubOnSubConfig {
-
-		String name();
-		String username();
-		String password();
-		String host() default "localhost";
-		int port() default 5672;
-		String virtualHost() default "";
-		boolean autoRecovery() default false;
-		boolean jmx() default false;
-		String brokerUrl();
-		String rpcQueue(); 
-		String rpcRoutingKey();
-
-	}		
 
 	@Activate	
-	void activate(AMQPPubOnSubConfig config, Map<String, Object> properties) throws Exception {
+	void activate(AMQPConfiguration config, Map<String, Object> properties) throws Exception {
 		this.properties = properties;
 		if (!validateConfiguration(config)) {
-			throw new ConfigurationException("PubOnSub-Config", "The Publish-on-subscibe configuration is not valid");
+			throw new ConfigurationException("PublishOnSubscribe-Configuration", "The Publish-on-subscibe configuration is not valid");
 		}
 		this.configuration = config;
-		ExecutorService es = Executors.newSingleThreadExecutor(NamedThreadFactory.newNamedFactory("PubOnSub-" + config.name()));
+		// configure publish on subscribe worker
+		ExecutorService es = Executors.newSingleThreadExecutor(NamedThreadFactory.newNamedFactory("PublishOnSubscribe-" + config.name()));
 		PromiseFactory pf = new PromiseFactory(es);
 		connectionPromise = pf.submit(this::configureConnectionFactory).
 				map(this::configureConnection).
@@ -169,22 +157,23 @@ public class AMQPubOnSubService implements MessagingRPCPubOnSub {
 	}
 	
 	private Channel configureChannel(Channel channel) throws IOException, TimeoutException {
-		String queueName = configuration.rpcQueue();
-		String routingKey = configuration.rpcRoutingKey();
+		String exchangeName = configuration.exchange();
+		String routingKey = configuration.routingKey();
 		// exchange mode
-		if (routingKey != null && queueName != null) {
-			String exchange = queueName;
+		if (nonNull(routingKey) && !routingKey.isBlank() && 
+				nonNull(exchangeName) && !exchangeName.isBlank()) {
+			String exchange = exchangeName;
 			channel.exchangeDeclare(exchange, RoutingType.DIRECT.toString().toLowerCase(), false, false, null);
-			String exQueueName = channel.queueDeclare().getQueue();
-			channel.queueBind(exQueueName, exchange, routingKey);
+			String queueName = channel.queueDeclare().getQueue();
+			channel.queueBind(queueName, exchange, routingKey);
 		} else {
-			channel.queueDeclare(queueName, false, false, false, null);
-			channel.queuePurge(queueName);
+			channel.queueDeclare(exchangeName, false, false, false, null);
+			channel.queuePurge(exchangeName);
 		}
 		channel.basicQos(1);
 		PushStreamContext<AMQPMessage> ctx = PushStreamHelper.getPushStreamContext(properties);
 		consumer = new AMQPPubOnSubConsumer(channel, callbackFunction, ctx);
-		channel.basicConsume(queueName, false, consumer);
+		channel.basicConsume(exchangeName, false, consumer);
 		return channel;
 	}
 	
@@ -199,12 +188,12 @@ public class AMQPubOnSubService implements MessagingRPCPubOnSub {
 	 * @param config the configuration annotation
 	 * @return <code>true</code>, if mandatory values are valid
 	 */
-	private boolean validateConfiguration(AMQPPubOnSubConfig config) {
-		return config != null && 
+	private boolean validateConfiguration(AMQPConfiguration config) {
+		return nonNull(config) && 
+				nonNull(config.virtualHost()) &&
 				config.port() > 0 && 
-				config.host() != null && !config.host().isEmpty() && 
-				config.virtualHost() != null &&
-				config.rpcQueue() != null && !config.rpcQueue().isEmpty();
+				nonNull(config.host()) && !config.host().isEmpty() && 
+				nonNull(config.topic()) && !config.topic().isBlank();
 	}
 	
 }

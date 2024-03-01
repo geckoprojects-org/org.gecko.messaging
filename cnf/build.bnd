@@ -10,7 +10,7 @@
 
 # Needed because we enabled library 'gecko-dimc'
 # Activate baselining
-dimcBaselining: true
+dimcBaselining: false
 mavenCentral: true
 github-project: org.gecko.messaging
 base-version: 1.1.0

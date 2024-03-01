@@ -63,5 +63,9 @@ public interface MessagingContext extends PushStreamContext<Message> {
 	 * @return the policy how many results are expected
 	 */
 	public ReplyToPolicy getReplyPolicy();
+	
+	public String getSoure();
+	
+	public String getId();
 
 }
