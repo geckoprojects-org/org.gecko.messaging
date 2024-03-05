@@ -15,12 +15,13 @@ import static java.util.Objects.nonNull;
 import static java.util.Objects.requireNonNull;
 
 import java.io.IOException;
-import java.util.function.BiConsumer;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import org.gecko.adapter.amqp.client.AMQPContext;
 import org.osgi.util.promise.Deferred;
+import org.osgi.util.promise.Promise;
 
 import com.rabbitmq.client.BasicProperties;
 import com.rabbitmq.client.Channel;
@@ -35,6 +36,8 @@ import com.rabbitmq.client.Envelope;
 public abstract class BasicReSubscribeConsumer<T> extends DefaultConsumer implements ReSubscribeCallback<T> {
 
 	private static final Logger logger = Logger.getLogger(BasicReSubscribeConsumer.class.getName());
+	private final AtomicBoolean progress = new AtomicBoolean(false);
+	private final AtomicBoolean cancelled = new AtomicBoolean(false);
 	private Consumer<AMQPContext> disconnectCallback;
 	private Deferred<T> deferred;
 	protected final AMQPContext context;
@@ -85,34 +88,18 @@ public abstract class BasicReSubscribeConsumer<T> extends DefaultConsumer implem
 	 */
 	@Override
 	public boolean shouldCloseConsumer() throws IOException {
+		// do not close the consumer per default
 		return false;
 	}
 
 	/* 
 	 * (non-Javadoc)
-	 * @see org.gecko.adapter.amqp.api.ReSubscribeCallback#preCloseConsumer()
+	 * @see org.gecko.adapter.amqp.api.ReSubscribeCallback#shouldResubscribe()
 	 */
 	@Override
-	public void preCloseConsumer() throws IOException {
-		// Nothing to do here
-	}
-
-	/* 
-	 * (non-Javadoc)
-	 * @see org.gecko.adapter.amqp.api.ReSubscribeCallback#closeConsumer()
-	 */
-	@Override
-	public void closeConsumer() throws IOException {
-		// Nothing to do here
-	}
-
-	/* 
-	 * (non-Javadoc)
-	 * @see org.gecko.adapter.amqp.api.ReSubscribeCallback#closeChannel()
-	 */
-	@Override
-	public void closeChannel() throws IOException {
-		// Nothing to do here
+	public boolean shouldResubscribe() {
+		// never re-subscribe
+		return false;
 	}
 
 	/* 
@@ -124,55 +111,32 @@ public abstract class BasicReSubscribeConsumer<T> extends DefaultConsumer implem
 		return null;
 	}
 
-	/**
-	 * Evaluates, whether the consumer should be closed or not.
-	 * @param envelop
-	 * @param properties
-	 * @param body
-	 * @return <code>true</code>, if the consumer should be closed, otherwise <code>false</code>
-	 */
-	protected boolean doShouldCloseConsumer() throws IOException {
-		if (shouldCloseConsumer()) {
-			doCancelConsumer();
-		}
-		return shouldCloseConsumer();
-	}
-	
-	/**
-	 * Called when the consumer is to be cancelled
-	 * @return <code>true</code> on successful closing, otherwise <code>false</code>s
-	 */
-	protected boolean doCancelConsumer() throws IOException {
-		Deferred<T> deferred = getDeferred();
-		try {
-			getChannel().basicCancel(consumerTag);
-			return true;
-		} catch (Exception e) {
-			deferred.fail(e);
-			return false;
-		}
-	}
-	
 	/* 
 	 * (non-Javadoc)
 	 * @see com.rabbitmq.client.DefaultConsumer#handleCancelOk(java.lang.String)
 	 */
 	@Override
 	public void handleCancelOk(String consumerTag) {
+		cancelled.compareAndSet(false, true);
+		checkResubscribe();
+	}
+
+	/**
+	 * Executes the disconnect of the channel
+	 */
+	private void doDisconnect() {
 		Deferred<T> deferred = getDeferred();
 		try {
-			preCloseConsumer();
-			Consumer<AMQPContext> dcc = getDisconnectCallback();
-			if (nonNull(dcc)) {
-				dcc.accept(context);
+			preDisconnect();
+			if (nonNull(disconnectCallback)) {
+				disconnectCallback.accept(context);
 			}
-			closeConsumer();
-			deferred.resolve(getCloseValue());
+			postDisconnect();
 		} catch (Exception e) {
 			deferred.fail(e);
 		}
 	}
-	
+
 	/* 
 	 * (non-Javadoc)
 	 * @see com.rabbitmq.client.DefaultConsumer#handleDelivery(java.lang.String, com.rabbitmq.client.Envelope, com.rabbitmq.client.AMQP.BasicProperties, byte[])
@@ -197,25 +161,95 @@ public abstract class BasicReSubscribeConsumer<T> extends DefaultConsumer implem
 		// checks whether to close the consumer
 		doShouldCloseConsumer();
 	}
+	
+	protected boolean isCancelled() {
+		return cancelled.get();
+	}
+	
+	/**
+	 * Checks if a re-subscription should be triggered by resolving the re-su
+	 * Delegates to the re-subscribe method to have the possibility to wait
+	 * until the moment, the re-subscribe should happen. If no {@link Promise} is returned,
+	 * the re-subscription will happen immediately.
+	 * We can only re-subscribe, if no further operation is in progress. If you are in RPC mode,
+	 * you might want to send a response back to a reply address. Though you don't want to get disconnected 
+	 * upfront.
+	 */
+	public final void checkResubscribe() {
+		if (shouldResubscribe() && 
+				isCancelled() && 
+				!isProgress()) {
+			doDisconnect();
+			deferred.resolve(getCloseValue());
+		}
+	}
+
+	/**
+	 * Delegated from the original consumer to handle the message
+	 * @param consumerTag the consumer tag
+	 * @param envelope the message envelope
+	 * @param properties the message properties
+	 * @param body the body content
+	 * @throws IOException
+	 */
+	abstract protected void doHandleDelivery(String consumerTag, Envelope envelope, BasicProperties properties,
+	byte[] body) throws IOException;
+
+	/**
+	 * Called before the disconnect callback is executed 
+	 * @throws IOException
+	 */
+	protected void preDisconnect() throws IOException {
+		// Nothing to do here
+	}
+
+	/**
+	 * Called after the disconnect callback was called
+	 * @throws IOException
+	 */
+	protected void postDisconnect() throws IOException {
+		// Nothing to do here
+	}
 
 	/**
 	 * Returns the {@link Deferred}
 	 * @return the {@link Deferred}
 	 */
-	Deferred<T> getDeferred() {
+	protected Deferred<T> getDeferred() {
 		requireNonNull(deferred);
 		return deferred;
 	}
-
-	/**
-	 * Returns the disconnect callback or <code>null</code>
-	 * @return the {@link BiConsumer} or <code>null</code>
-	 */
-	Consumer<AMQPContext> getDisconnectCallback() {
-		return disconnectCallback;
+	
+	protected void setProgress(boolean _progress) {
+		progress.set(_progress);
+	}
+	
+	private boolean isProgress() {
+		return progress.get();
 	}
 
-	abstract protected void doHandleDelivery(String consumerTag, Envelope envelope, BasicProperties properties,
-			byte[] body) throws IOException;
+	/**
+	 * Evaluates, whether the consumer should be closed or not.
+	 * @return <code>true</code>, if the consumer should be closed, otherwise <code>false</code>
+	 */
+	private boolean doShouldCloseConsumer() throws IOException {
+		return shouldCloseConsumer() ? doCancelConsumer() : false;
+	}
+	
+	/**
+	 * Called when the consumer is to be cancelled. This triggers the 
+	 * {@link DefaultConsumer#handleCancelOk(String)} callback.
+	 * @return <code>true</code> on successful closing, otherwise <code>false</code>s
+	 */
+	private boolean doCancelConsumer() throws IOException {
+		Deferred<T> deferred = getDeferred();
+		try {
+			getChannel().basicCancel(consumerTag);
+			return true;
+		} catch (Exception e) {
+			deferred.fail(e);
+			return false;
+		}
+	}
 
 }

@@ -335,7 +335,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * Sets the messageId.
 	 * @param messageId the messageId to set
 	 */
-	void setMessageId(String messageId) {
+	public void setMessageId(String messageId) {
 		this.messageId = messageId;
 	}
 

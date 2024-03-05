@@ -126,6 +126,11 @@ public class AMQPContextBuilder extends SimpleMessagingContextBuilder {
 		return this;
 	}
 	
+	public AMQPContextBuilder asRPCRequest() {
+		context.setRpc(true);
+		return this;
+	}
+	
 	public AMQPContextBuilder asRPCRequest(String correlationId, String replyTo) {
 		if (correlationId == null || replyTo == null) {
 			throw new IllegalArgumentException("One of the RPC argumens are null. Both parameter are mendatory for RPC requests");

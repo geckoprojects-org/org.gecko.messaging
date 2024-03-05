@@ -1,0 +1,28 @@
+/**
+ * Copyright (c) 2012 - 2017 Data In Motion and others.
+ * All rights reserved. 
+ * 
+ * This program and the accompanying materials are made available under the terms of the 
+ * Eclipse Public License v1.0 which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v10.html
+ * 
+ * Contributors:
+ *     Data In Motion - initial API and implementation
+ */
+package org.gecko.adapter.amqp.api.rpc;
+
+import org.gecko.osgi.messaging.MessagingRPCPubOnSub;
+import org.osgi.annotation.versioning.ProviderType;
+
+/**
+ * Messaging service interface to RPC publish on subscribe.
+ * This is just a marker interface
+ * @author Mark Hoffmann
+ * @since 10.10.2017
+ */
+@ProviderType
+public interface MessagingResubscribingPubOnSub extends MessagingRPCPubOnSub {
+	
+	public void resubscribe(String topic);
+	
+}

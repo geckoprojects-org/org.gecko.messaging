@@ -20,6 +20,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.gecko.adapter.amqp.api.BasicReSubscribeConsumerFactory.ConsumerFactoryContext;
 import org.gecko.adapter.amqp.client.AMQPContext;
 import org.gecko.adapter.amqp.client.AMQPContextBuilder;
 import org.gecko.util.common.concurrent.NamedThreadFactory;
@@ -38,6 +39,7 @@ public abstract class BasicReSubscriber<T> extends BasicAMQPService {
 
 	private static final Logger logger = Logger.getLogger(BasicReSubscriber.class.getName());
 	protected PromiseFactory pf = new PromiseFactory(Executors.newCachedThreadPool(NamedThreadFactory.newNamedFactory("AMQPRe-Subscriber")));
+	private BasicReSubscribeConsumerFactory<T> consumerFactory;
 
 	public Promise<T> subscribePromise(String topic) {
 		AMQPConfiguration configuration = getConfiguration();
@@ -83,7 +85,11 @@ public abstract class BasicReSubscriber<T> extends BasicAMQPService {
 	 * @param context the {@link AMQPContext}
 	 * @return the consumer instance
 	 */
-	abstract protected BasicReSubscribeConsumer<T> createReSubscribeConsumer(Channel channel, String consumerTag, AMQPContext context) ;
+	protected BasicReSubscribeConsumer<T> createReSubscribeConsumer(Channel channel, String consumerTag, AMQPContext context) {
+		requireNonNull(getConsumerFactory());
+		ConsumerFactoryContext cfc = BasicReSubscribeConsumerFactory.createContext(channel, consumerTag, context, null,  pf, null);
+		return getConsumerFactory().createConsumer(cfc);
+	}
 
 	/**
 	 * Executes a disconnect for the channel that belongs to the context
@@ -94,6 +100,23 @@ public abstract class BasicReSubscriber<T> extends BasicAMQPService {
 		} catch (IOException | TimeoutException e) {
 			logger.log(Level.SEVERE, e, ()->"Error disconnecting channel");
 		}
+	}
+
+	/**
+	 * Returns the consumerFactory.
+	 * @return the consumerFactory
+	 */
+	public BasicReSubscribeConsumerFactory<T> getConsumerFactory() {
+		return consumerFactory;
+	}
+
+	/**
+	 * Sets the consumerFactory.
+	 * @param consumerFactory the consumerFactory to set
+	 */
+	public void setConsumerFactory(BasicReSubscribeConsumerFactory<T> consumerFactory) {
+		requireNonNull(consumerFactory);
+		this.consumerFactory = consumerFactory;
 	}
 
 }

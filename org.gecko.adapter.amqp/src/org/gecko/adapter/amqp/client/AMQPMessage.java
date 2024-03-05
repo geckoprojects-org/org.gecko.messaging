@@ -32,6 +32,8 @@ public interface AMQPMessage extends Message {
 	
 	String getContentType();
 	
+	String getMessageId();
+	
 	/**
 	 * Returns <code>true</code>, if the message seems to be an RPC call
 	 * @return <code>true</code>, if the message seems to be an RPC call
