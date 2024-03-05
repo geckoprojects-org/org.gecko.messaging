@@ -21,12 +21,14 @@ import static org.gecko.adapter.amqp.consumer.AMQPHelper.validateQueueConfigurat
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URISyntaxException;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -224,6 +226,11 @@ public abstract class BasicAMQPService {
 	}
 	
 	protected Connection ensureOpenConnection() {
+		try {
+			connectionPromise.getValue();
+		} catch (InvocationTargetException | InterruptedException e) {
+			throw new IllegalStateException("Getting a connection was interrupted");
+		}
 		Connection connection = connectionRef.get();
 		if (nonNull(connection) && connection.isOpen()) {
 			return connection;
@@ -311,7 +318,10 @@ public abstract class BasicAMQPService {
 	}
 
 	/**
-	 * Connects using an exchange and routing key to a routing type
+	 * Connects using an exchange and routing key to a routing type.
+	 * The channels gets an unique id, to keep them till the disconnection.
+	 * Usually the queue name is taken as prefix for this key, In single RPC mode,
+	 * the message id was taken as prefix
 	 * @param context the context
 	 * @param subscribe whether to create an exchange for publishing or subscription
 	 * @return the channel instance
@@ -328,13 +338,9 @@ public abstract class BasicAMQPService {
 		String queueName = context.getQueueName();
 		String routingKey = context.getRoutingKey();
 		String routingType = context.getRoutingType();
-		String key = AMQPHelper.getKey(context);
-		if (subscribe) {
-			key += "_sub";
-		}
-		if (channelMap.containsKey(key)) {
-			logger.log(Level.FINE, "[{0}] Channel already exists", key);
-			return channelMap.get(key);
+		Optional<Channel> channelOpt = getChannel(context, subscribe);
+		if (channelOpt.isPresent()) {
+			return channelOpt.get();
 		}
 		Map<String, Object> arguments = new HashMap<String, Object>();
 		if (nonNull(amqpProps) && amqpProps.singleActiveConsumer()) {
@@ -350,9 +356,24 @@ public abstract class BasicAMQPService {
 			}
 			channel.queueBind(queueName, exchangeName, routingKey);
 		}
-		channelMap.put(key, channel);
-		logger.log(Level.FINE, "[{0}] Created channel", key);
+		registerChannel(channel, context, subscribe);
 		return channel;
+	}
+	
+	protected Optional<Channel> getChannel(AMQPContext context, boolean subscribe) {
+		String key = AMQPHelper.getKey(context, subscribe);
+		if (channelMap.containsKey(key)) {
+			logger.log(Level.FINE, "[{0}] Channel already exists", key);
+			return Optional.of(channelMap.get(key));
+		}
+		return Optional.empty();
+	}
+	
+	protected void registerChannel(Channel channel, AMQPContext context, boolean subscribe) {
+		String key = AMQPHelper.getKey(context, subscribe);
+		if (!channelMap.containsKey(key)) {
+			channelMap.put(key, channel);
+		}
 	}
 	
 	/**

@@ -9,21 +9,9 @@
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
-package org.gecko.adapter.amqp.api;
-
 /**
- * Additional AMQP Properties
- * @author Mark Hoffmann
- * @since 28.02.2024
+ * 
+ * @author mark
+ * @since 26.02.2024
  */
-public @interface AMQPProperties {
-	
-	static final String PREFIX_ = "amqp.";
-	
-	int maxActivateRPCWorker() default 3;
-	boolean singleActiveConsumer() default false;
-	boolean exclusiveQueue() default false;
-	int basicQos() default 0;
-	boolean autoAcknowledge() default false;
-	
-}
+package org.gecko.adapter.amqp.api.rpc;
