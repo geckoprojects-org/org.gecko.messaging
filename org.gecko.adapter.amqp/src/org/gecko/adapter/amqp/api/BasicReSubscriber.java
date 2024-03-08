@@ -41,6 +41,11 @@ public abstract class BasicReSubscriber<T> extends BasicAMQPService {
 	protected PromiseFactory pf = new PromiseFactory(Executors.newCachedThreadPool(NamedThreadFactory.newNamedFactory("AMQPRe-Subscriber")));
 	private BasicReSubscribeConsumerFactory<T> consumerFactory;
 
+	/**
+	 * subscribes to a topic and returns the subscription promise
+	 * @param topic the topic to subscribe upon
+	 * @return the promise the resolved on re-subscription
+	 */
 	public Promise<T> subscribePromise(String topic) {
 		AMQPConfiguration configuration = getConfiguration();
 		AMQPProperties amqpProps = getAmqpProperties();
@@ -77,7 +82,7 @@ public abstract class BasicReSubscriber<T> extends BasicAMQPService {
 		} 
 		return deferred.getPromise();
 	}
-
+	
 	/**
 	 * Creates the {@link BasicReSubscribeConsumer} and pre-configures it 
 	 * @param channel the {@link Channel}

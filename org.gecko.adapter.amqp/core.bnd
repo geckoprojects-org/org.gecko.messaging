@@ -9,4 +9,5 @@ Export-Package: \
 	org.gecko.adapter.amqp.client,\
 	org.gecko.adapter.amqp.jmx,\
 	org.gecko.adapter.amqp.api,\
-	org.gecko.adapter.amqp.api.rpc
+	org.gecko.adapter.amqp.api.rpc,\
+	org.gecko.adapter.amqp.api.annotations
