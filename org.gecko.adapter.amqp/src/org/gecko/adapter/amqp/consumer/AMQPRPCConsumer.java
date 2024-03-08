@@ -65,6 +65,7 @@ public class AMQPRPCConsumer extends DefaultConsumer {
 		String exchange = envelope.getExchange();
 		long deliveryTag = envelope.getDeliveryTag();
 		String contentType = properties.getContentType();
+		String messageId = properties.getMessageId();
 		// for RPC
 		String correlationId = properties.getCorrelationId();
 		if (correlationId == null || !correlationId.equals(this.correlationId)) {
@@ -81,6 +82,7 @@ public class AMQPRPCConsumer extends DefaultConsumer {
 			msg.setContentType(contentType);
 			msg.setReplyTo(replyTo);
 			msg.setCorrelationId(correlationId);
+			msg.setMessageId(messageId);
 			messageDeferred.resolve(msg);
 		} catch(Exception ex){
 			logger.log(Level.SEVERE, "Detected error on AMQP receive", ex);
