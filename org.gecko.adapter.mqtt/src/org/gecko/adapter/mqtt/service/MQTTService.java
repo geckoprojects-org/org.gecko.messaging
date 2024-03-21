@@ -18,13 +18,17 @@ import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
 import org.gecko.adapter.mqtt.MQTTContext;
 import org.gecko.adapter.mqtt.MQTTContextBuilder;
 import org.gecko.adapter.mqtt.QoS;
@@ -76,10 +80,18 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 
 		String brokerUrl();
 		String username();
-		String password(); 
+		String password();
+		PersistenceType inflightPersistence() default PersistenceType.MEMORY;
+		String filePersistencePath() default "";
+		int maxThreads() default 0; 
 		int maxInflight() default 10; 
 		
-	}		
+	}	
+	
+	enum PersistenceType {
+		MEMORY,
+		FILE
+	}
 
 	@Activate	
 	void activate(MqttConfig config, BundleContext context) throws Exception {
@@ -93,7 +105,21 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			}
 			options.setMaxInflight(config.maxInflight());
 			options.setAutomaticReconnect(true);
-			mqtt = new MqttClient(config.brokerUrl(), id);
+			MqttClientPersistence persistence = null;
+			if (PersistenceType.FILE.equals(config.inflightPersistence())) {
+				if (!config.filePersistencePath().isEmpty() && 
+						!config.filePersistencePath().equals("")) {
+					persistence = new MqttDefaultFilePersistence(config.filePersistencePath());
+				} else {
+					persistence = new MqttDefaultFilePersistence();
+				}
+			}
+			if (config.maxThreads() > 0) {
+				ScheduledExecutorService ses = Executors.newScheduledThreadPool(config.maxThreads());
+				mqtt = new MqttClient(config.brokerUrl(), id, persistence, ses);
+			} else {
+				mqtt = new MqttClient(config.brokerUrl(), id, persistence);
+			}
 			mqtt.connect(options);
 			mqtt.setCallback(this);
 		} catch(Exception e){
