@@ -12,7 +12,7 @@
 javac.source: 1.8
 javac.target: 1.8
 
-Bundle-Version: 1.0.5.SNAPSHOT
+Bundle-Version: 1.1.0.SNAPSHOT
 
 Bundle-Vendor: Data In Motion Consulting
 Bundle-Name: MQTT Messaging Implementation
