@@ -138,11 +138,11 @@ public class BasicRPCWorkerConsumer extends BasicReSubscribeConsumer<Void> {
 	 * @param request the request message
 	 * @return the response message
 	 */
-	protected AMQPMessageImpl handleWorker(AMQPMessageImpl request) {
+	protected AMQPMessage handleWorker(AMQPMessage request) {
 		WorkerFunction worker = functionCSO.getService();
 		try {
 			ByteBuffer response = worker.apply(request);
-			AMQPMessageImpl responseMessage = createFromMessage(request, response);
+			AMQPMessage responseMessage = createFromMessage(request, response);
 			return responseMessage;
 		} finally {
 			functionCSO.ungetService(worker);

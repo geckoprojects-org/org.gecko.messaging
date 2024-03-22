@@ -19,6 +19,7 @@ import java.nio.ByteBuffer;
 
 import org.gecko.adapter.amqp.api.AMQPConfiguration;
 import org.gecko.adapter.amqp.client.AMQPContext;
+import org.gecko.adapter.amqp.client.AMQPMessage;
 
 import com.rabbitmq.client.Envelope;
 import com.rabbitmq.client.AMQP.BasicProperties;
@@ -169,7 +170,7 @@ public class AMQPHelper {
 		return message;
 	}
 	
-	public static AMQPMessageImpl createFromMessage(AMQPMessageImpl message, ByteBuffer buffer) {
+	public static AMQPMessage createFromMessage(AMQPMessage message, ByteBuffer buffer) {
 		requireNonNull(message);
 		requireNonNull(buffer);
 		AMQPMessageImpl newMessage = new AMQPMessageImpl(isNull(message.getExchange()) ? "" : message.getExchange(), buffer);
