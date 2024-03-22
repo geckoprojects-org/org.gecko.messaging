@@ -67,5 +67,9 @@ public interface MessagingContextBuilder {
 	public MessagingContextBuilder withPushbackPolicy(PushbackPolicy<Message, BlockingQueue<PushEvent<? extends Message>>> pushbackPolicy);
 	
 	public MessagingContextBuilder withPushstreamContext(PushStreamContext<Message> context);
+	
+	public MessagingContextBuilder source(String source);
+	
+	public MessagingContextBuilder id(String id);
 
 }

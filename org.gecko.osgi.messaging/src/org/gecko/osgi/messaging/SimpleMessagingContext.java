@@ -23,6 +23,8 @@ import org.osgi.util.pushstream.QueuePolicyOption;
  */
 public class SimpleMessagingContext implements MessagingContext {
 	
+	private String id;
+	private String source;
 	private String queueName;
 	private String routingKey;
 	private String contentType = null;
@@ -350,6 +352,40 @@ public class SimpleMessagingContext implements MessagingContext {
 	
 	public void setReplyToPolicy(ReplyToPolicy replyToPolicy) {
 		this.replyToPolicy = replyToPolicy;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContext#getSoure()
+	 */
+	@Override
+	public String getSoure() {
+		return source;
+	}
+	
+	/**
+	 * Sets the source.
+	 * @param source the source to set
+	 */
+	void setSource(String source) {
+		this.source = source;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContext#getId()
+	 */
+	@Override
+	public String getId() {
+		return id;
+	}
+	
+	/**
+	 * Sets the id.
+	 * @param id the id to set
+	 */
+	void setId(String id) {
+		this.id = id;
 	}
 
 }
