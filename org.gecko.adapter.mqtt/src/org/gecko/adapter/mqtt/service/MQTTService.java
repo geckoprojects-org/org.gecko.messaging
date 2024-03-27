@@ -53,11 +53,13 @@ import org.osgi.util.pushstream.SimplePushEventSource;
 
 /**
  * MQTT messaging service implementation
+ * 
  * @author Mark Hoffmann
  * @since 10.10.2017
  */
-@Capability(namespace=MessagingConstants.CAPABILITY_NAMESPACE, name="mqtt.adapter", version="1.0.0", attribute= {"vendor=Gecko.io", "implementation=Paho"})
-@Component(service=MessagingService.class, name="MQTTService", configurationPolicy=ConfigurationPolicy.REQUIRE, immediate=true)
+@Capability(namespace = MessagingConstants.CAPABILITY_NAMESPACE, name = "mqtt.adapter", version = "1.0.0", attribute = {
+		"vendor=Gecko.io", "implementation=Paho" })
+@Component(service = MessagingService.class, name = "MQTTService", configurationPolicy = ConfigurationPolicy.REQUIRE, immediate = true)
 public class MQTTService implements MessagingService, AutoCloseable, MqttCallback {
 
 	private MqttClient mqtt;
@@ -66,11 +68,11 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 
 	private Map<String, SimplePushEventSource<Message>> subscriptions = new ConcurrentHashMap<>();
 
-	public MQTTService(){
+	public MQTTService() {
 		// to be used with @Activate
 	}
 
-	public MQTTService(MqttClient mqtt){
+	public MQTTService(MqttClient mqtt) {
 		this.mqtt = mqtt;
 		this.mqtt.setCallback(this);
 	}
@@ -79,36 +81,40 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 	@interface MqttConfig {
 
 		String brokerUrl();
+
 		String username();
+
 		String password();
+
 		PersistenceType inflightPersistence() default PersistenceType.MEMORY;
+
 		String filePersistencePath() default "";
-		int maxThreads() default 0; 
-		int maxInflight() default 10; 
-		
-	}	
-	
-	enum PersistenceType {
-		MEMORY,
-		FILE
+
+		int maxThreads() default 0;
+
+		int maxInflight() default 10;
+
 	}
 
-	@Activate	
+	enum PersistenceType {
+		MEMORY, FILE
+	}
+
+	@Activate
 	void activate(MqttConfig config, BundleContext context) throws Exception {
 		String id = UUID.randomUUID().toString();
 		try {
 			MqttConnectOptions options = new MqttConnectOptions();
-			if(config.username() != null && config.username().length() != 0) {
+			if (config.username() != null && config.username().length() != 0) {
 				options.setUserName(config.username());
-				if(config.password() != null && config.password().length() != 0)
-				options.setPassword(config.password().toCharArray());
+				if (config.password() != null && config.password().length() != 0)
+					options.setPassword(config.password().toCharArray());
 			}
 			options.setMaxInflight(config.maxInflight());
 			options.setAutomaticReconnect(true);
 			MqttClientPersistence persistence = null;
 			if (PersistenceType.FILE.equals(config.inflightPersistence())) {
-				if (!config.filePersistencePath().isEmpty() && 
-						!config.filePersistencePath().equals("")) {
+				if (!config.filePersistencePath().isEmpty() && !config.filePersistencePath().equals("")) {
 					persistence = new MqttDefaultFilePersistence(config.filePersistencePath());
 				} else {
 					persistence = new MqttDefaultFilePersistence();
@@ -122,7 +128,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			}
 			mqtt.connect(options);
 			mqtt.setCallback(this);
-		} catch(Exception e){
+		} catch (Exception e) {
 			System.err.println("Error connecting to MQTT broker " + config.brokerUrl());
 			throw e;
 		}
@@ -130,6 +136,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 
 	/**
 	 * Called on component deactivation
+	 * 
 	 * @throws Exception
 	 */
 	@Deactivate
@@ -137,43 +144,51 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		close();
 	}
 
-	/* 
+	/*
 	 * (non-Javadoc)
+	 * 
 	 * @see java.lang.AutoCloseable#close()
 	 */
 	@Override
 	public void close() throws Exception {
-		if(mqtt != null)
+		if (mqtt != null)
 			mqtt.disconnect();
-			mqtt.close();
+		mqtt.close();
 	}
 
-
-	/* 
+	/*
 	 * (non-Javadoc)
-	 * @see org.eclipse.paho.client.mqttv3.MqttCallback#connectionLost(java.lang.Throwable)
+	 * 
+	 * @see org.eclipse.paho.client.mqttv3.MqttCallback#connectionLost(java.lang.
+	 * Throwable)
 	 */
 	@Override
 	public void connectionLost(Throwable ex) {
 		ex.printStackTrace();
 	}
 
-	/* 
+	/*
 	 * (non-Javadoc)
-	 * @see org.eclipse.paho.client.mqttv3.MqttCallback#deliveryComplete(org.eclipse.paho.client.mqttv3.IMqttDeliveryToken)
+	 * 
+	 * @see
+	 * org.eclipse.paho.client.mqttv3.MqttCallback#deliveryComplete(org.eclipse.paho
+	 * .client.mqttv3.IMqttDeliveryToken)
 	 */
 	@Override
 	public void deliveryComplete(IMqttDeliveryToken deliveryComplete) {
 	}
 
-	/* 
+	/*
 	 * (non-Javadoc)
-	 * @see org.eclipse.paho.client.mqttv3.MqttCallback#messageArrived(java.lang.String, org.eclipse.paho.client.mqttv3.MqttMessage)
+	 * 
+	 * @see
+	 * org.eclipse.paho.client.mqttv3.MqttCallback#messageArrived(java.lang.String,
+	 * org.eclipse.paho.client.mqttv3.MqttMessage)
 	 */
 	@Override
 	public void messageArrived(String topic, MqttMessage message) throws Exception {
 		Iterator<Entry<String, SimplePushEventSource<Message>>> it = subscriptions.entrySet().iterator();
-		while(it.hasNext()){
+		while (it.hasNext()) {
 			Entry<String, SimplePushEventSource<Message>> e = it.next();
 			String key = e.getKey();
 			boolean match = false;
@@ -183,26 +198,27 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			} else {
 				match = key.equals(topic);
 			}
-			if(!match){
+			if (!match) {
 				continue;
 			}
 			SimplePushEventSource<Message> source = e.getValue();
-			if(!source.isConnected()){
+			if (!source.isConnected()) {
 				source.close();
 				it.remove();
 			} else {
 				try {
 					Message msg = fromPahoMessage(message, topic);
 					source.publish(msg);
-				} catch(Exception ex){
+				} catch (Exception ex) {
 					ex.printStackTrace();
 				}
 			}
 		}
 	}
 
-	/* 
+	/*
 	 * (non-Javadoc)
+	 * 
 	 * @see org.gecko.osgi.messaging.MessagingService#subscribe(java.lang.String)
 	 */
 	@Override
@@ -224,20 +240,23 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			mqtt.subscribe(topic, qos.ordinal());
 			String filter = topic.replaceAll("\\*", "#"); // replace MQTT # sign with * for filters
 			SimplePushEventSource<Message> source = subscriptions.get(filter);
-			if(source == null){
+			if (source == null) {
 				source = provider.buildSimpleEventSource(Message.class).build();
 				subscriptions.put(filter, source);
 			}
-			PushStreamBuilder<Message,BlockingQueue<PushEvent<? extends Message>>> buildStream = PushStreamHelper.configurePushStreamBuilder(source, context);
+			PushStreamBuilder<Message, BlockingQueue<PushEvent<? extends Message>>> buildStream = PushStreamHelper
+					.configurePushStreamBuilder(source, context);
 			return buildStream.build();
-		} catch(MqttException e){
+		} catch (MqttException e) {
 			throw new Exception(e.getMessage(), e);
 		}
 	}
 
-	/* 
+	/*
 	 * (non-Javadoc)
-	 * @see org.gecko.osgi.messaging.MessagingService#publish(java.lang.String, java.nio.ByteBuffer)
+	 * 
+	 * @see org.gecko.osgi.messaging.MessagingService#publish(java.lang.String,
+	 * java.nio.ByteBuffer)
 	 */
 	@Override
 	public void publish(String topic, ByteBuffer content) throws Exception {
@@ -245,9 +264,11 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		publish(topic, content, ctx);
 	}
 
-	/* 
+	/*
 	 * (non-Javadoc)
-	 * @see org.gecko.osgi.messaging.MessagingService#publish(java.lang.String, java.nio.ByteBuffer, org.gecko.osgi.messaging.MessagingContext)
+	 * 
+	 * @see org.gecko.osgi.messaging.MessagingService#publish(java.lang.String,
+	 * java.nio.ByteBuffer, org.gecko.osgi.messaging.MessagingContext)
 	 */
 	@Override
 	public void publish(String topic, ByteBuffer content, MessagingContext context) throws Exception {
@@ -262,16 +283,19 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		}
 		mqtt.publish(topic, content.array(), qos.ordinal(), retained);
 	}
-	
+
 	/**
 	 * Converts a Paho {@link MqttMessage} into an own one
-	 * @param msg the original message
+	 * 
+	 * @param msg   the original message
 	 * @param topic the topic
 	 * @return the converted message
 	 */
 	public static Message fromPahoMessage(MqttMessage msg, String topic) {
 		ByteBuffer content = ByteBuffer.wrap(msg.getPayload());
-		return new SimpleMessage(topic, content);
+		MessagingContext context = new MQTTContextBuilder().setRetained(msg.isRetained())
+				.withQoS(QoS.values()[msg.getQos()]).build();
+		return new SimpleMessage(topic, content, context);
 	}
 
 }
