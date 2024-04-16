@@ -4,7 +4,8 @@
 	org.osgi.util.pushstream;version=latest,\
 	org.osgi.util.function;version=latest,\
 	org.gecko.util.pushstream;version=latest,\
-	org.osgi.framework
+	org.osgi.framework,\
+	org.osgi.util.promise;version=latest
 
 Bundle-Version: 1.0.5.SNAPSHOT
 Bundle-Name: MQTT Messaging Implementation
