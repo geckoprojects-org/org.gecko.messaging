@@ -236,20 +236,24 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 				qos = ctx.getQoS();
 			}
 		}
-		try {
-			mqtt.subscribe(topic, qos.ordinal());
-			String filter = topic.replaceAll("\\*", "#"); // replace MQTT # sign with * for filters
-			SimplePushEventSource<Message> source = subscriptions.get(filter);
-			if (source == null) {
-				source = provider.buildSimpleEventSource(Message.class).build();
-				subscriptions.put(filter, source);
-			}
-			PushStreamBuilder<Message, BlockingQueue<PushEvent<? extends Message>>> buildStream = PushStreamHelper
-					.configurePushStreamBuilder(source, context);
-			return buildStream.build();
-		} catch (MqttException e) {
-			throw new Exception(e.getMessage(), e);
+		String filter = topic.replaceAll("\\*", "#"); // replace MQTT # sign with * for filters
+		SimplePushEventSource<Message> source = subscriptions.get(filter);
+		if (source == null) {
+			final SimplePushEventSource<Message>  newSource = provider.buildSimpleEventSource(Message.class).build();
+			final int qosInt = qos.ordinal();
+			newSource.connectPromise().onResolve(() -> {
+				try {
+					subscriptions.put(filter, newSource);
+					mqtt.subscribe(topic, qosInt);
+				} catch (MqttException e) {
+					throw new RuntimeException("Error Connecting subscribing to " + topic, e);
+				}
+			});
+			source = newSource;
 		}
+		PushStreamBuilder<Message, BlockingQueue<PushEvent<? extends Message>>> buildStream = PushStreamHelper
+				.configurePushStreamBuilder(source, context);
+		return buildStream.build();
 	}
 
 	/*
