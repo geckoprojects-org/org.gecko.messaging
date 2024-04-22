@@ -48,7 +48,6 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 import org.osgi.util.pushstream.PushEvent;
 import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.PushStreamBuilder;
-import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.SimplePushEventSource;
 
 /**
@@ -63,8 +62,6 @@ import org.osgi.util.pushstream.SimplePushEventSource;
 public class MQTTService implements MessagingService, AutoCloseable, MqttCallback {
 
 	private MqttClient mqtt;
-
-	private PushStreamProvider provider = new PushStreamProvider();
 
 	private Map<String, SimplePushEventSource<Message>> subscriptions = new ConcurrentHashMap<>();
 
@@ -239,7 +236,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		String filter = topic.replaceAll("\\*", "#"); // replace MQTT # sign with * for filters
 		SimplePushEventSource<Message> source = subscriptions.get(filter);
 		if (source == null) {
-			final SimplePushEventSource<Message>  newSource = provider.buildSimpleEventSource(Message.class).build();
+			final SimplePushEventSource<Message>  newSource = PushStreamHelper.createSimpleEventSource(Message.class, context);
 			final int qosInt = qos.ordinal();
 			newSource.connectPromise().onResolve(() -> {
 				try {
