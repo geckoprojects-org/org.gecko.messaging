@@ -63,7 +63,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 
 	private MqttClient mqtt;
 
-	private Map<String, SimplePushEventSource<Message>> subscriptions = new ConcurrentHashMap<>();
+	private volatile Map<String, SimplePushEventSource<Message>> subscriptions = new ConcurrentHashMap<>();
 
 	public MQTTService() {
 		// to be used with @Activate
@@ -184,7 +184,10 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 	 */
 	@Override
 	public void messageArrived(String topic, MqttMessage message) throws Exception {
-		Iterator<Entry<String, SimplePushEventSource<Message>>> it = subscriptions.entrySet().iterator();
+		final Iterator<Entry<String, SimplePushEventSource<Message>>> it;
+		synchronized (subscriptions) {
+			it = subscriptions.entrySet().iterator();
+		}
 		while (it.hasNext()) {
 			Entry<String, SimplePushEventSource<Message>> e = it.next();
 			String key = e.getKey();
@@ -240,7 +243,9 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			final int qosInt = qos.ordinal();
 			newSource.connectPromise().onResolve(() -> {
 				try {
-					subscriptions.put(filter, newSource);
+					synchronized (subscriptions) {
+						subscriptions.put(filter, newSource);
+					}
 					mqtt.subscribe(topic, qosInt);
 				} catch (MqttException e) {
 					throw new RuntimeException("Error Connecting subscribing to " + topic, e);
