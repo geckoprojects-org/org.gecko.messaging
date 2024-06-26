@@ -21,14 +21,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
+import org.eclipse.paho.mqttv5.client.IMqttToken;
+import org.eclipse.paho.mqttv5.client.MqttCallback;
+import org.eclipse.paho.mqttv5.client.MqttClient;
+import org.eclipse.paho.mqttv5.client.MqttClientPersistence;
+import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
+import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
+import org.eclipse.paho.mqttv5.client.persist.MqttDefaultFilePersistence;
+import org.eclipse.paho.mqttv5.common.MqttException;
+import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import org.gecko.adapter.mqtt.MQTTContext;
 import org.gecko.adapter.mqtt.MQTTContextBuilder;
 import org.gecko.adapter.mqtt.QoS;
@@ -101,14 +103,14 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 	void activate(MqttConfig config, BundleContext context) throws Exception {
 		String id = UUID.randomUUID().toString();
 		try {
-			MqttConnectOptions options = new MqttConnectOptions();
+			MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
 			if (config.username() != null && config.username().length() != 0) {
-				options.setUserName(config.username());
+				ob.username(config.username());
 				if (config.password() != null && config.password().length() != 0)
-					options.setPassword(config.password().toCharArray());
+					ob.password(config.password().getBytes());
 			}
-			options.setMaxInflight(config.maxInflight());
-			options.setAutomaticReconnect(true);
+//			ob.setMaxInflight(config.maxInflight());
+			ob.automaticReconnect(true);
 			MqttClientPersistence persistence = null;
 			if (PersistenceType.FILE.equals(config.inflightPersistence())) {
 				if (!config.filePersistencePath().isEmpty() && !config.filePersistencePath().equals("")) {
@@ -123,7 +125,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			} else {
 				mqtt = new MqttClient(config.brokerUrl(), id, persistence);
 			}
-			mqtt.connect(options);
+			mqtt.connect(ob.build());
 			mqtt.setCallback(this);
 		} catch (Exception e) {
 			System.err.println("Error connecting to MQTT broker " + config.brokerUrl());
@@ -151,28 +153,6 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		if (mqtt != null)
 			mqtt.disconnect();
 		mqtt.close();
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.eclipse.paho.client.mqttv3.MqttCallback#connectionLost(java.lang.
-	 * Throwable)
-	 */
-	@Override
-	public void connectionLost(Throwable ex) {
-		ex.printStackTrace();
-	}
-
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * org.eclipse.paho.client.mqttv3.MqttCallback#deliveryComplete(org.eclipse.paho
-	 * .client.mqttv3.IMqttDeliveryToken)
-	 */
-	@Override
-	public void deliveryComplete(IMqttDeliveryToken deliveryComplete) {
 	}
 
 	/*
@@ -216,11 +196,6 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		}
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.gecko.osgi.messaging.MessagingService#subscribe(java.lang.String)
-	 */
 	@Override
 	public PushStream<Message> subscribe(String topic) throws Exception {
 		MessagingContext ctx = new MQTTContextBuilder().withQoS(QoS.AT_LEAST_ONE).build();
@@ -258,24 +233,12 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		return buildStream.build();
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.gecko.osgi.messaging.MessagingService#publish(java.lang.String,
-	 * java.nio.ByteBuffer)
-	 */
 	@Override
 	public void publish(String topic, ByteBuffer content) throws Exception {
 		MessagingContext ctx = new MQTTContextBuilder().withQoS(QoS.AT_LEAST_ONE).build();
 		publish(topic, content, ctx);
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.gecko.osgi.messaging.MessagingService#publish(java.lang.String,
-	 * java.nio.ByteBuffer, org.gecko.osgi.messaging.MessagingContext)
-	 */
 	@Override
 	public void publish(String topic, ByteBuffer content, MessagingContext context) throws Exception {
 		QoS qos = QoS.AT_LEAST_ONE;
@@ -302,6 +265,55 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		MessagingContext context = new MQTTContextBuilder().setRetained(msg.isRetained())
 				.withQoS(QoS.values()[msg.getQos()]).build();
 		return new SimpleMessage(topic, content, context);
+	}
+
+/* 
+ * (non-Javadoc)
+ * @see org.eclipse.paho.mqttv5.client.MqttCallback#disconnected(org.eclipse.paho.mqttv5.client.MqttDisconnectResponse)
+ */
+@Override
+public void disconnected(MqttDisconnectResponse disconnectResponse) {
+	// TODO Auto-generated method stub
+	
+}
+	/* 
+	 * (non-Javadoc)
+	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#mqttErrorOccurred(org.eclipse.paho.mqttv5.common.MqttException)
+	 */
+	@Override
+	public void mqttErrorOccurred(MqttException exception) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#deliveryComplete(org.eclipse.paho.mqttv5.client.IMqttToken)
+	 */
+	@Override
+	public void deliveryComplete(IMqttToken token) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#connectComplete(boolean, java.lang.String)
+	 */
+	@Override
+	public void connectComplete(boolean reconnect, String serverURI) {
+		// TODO Auto-generated method stub
+		
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#authPacketArrived(int, org.eclipse.paho.mqttv5.common.packet.MqttProperties)
+	 */
+	@Override
+	public void authPacketArrived(int reasonCode, MqttProperties properties) {
+		// TODO Auto-generated method stub
+		
 	}
 
 }

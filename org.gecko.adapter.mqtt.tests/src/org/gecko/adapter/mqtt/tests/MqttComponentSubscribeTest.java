@@ -13,11 +13,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
+import org.eclipse.paho.mqttv5.client.MqttClient;
+import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
+import org.eclipse.paho.mqttv5.common.MqttException;
+import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.MqttPersistenceException;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingService;
@@ -45,10 +45,10 @@ public class MqttComponentSubscribeTest {
 	@BeforeEach
 	public void setup() throws MqttException {
 		checkClient = new MqttClient(brokerUrl, "test");
-		MqttConnectOptions options = new MqttConnectOptions();
-		options.setUserName("demo");
-		options.setPassword("1234".toCharArray());
-		checkClient.connect(options);
+		MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
+		ob.username("demo");
+		ob.password("1234".getBytes());
+		checkClient.connect(ob.build());
 	}
 	
 	@AfterEach
