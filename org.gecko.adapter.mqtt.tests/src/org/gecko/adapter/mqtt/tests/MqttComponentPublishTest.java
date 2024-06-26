@@ -15,12 +15,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.mqttv5.client.IMqttToken;
+import org.eclipse.paho.mqttv5.client.MqttCallback;
+import org.eclipse.paho.mqttv5.client.MqttClient;
+import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
+import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
+import org.eclipse.paho.mqttv5.common.MqttException;
+import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingService;
 import org.junit.jupiter.api.AfterEach;
@@ -52,10 +54,11 @@ public class MqttComponentPublishTest {
 	@BeforeEach
 	public void setup() throws MqttException {
 		checkClient = new MqttClient(brokerUrl, "test");
-		MqttConnectOptions options = new MqttConnectOptions();
-		options.setUserName("demo");
-		options.setPassword("1234".toCharArray());
-		checkClient.connect(options);
+
+		MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
+		ob.username("demo");
+		ob.password("1234".getBytes());
+		checkClient.connect(ob.build());
 	}
 
 	@AfterEach
@@ -188,10 +191,10 @@ public class MqttComponentPublishTest {
 		checkClient.close();
 		
 		checkClient = new MqttClient("tcp://devel.data-in-motion.biz:1883", "test");
-		MqttConnectOptions options = new MqttConnectOptions();
-		options.setUserName("demo");
-		options.setPassword("1234".toCharArray());
-		checkClient.connect(options);
+		MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
+		ob.username("demo");
+		ob.password("1234".getBytes());
+		checkClient.connect(ob.build());
 		
 		// has to be a new configuration
 		Dictionary<String, Object> p = clientConfig.getProperties();
@@ -410,7 +413,7 @@ public class MqttComponentPublishTest {
 	 * @throws MqttException
 	 */
 	private void connectClient(String topic, CountDownLatch checkLatch, AtomicReference<String> resultContent) throws MqttException {
-		checkClient.subscribe(topic);
+		checkClient.subscribe(topic,0);
 		checkClient.setCallback(new MqttCallback() {
 
 			@Override
@@ -421,14 +424,32 @@ public class MqttComponentPublishTest {
 
 			}
 
+
 			@Override
-			public void deliveryComplete(IMqttDeliveryToken arg0) {
+			public void disconnected(MqttDisconnectResponse disconnectResponse) {
+				fail("fail was not expected");
+			}
+
+			@Override
+			public void mqttErrorOccurred(MqttException exception) {
+				fail("fail was not expected");
+			}
+
+			@Override
+			public void deliveryComplete(IMqttToken token) {
 				fail("delivery complete was not expected");
 			}
 
 			@Override
-			public void connectionLost(Throwable arg0) {
-				fail("fail was not expected");
+			public void connectComplete(boolean reconnect, String serverURI) {
+				// TODO Auto-generated method stub
+				
+			}
+
+			@Override
+			public void authPacketArrived(int reasonCode, MqttProperties properties) {
+				// TODO Auto-generated method stub
+				
 			}
 		});
 	}

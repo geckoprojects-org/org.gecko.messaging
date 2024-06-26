@@ -18,4 +18,4 @@
  */
 @org.osgi.annotation.bundle.Export
 @org.osgi.annotation.versioning.Version("1.2.6")
-package org.eclipse.paho.mqttv5.client.internal;
+package org.eclipse.paho.mqttv5.client.persist;

@@ -5,7 +5,8 @@
 	org.osgi.util.function;version=latest,\
 	org.gecko.util.pushstream;version=latest,\
 	org.osgi.framework,\
-	org.osgi.util.promise;version=latest
+	org.osgi.util.promise;version=latest,\
+	org.eclipse.paho.mqttv5.client
 
 Bundle-Version: 1.1.0.SNAPSHOT
 Bundle-Vendor: Data In Motion Consulting
