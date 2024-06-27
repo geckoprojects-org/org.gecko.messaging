@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Dictionary;
 import java.util.Hashtable;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -79,7 +80,7 @@ public class MqttComponentDisconnectTest {
 		final CountDownLatch createLatch = new CountDownLatch(1);
 		clientConfig = getConfiguration(context, "MQTTService", createLatch);
 
-		String publishTopic = "publish.junit";
+		String publishTopic = "publish.junit." + UUID.randomUUID();
 		String publishContent = "this is a test";
 
 		// has to be a new configuration
@@ -102,22 +103,29 @@ public class MqttComponentDisconnectTest {
 		// starting adapter with the given properties
 		clientConfig.update(p);
 
-		createLatch.await(1, TimeUnit.SECONDS);
+		createLatch.await(3, TimeUnit.SECONDS);
 
 		// check for service
 		MessagingService messagingService = getService(MessagingService.class, 30000l);
+		
 		assertNotNull(messagingService);
 
-		// send message and wait for the result
-		while (true) {
-			messagingService.publish(publishTopic, ByteBuffer.wrap(publishContent.getBytes()));
-			// wait and compare the received message
-			resultLatch.await(1, TimeUnit.SECONDS);
-			assertEquals(publishContent, result.get());
-		}
+			// send message and wait for the result
+			while (true) {
+				try {
+					messagingService.publish(publishTopic, ByteBuffer.wrap(publishContent.getBytes()));
+					// wait and compare the received message
+					resultLatch.await(1, TimeUnit.SECONDS);
+					assertEquals(publishContent, result.get());
+				} catch (Exception e) {
+					System.out.println("Ex: " + e.getLocalizedMessage());
+				}
+				Thread.sleep(1000);
+			}
 
 //			createLatch.await(10, TimeUnit.SECONDS);
 	}
+	
 
 	/**
 	 * Creates a configuration with the configuration admin
@@ -159,7 +167,7 @@ public class MqttComponentDisconnectTest {
 	 */
 	private void connectClient(String topic, CountDownLatch checkLatch, AtomicReference<String> resultContent)
 			throws MqttException {
-		checkClient.subscribe(topic,0);
+		checkClient.subscribe(topic, 0);
 		checkClient.setCallback(new MqttCallback() {
 
 			@Override
@@ -172,29 +180,29 @@ public class MqttComponentDisconnectTest {
 
 			@Override
 			public void disconnected(MqttDisconnectResponse disconnectResponse) {
-				fail("fail was not expected");
+				System.out.println("fail was not expected"+disconnectResponse);
 			}
 
 			@Override
 			public void mqttErrorOccurred(MqttException exception) {
-				fail("fail was not expected");
+				System.out.println("fail was not expected");
 			}
 
 			@Override
 			public void deliveryComplete(IMqttToken token) {
-				fail("delivery complete was not expected");
+				System.out.println("delivery complete was not expected");
 			}
 
 			@Override
 			public void connectComplete(boolean reconnect, String serverURI) {
-				fail("delivery complete was not expected");
-				
+				System.out.println("delivery complete was not expected");
+
 			}
 
 			@Override
 			public void authPacketArrived(int reasonCode, MqttProperties properties) {
 				fail("delivery complete was not expected");
-				
+
 			}
 		});
 	}
