@@ -11,10 +11,13 @@
  */
 package org.gecko.adapter.mqtt.service;
 
+import java.net.ConnectException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,6 +30,7 @@ import org.eclipse.paho.mqttv5.client.IMqttToken;
 import org.eclipse.paho.mqttv5.client.MqttCallback;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.client.MqttClientPersistence;
+import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
 import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
 import org.eclipse.paho.mqttv5.client.persist.MqttDefaultFilePersistence;
@@ -66,9 +70,19 @@ import org.osgi.util.pushstream.SimplePushEventSource;
 public class MQTTService implements MessagingService, AutoCloseable, MqttCallback {
 	private static final Logger logger = Logger.getLogger(MQTTService.class.getName());
 
+	private static final int RECONNECT_DELAY_MS = 5000;
+
+	private Timer reconnectTimer;
+
 	private MqttClient mqtt;
 
+
 	private volatile Map<String, SimplePushEventSource<Message>> subscriptions = new ConcurrentHashMap<>();
+
+	private Map<String,Integer> reconnectSub = new ConcurrentHashMap<>();
+
+	private MqttConnectionOptions connectOptions;
+
 
 	public MQTTService() {
 		// to be used with @Activate
@@ -127,10 +141,12 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			} else {
 				mqtt = new MqttClient(config.brokerUrl(), id, persistence);
 			}
-			mqtt.connect(ob.build());
+			connectOptions = ob.build();
+			mqtt.connect(connectOptions);
 			mqtt.setCallback(this);
 		} catch (Exception e) {
-			logger.log(Level.SEVERE, "Error connecting to MQTT broker " + config.brokerUrl(), e);
+			System.err.println("Error connecting to MQTT broker " + config.brokerUrl());
+			throw e;
 		}
 	}
 
@@ -211,6 +227,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 				try {
 					synchronized (subscriptions) {
 						subscriptions.put(filter, newSource);
+						reconnectSub.put(topic,qosInt);
 					}
 					mqtt.subscribe(topic, qosInt);
 				} catch (MqttException e) {
@@ -260,7 +277,52 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 
 	@Override
 	public void disconnected(MqttDisconnectResponse disconnectResponse) {
-		logger.log(Level.FINER, "disconnected " + disconnectResponse);
+
+		MqttException exception = disconnectResponse.getException();
+		if (exception != null)
+			exception.printStackTrace();
+		logger.log(Level.INFO, "Connection to MQTT broker lost: "+disconnectResponse.getReasonString()+". Waiting before reconnecting."
+				);
+
+		if (reconnectTimer != null) {
+			reconnectTimer.cancel();
+			reconnectTimer = null;
+		}
+
+		reconnectTimer = new Timer();
+		reconnectTimer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				try {
+					if (mqtt == null || mqtt.isConnected()) {
+						logger.log(Level.SEVERE, "Trying to reconnect a null client or allready connected client.");
+						return;
+					}
+					logger.log(Level.INFO, "Reconnect");
+					mqtt.connect(connectOptions);
+				} catch (MqttException e) {
+					if (e.getCause() instanceof ConnectException) {
+						logger.log(Level.SEVERE, "Error trying to reconnect to MQTT broker.", e);
+						disconnected(disconnectResponse);
+					} else {
+						logger.log(Level.SEVERE,
+								"Fatal error trying to reconnect to MQTT broker. No further reconnection will be attempted",
+								e);
+					}
+					return;
+				}
+				
+				for (String topic : reconnectSub.keySet()) {
+					try {
+						mqtt.subscribe(topic, reconnectSub.get(topic));
+					} catch (MqttException e) {
+						logger.log(Level.SEVERE,
+								"Fatal error trying to subscribe to \""+topic+"\" MQTT broker while reconnect.",
+								e);
+					}					
+				}
+			}
+		}, RECONNECT_DELAY_MS);
 	}
 
 	@Override
@@ -275,7 +337,12 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 
 	@Override
 	public void connectComplete(boolean reconnect, String serverURI) {
-		logger.log(Level.FINER, "connect to " + serverURI + " complete reconnect = " + reconnect);
+		logger.log(Level.INFO, "connect to " + serverURI + " complete reconnect = " + reconnect);
+//		if (reconnectTimer != null) {
+//			logger.log(Level.INFO, "cancel reconnect timer.");
+//			reconnectTimer.cancel();
+//			reconnectTimer = null;
+//		}
 	}
 
 	@Override

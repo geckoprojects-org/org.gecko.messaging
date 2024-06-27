@@ -107,25 +107,31 @@ public class MqttComponentDisconnectTest {
 
 		// check for service
 		MessagingService messagingService = getService(MessagingService.class, 30000l);
-		
-		assertNotNull(messagingService);
 
-			// send message and wait for the result
-			while (true) {
-				try {
-					messagingService.publish(publishTopic, ByteBuffer.wrap(publishContent.getBytes()));
-					// wait and compare the received message
-					resultLatch.await(1, TimeUnit.SECONDS);
-					assertEquals(publishContent, result.get());
-				} catch (Exception e) {
-					System.out.println("Ex: " + e.getLocalizedMessage());
+		assertNotNull(messagingService);
+		boolean isError = false;
+		// send message and wait for the result
+		while (true) {
+			try {
+				messagingService.publish(publishTopic, ByteBuffer.wrap(publishContent.getBytes()));
+				// wait and compare the received message
+				resultLatch.await(1, TimeUnit.SECONDS);
+				assertEquals(publishContent, result.get());
+				if (isError) {
+					System.out.println("message send.");
+					isError = false;
 				}
-				Thread.sleep(1000);
+			} catch (Exception e) {
+				if (!isError) {
+					System.out.println("Ex: " + e.getLocalizedMessage());
+					isError = true;
+				}
 			}
+//				Thread.sleep(1000);
+		}
 
 //			createLatch.await(10, TimeUnit.SECONDS);
 	}
-	
 
 	/**
 	 * Creates a configuration with the configuration admin
@@ -180,7 +186,7 @@ public class MqttComponentDisconnectTest {
 
 			@Override
 			public void disconnected(MqttDisconnectResponse disconnectResponse) {
-				System.out.println("fail was not expected"+disconnectResponse);
+				System.out.println("fail was not expected" + disconnectResponse);
 			}
 
 			@Override
