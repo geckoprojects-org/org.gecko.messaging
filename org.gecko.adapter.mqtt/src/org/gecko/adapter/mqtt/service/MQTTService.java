@@ -20,6 +20,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.paho.mqttv5.client.IMqttToken;
 import org.eclipse.paho.mqttv5.client.MqttCallback;
@@ -62,6 +64,7 @@ import org.osgi.util.pushstream.SimplePushEventSource;
 		"vendor=Gecko.io", "implementation=Paho" })
 @Component(service = MessagingService.class, name = "MQTTService", configurationPolicy = ConfigurationPolicy.REQUIRE, immediate = true)
 public class MQTTService implements MessagingService, AutoCloseable, MqttCallback {
+	private static final Logger logger = Logger.getLogger(MQTTService.class.getName());
 
 	private MqttClient mqtt;
 
@@ -109,7 +112,6 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 				if (config.password() != null && config.password().length() != 0)
 					ob.password(config.password().getBytes());
 			}
-//			ob.setMaxInflight(config.maxInflight());
 			ob.automaticReconnect(true);
 			MqttClientPersistence persistence = null;
 			if (PersistenceType.FILE.equals(config.inflightPersistence())) {
@@ -128,8 +130,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			mqtt.connect(ob.build());
 			mqtt.setCallback(this);
 		} catch (Exception e) {
-			System.err.println("Error connecting to MQTT broker " + config.brokerUrl());
-			throw e;
+			logger.log(Level.SEVERE, "Error connecting to MQTT broker " + config.brokerUrl(), e);
 		}
 	}
 
@@ -143,25 +144,14 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		close();
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see java.lang.AutoCloseable#close()
-	 */
 	@Override
 	public void close() throws Exception {
-		if (mqtt != null)
+		if (mqtt != null) {
 			mqtt.disconnect();
-		mqtt.close();
+			mqtt.close();
+		}
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see
-	 * org.eclipse.paho.client.mqttv3.MqttCallback#messageArrived(java.lang.String,
-	 * org.eclipse.paho.client.mqttv3.MqttMessage)
-	 */
 	@Override
 	public void messageArrived(String topic, MqttMessage message) throws Exception {
 		final Iterator<Entry<String, SimplePushEventSource<Message>>> it;
@@ -214,7 +204,8 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		String filter = topic.replaceAll("\\*", "#"); // replace MQTT # sign with * for filters
 		SimplePushEventSource<Message> source = subscriptions.get(filter);
 		if (source == null) {
-			final SimplePushEventSource<Message>  newSource = PushStreamHelper.createSimpleEventSource(Message.class, context);
+			final SimplePushEventSource<Message> newSource = PushStreamHelper.createSimpleEventSource(Message.class,
+					context);
 			final int qosInt = qos.ordinal();
 			newSource.connectPromise().onResolve(() -> {
 				try {
@@ -267,53 +258,29 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		return new SimpleMessage(topic, content, context);
 	}
 
-/* 
- * (non-Javadoc)
- * @see org.eclipse.paho.mqttv5.client.MqttCallback#disconnected(org.eclipse.paho.mqttv5.client.MqttDisconnectResponse)
- */
-@Override
-public void disconnected(MqttDisconnectResponse disconnectResponse) {
-	// TODO Auto-generated method stub
-	
-}
-	/* 
-	 * (non-Javadoc)
-	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#mqttErrorOccurred(org.eclipse.paho.mqttv5.common.MqttException)
-	 */
+	@Override
+	public void disconnected(MqttDisconnectResponse disconnectResponse) {
+		logger.log(Level.FINER, "disconnected " + disconnectResponse);
+	}
+
 	@Override
 	public void mqttErrorOccurred(MqttException exception) {
-		// TODO Auto-generated method stub
-		
+		logger.log(Level.WARNING, "MQTT error occurred ", exception);
 	}
 
-	/* 
-	 * (non-Javadoc)
-	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#deliveryComplete(org.eclipse.paho.mqttv5.client.IMqttToken)
-	 */
 	@Override
 	public void deliveryComplete(IMqttToken token) {
-		// TODO Auto-generated method stub
-		
+		logger.log(Level.FINER, "deliveryComplete " + token);
 	}
 
-	/* 
-	 * (non-Javadoc)
-	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#connectComplete(boolean, java.lang.String)
-	 */
 	@Override
 	public void connectComplete(boolean reconnect, String serverURI) {
-		// TODO Auto-generated method stub
-		
+		logger.log(Level.FINER, "connect to " + serverURI + " complete reconnect = " + reconnect);
 	}
 
-	/* 
-	 * (non-Javadoc)
-	 * @see org.eclipse.paho.mqttv5.client.MqttCallback#authPacketArrived(int, org.eclipse.paho.mqttv5.common.packet.MqttProperties)
-	 */
 	@Override
 	public void authPacketArrived(int reasonCode, MqttProperties properties) {
-		// TODO Auto-generated method stub
-		
+		logger.log(Level.FINER, "auth packet arrived reasonCode = " + reasonCode);
 	}
 
 }
