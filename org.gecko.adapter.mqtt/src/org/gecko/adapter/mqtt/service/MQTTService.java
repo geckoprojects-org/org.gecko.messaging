@@ -266,7 +266,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 	 */
 	@Override
 	public void publish(String topic, ByteBuffer content) throws Exception {
-		MessagingContext ctx = new MQTTContextBuilder().withQoS(QoS.AT_LEAST_ONE).build();
+		MessagingContext ctx = new MQTTContextBuilder().withQoS(QoS.AT_MOST_ONE).build();
 		publish(topic, content, ctx);
 	}
 
@@ -278,7 +278,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 	 */
 	@Override
 	public void publish(String topic, ByteBuffer content, MessagingContext context) throws Exception {
-		QoS qos = QoS.AT_LEAST_ONE;
+		QoS qos = QoS.AT_MOST_ONE;
 		boolean retained = false;
 		if (context != null && context instanceof MQTTContext) {
 			MQTTContext ctx = (MQTTContext) context;
