@@ -22,23 +22,26 @@ import org.gecko.osgi.messaging.MessagingConstants;
 import org.osgi.annotation.bundle.Attribute;
 import org.osgi.annotation.bundle.Requirement;
 
-@Requirement(namespace=MessagingConstants.CAPABILITY_NAMESPACE)
+@Requirement(namespace = MessagingConstants.CAPABILITY_NAMESPACE)
 @Retention(CLASS)
 @Target({ TYPE, PACKAGE })
 /**
  * Require capability annotation for the message adapter
+ * 
  * @author Mark Hoffmann
  * @since 15.02.2018
  */
 public @interface RequireMessageAdapter {
-	
-	@Attribute(value="name")
+
+	@Attribute(value = "name")
 	String name();
-	
+
 	String version() default "";
-	
+
 	String vendor() default "";
-	
+
 	String implementation() default "";
+
+	String mqttVersion() default "";
 
 }

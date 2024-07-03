@@ -18,7 +18,7 @@ import org.gecko.moquette.broker.MQTTBroker;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingService;
-import org.gecko.osgi.messaging.annotations.RequireMQTTv3;
+import org.gecko.osgi.messaging.annotations.RequireMQTTv5;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,7 +34,7 @@ import org.osgi.util.pushstream.PushStream;
 @ExtendWith(MockitoExtension.class)
 @ExtendWith(ServiceExtension.class)
 @ExtendWith(ConfigurationExtension.class)
-@RequireMQTTv3
+@RequireMQTTv5
 public class MqttComponentSubscribeTest {
 
 	private static final String BROKER_URL = "tcp://localhost:2183";
