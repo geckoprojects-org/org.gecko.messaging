@@ -5,7 +5,6 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 
 # sets the usually required buildpath using the bnd library, you can extend it with the normal -buildpath to your liking
 -buildpath: \
-	io.moquette:moquette-broker,\
 	org.osgi.framework;version=latest,\
 	org.osgi.service.cm;version=latest,\
 	org.osgi.util.tracker;version=latest,\
@@ -14,20 +13,8 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.gecko.adapter.mqtt;version=snapshot,\
 	org.gecko.osgi.messaging;version=snapshot,\
 	org.eclipse.paho.mqttv5.client;version=latest,\
-	org.osgi.test.junit5.cm
+	org.osgi.test.junit5.cm,\
+	org.gecko.moquette.broker;version=latest
 
 Bundle-Name: MQTT Messaging Integration Test
 Private-Package: org.gecko.adapter.mqtt.tests
-
--conditionalpackage: \
-    io.moquette, \
-    io.moquette.*
-
-Import-Package: \
-    !com.bugsnag, \
-    !com.codahale.metrics, \
-    !com.librato.metrics.*, \
-    !com.zaxxer.hikari.*, \
-    !org.apache.commons.codec.*, \
-    *
-#    !org.h2.*, \
