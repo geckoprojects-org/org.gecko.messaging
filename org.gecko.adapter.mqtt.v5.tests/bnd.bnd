@@ -1,0 +1,20 @@
+    
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
+
+-library: enableOSGi-Test
+
+# sets the usually required buildpath using the bnd library, you can extend it with the normal -buildpath to your liking
+-buildpath: \
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	org.osgi.util.tracker;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	org.gecko.osgi.messaging;version=snapshot,\
+	org.osgi.test.junit5.cm,\
+	org.gecko.moquette.broker;version=latest,\
+	org.gecko.adapter.mqtt.v5;version=latest,\
+	org.eclipse.paho.mqttv5.client;version=latest
+
+Bundle-Name: MQTT Messaging v5 Integration Test
+Private-Package: org.gecko.adapter.mqtt.tests

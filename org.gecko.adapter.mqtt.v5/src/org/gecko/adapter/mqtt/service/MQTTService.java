@@ -26,14 +26,17 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
-import org.eclipse.paho.client.mqttv3.MqttCallback;
-import org.eclipse.paho.client.mqttv3.MqttClient;
-import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
-import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
-import org.eclipse.paho.client.mqttv3.MqttException;
-import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
+import org.eclipse.paho.mqttv5.client.IMqttToken;
+import org.eclipse.paho.mqttv5.client.MqttCallback;
+import org.eclipse.paho.mqttv5.client.MqttClient;
+import org.eclipse.paho.mqttv5.client.MqttClientPersistence;
+import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
+import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
+import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
+import org.eclipse.paho.mqttv5.client.persist.MqttDefaultFilePersistence;
+import org.eclipse.paho.mqttv5.common.MqttException;
+import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import org.gecko.adapter.mqtt.MQTTContext;
 import org.gecko.adapter.mqtt.MQTTContextBuilder;
 import org.gecko.adapter.mqtt.QoS;
@@ -56,13 +59,13 @@ import org.osgi.util.pushstream.PushStreamBuilder;
 import org.osgi.util.pushstream.SimplePushEventSource;
 
 /**
- * MQTT messaging service implementation
+ * MQTT messaging service implementation for version 5
  * 
  * @author Mark Hoffmann
  * @since 10.10.2017
  */
 @Capability(namespace = MessagingConstants.CAPABILITY_NAMESPACE, name = "mqtt.adapter", version = "1.0.0", attribute = {
-		"vendor=Gecko.io", "implementation=Paho", "mqttVersion=3" })
+		"vendor=Gecko.io", "implementation=Paho", "mqttVersion=5" })
 @Component(service = MessagingService.class, name = "MQTTService", configurationPolicy = ConfigurationPolicy.REQUIRE, immediate = true)
 public class MQTTService implements MessagingService, AutoCloseable, MqttCallback {
 	private static final Logger logger = Logger.getLogger(MQTTService.class.getName());
@@ -77,7 +80,7 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 
 	private Map<String, Integer> reconnectSub = new ConcurrentHashMap<>();
 
-	private MqttConnectOptions options;
+	private MqttConnectionOptions connectOptions;
 
 	public MQTTService() {
 		// to be used with @Activate
@@ -115,14 +118,13 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 	void activate(MqttConfig config, BundleContext context) throws Exception {
 		String id = UUID.randomUUID().toString();
 		try {
-			options = new MqttConnectOptions();
+			MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
 			if (config.username() != null && config.username().length() != 0) {
-				options.setUserName(config.username());
+				ob.username(config.username());
 				if (config.password() != null && config.password().length() != 0)
-					options.setPassword(config.password().toCharArray());
+					ob.password(config.password().getBytes());
 			}
-			options.setMaxInflight(config.maxInflight());
-			options.setAutomaticReconnect(true);
+			ob.automaticReconnect(true);
 			MqttClientPersistence persistence = null;
 			if (PersistenceType.FILE.equals(config.inflightPersistence())) {
 				if (!config.filePersistencePath().isEmpty() && !config.filePersistencePath().equals("")) {
@@ -137,7 +139,8 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			} else {
 				mqtt = new MqttClient(config.brokerUrl(), id, persistence);
 			}
-			mqtt.connect(options);
+			connectOptions = ob.build();
+			mqtt.connect(connectOptions);
 			mqtt.setCallback(this);
 		} catch (Exception e) {
 			System.err.println("Error connecting to MQTT broker " + config.brokerUrl());
@@ -163,59 +166,6 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 			}
 			mqtt.close();
 		}
-	}
-
-	@Override
-	public void connectionLost(Throwable exception) {
-		if (exception != null)
-			exception.printStackTrace();
-		logger.log(Level.INFO,
-				"Connection to MQTT broker lost: " + exception.getMessage() + ". Waiting before reconnecting.");
-
-		if (reconnectTimer != null) {
-			reconnectTimer.cancel();
-			reconnectTimer = null;
-		}
-
-		reconnectTimer = new Timer();
-		reconnectTimer.schedule(new TimerTask() {
-			@Override
-			public void run() {
-				try {
-					if (mqtt == null) {
-						logger.log(Level.SEVERE, "Trying to reconnect a null client.");
-						return;
-					}
-					if (!mqtt.isConnected()) {
-						logger.log(Level.INFO, "Reconnect");
-						mqtt.connect(options);
-					}
-				} catch (MqttException e) {
-					if (e.getCause() instanceof ConnectException) {
-						logger.log(Level.SEVERE, "Error trying to reconnect to MQTT broker.", e);
-						connectionLost(exception);
-					} else {
-						logger.log(Level.SEVERE,
-								"Fatal error trying to reconnect to MQTT broker. No further reconnection will be attempted",
-								e);
-					}
-					return;
-				}
-
-				for (String topic : reconnectSub.keySet()) {
-					try {
-						mqtt.subscribe(topic, reconnectSub.get(topic));
-					} catch (MqttException e) {
-						logger.log(Level.SEVERE,
-								"Fatal error trying to subscribe to \"" + topic + "\" MQTT broker while reconnect.", e);
-					}
-				}
-			}
-		}, RECONNECT_DELAY_MS);
-	}
-
-	@Override
-	public void deliveryComplete(IMqttDeliveryToken deliveryComplete) {
 	}
 
 	@Override
@@ -326,6 +276,77 @@ public class MQTTService implements MessagingService, AutoCloseable, MqttCallbac
 		MessagingContext context = new MQTTContextBuilder().setRetained(msg.isRetained())
 				.withQoS(QoS.values()[msg.getQos()]).build();
 		return new SimpleMessage(topic, content, context);
+	}
+
+	@Override
+	public void disconnected(MqttDisconnectResponse disconnectResponse) {
+
+		MqttException exception = disconnectResponse.getException();
+		if (exception != null)
+			exception.printStackTrace();
+		logger.log(Level.INFO, "Connection to MQTT broker lost: " + disconnectResponse.getReasonString()
+				+ ". Waiting before reconnecting.");
+
+		if (reconnectTimer != null) {
+			reconnectTimer.cancel();
+			reconnectTimer = null;
+		}
+
+		reconnectTimer = new Timer();
+		reconnectTimer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				try {
+					if (mqtt == null) {
+						logger.log(Level.SEVERE, "Trying to reconnect a null client.");
+						return;
+					}
+					if (!mqtt.isConnected()) {
+						logger.log(Level.INFO, "Reconnect");
+						mqtt.connect(connectOptions);
+					}
+				} catch (MqttException e) {
+					if (e.getCause() instanceof ConnectException) {
+						logger.log(Level.SEVERE, "Error trying to reconnect to MQTT broker.", e);
+						disconnected(disconnectResponse);
+					} else {
+						logger.log(Level.SEVERE,
+								"Fatal error trying to reconnect to MQTT broker. No further reconnection will be attempted",
+								e);
+					}
+					return;
+				}
+
+				for (String topic : reconnectSub.keySet()) {
+					try {
+						mqtt.subscribe(topic, reconnectSub.get(topic));
+					} catch (MqttException e) {
+						logger.log(Level.SEVERE,
+								"Fatal error trying to subscribe to \"" + topic + "\" MQTT broker while reconnect.", e);
+					}
+				}
+			}
+		}, RECONNECT_DELAY_MS);
+	}
+
+	@Override
+	public void mqttErrorOccurred(MqttException exception) {
+		logger.log(Level.WARNING, "MQTT error occurred ", exception);
+	}
+
+	@Override
+	public void deliveryComplete(IMqttToken token) {
+		logger.log(Level.FINER, "deliveryComplete " + token);
+	}
+
+	@Override
+	public void connectComplete(boolean reconnect, String serverURI) {
+		logger.log(Level.INFO, "connect to " + serverURI + " complete reconnect = " + reconnect);
+	}
+
+	@Override
+	public void authPacketArrived(int reasonCode, MqttProperties properties) {
+		logger.log(Level.FINER, "auth packet arrived reasonCode = " + reasonCode);
 	}
 
 }
