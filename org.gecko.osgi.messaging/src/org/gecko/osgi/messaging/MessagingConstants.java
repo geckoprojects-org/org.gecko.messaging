@@ -12,7 +12,7 @@
 package org.gecko.osgi.messaging;
 
 /**
- * Ciónstants for the messaging
+ * Constants for the messaging
  * @author Mark Hoffmann
  * @since 10.10.2017
  */
