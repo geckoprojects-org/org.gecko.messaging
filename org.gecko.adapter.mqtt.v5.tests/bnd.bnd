@@ -14,7 +14,8 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.osgi.test.junit5.cm,\
 	org.gecko.moquette.broker;version=latest,\
 	org.gecko.adapter.mqtt.v5;version=latest,\
-	org.eclipse.paho.mqttv5.client;version=latest
+	org.eclipse.paho.mqttv5.client;version=latest,\
+	org.gecko.adapter.mqtt.common
 
 Bundle-Name: MQTT Messaging v5 Integration Test
 Private-Package: org.gecko.adapter.mqtt.tests

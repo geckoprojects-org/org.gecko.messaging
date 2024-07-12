@@ -5,8 +5,14 @@
 	org.osgi.util.function;version=latest,\
 	org.gecko.util.pushstream;version=latest,\
 	org.osgi.framework,\
-	org.osgi.util.promise;version=latest
+	org.osgi.util.promise;version=latest,\
+	org.gecko.adapter.mqtt.common;version=latest
 
 Bundle-Version: 1.1.0.SNAPSHOT
 Bundle-Vendor: Data In Motion Consulting
-Bundle-Name: MQTT Messaging Implementation
+Bundle-Name: MQTT V3 Messaging Implementation
+
+-includepackage org.gecko.adapter.mqtt, \
+	org.gecko.adapter.mqtt.service
+
+-dsannotations-options: inherit

@@ -12,7 +12,6 @@
 	net.bytebuddy.byte-buddy;version='[1.14.9,1.14.10)',\
 	net.bytebuddy.byte-buddy-agent;version='[1.14.9,1.14.10)',\
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
-	org.apache.felix.scr;version='[2.2.6,2.2.7)',\
 	org.gecko.osgi.messaging;version=snapshot,\
 	org.gecko.util.common;version='[1.2.0,1.2.1)',\
 	org.gecko.util.pushstream;version='[1.2.0,1.2.1)',\
@@ -40,9 +39,10 @@
 	io.netty.transport-native-unix-common;version='[4.1.111,4.1.112)',\
 	slf4j.api;version='[1.7.36,1.7.37)',\
 	slf4j.simple;version='[1.7.36,1.7.37)',\
-	com.h2database.mvstore;version='[2.2.224,2.2.225)',\
 	io.netty.transport-classes-kqueue;version='[4.1.111,4.1.112)',\
 	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)',\
 	org.gecko.moquette.broker;version=snapshot,\
 	org.gecko.adapter.mqtt.v5;version=snapshot,\
-	org.gecko.adapter.mqtt.v5.tests;version=snapshot
+	org.gecko.adapter.mqtt.v5.tests;version=snapshot,\
+	org.gecko.adapter.mqtt.common;version=snapshot,\
+	org.apache.felix.scr;version='[2.2.12,2.2.13)'
