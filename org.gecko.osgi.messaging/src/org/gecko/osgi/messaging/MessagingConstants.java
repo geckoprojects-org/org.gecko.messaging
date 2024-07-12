@@ -21,7 +21,7 @@ public interface MessagingConstants {
 	/** Connection URL for the broker */
 	public static final String PROP_BROKER = "brokerUrl";
 	public static final String PROP_USERNAME = "username";
-	public static final String PROP_PASSWORD = "password";
+	public static final String PROP_PASSWORD = ".password";
 	public static final String PROP_RPC_QUEUE = "rpcQueue";
 	public static final String PROP_RPC_EXCHANGE = "rpcQueue";
 	public static final String PROP_RPC_ROUTING_KEY = "rpcRoutingKey";
@@ -29,7 +29,7 @@ public interface MessagingConstants {
 	/** Names space for the message adapter capability */
 	public static final String CAPABILITY_NAMESPACE = "osgi.message.adapter";
 	
-	public static final String EVENTADMIN_ADAPTER = "evetnadmin.adapter";
+	public static final String EVENTADMIN_ADAPTER = "eventadmin.adapter";
 	public static final String EVENTADMIN_ADAPTER_VERSION = "1.0.0";
 	
 

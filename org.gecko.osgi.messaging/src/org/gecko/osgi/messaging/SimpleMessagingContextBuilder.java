@@ -127,7 +127,7 @@ public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 	 */
 	@Override
 	public MessagingContextBuilder withBuffer(int size) {
-		if (bufferSize > 0) {
+		if (size > 0) {
 			this.bufferSize = size;
 		}
 		return this;

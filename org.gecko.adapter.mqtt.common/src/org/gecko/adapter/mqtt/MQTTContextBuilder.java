@@ -16,25 +16,29 @@ import org.gecko.osgi.messaging.SimpleMessagingContextBuilder;
 
 /**
  * Builder for the MQTT MessageContext
+ * 
  * @author Mark Hoffmann
  * @since 10.10.2017
  */
 public class MQTTContextBuilder extends SimpleMessagingContextBuilder {
-	
+
 	private MQTTContext context = new MQTTContext();
-	
+
 	/**
 	 * Sets the {@link QoS} parameter
-	 * @param qos the qualitiy of service parameter. <code>null</code> defaults to 'at least one'
+	 * 
+	 * @param qos the qualitiy of service parameter. <code>null</code> defaults to
+	 *            'at least one'
 	 * @return
 	 */
 	public MQTTContextBuilder withQoS(QoS qos) {
 		context.setQoS(qos == null ? QoS.AT_LEAST_ONE : qos);
 		return this;
 	}
-	
+
 	/**
 	 * Sets retained to true
+	 * 
 	 * @return the builder instance
 	 */
 	public MQTTContextBuilder retained() {
@@ -44,6 +48,7 @@ public class MQTTContextBuilder extends SimpleMessagingContextBuilder {
 
 	/**
 	 * Sets retained to true
+	 * 
 	 * @return the builder instance
 	 */
 	public MQTTContextBuilder setRetained(boolean retained) {
@@ -51,10 +56,6 @@ public class MQTTContextBuilder extends SimpleMessagingContextBuilder {
 		return this;
 	}
 
-	/* 
-	 * (non-Javadoc)
-	 * @see org.gecko.osgi.messaging.MessageContextBuilder#build()
-	 */
 	@Override
 	public MessagingContext build() {
 		return buildContext(context);

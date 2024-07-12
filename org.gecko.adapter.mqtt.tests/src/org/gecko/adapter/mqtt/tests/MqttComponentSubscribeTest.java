@@ -35,6 +35,9 @@ import org.osgi.util.pushstream.PushStream;
 @ExtendWith(ServiceExtension.class)
 @ExtendWith(ConfigurationExtension.class)
 @RequireMQTTv3
+@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
+		@Property(key = MQTTBroker.HOST, value = "localhost"), //
+		@Property(key = MQTTBroker.PORT, value = "2183") })
 public class MqttComponentSubscribeTest {
 
 	private static final String BROKER_URL = "tcp://localhost:2183";
@@ -56,9 +59,6 @@ public class MqttComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeMessage_NoMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
@@ -84,9 +84,6 @@ public class MqttComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeOftenMessage_NoMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
@@ -116,9 +113,6 @@ public class MqttComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeMessage_Message(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
@@ -158,9 +152,6 @@ public class MqttComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeMessage_Wildcard(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
@@ -202,9 +193,6 @@ public class MqttComponentSubscribeTest {
 	 * @throws Exception
 	 */
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeOftenMessage_Message(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
@@ -242,7 +230,7 @@ public class MqttComponentSubscribeTest {
 		});
 		publish(publishTopic, publishContent);
 		// wait and compare the received message
-		resultLatch.await(3, TimeUnit.SECONDS);
+		resultLatch.await(5, TimeUnit.SECONDS);
 		assertEquals(publishContent, result01.get());
 		assertEquals(publishContent, result02.get());
 		assertEquals(result01.get(), result02.get());

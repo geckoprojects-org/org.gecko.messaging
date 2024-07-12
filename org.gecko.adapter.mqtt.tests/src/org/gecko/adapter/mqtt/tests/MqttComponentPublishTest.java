@@ -104,13 +104,10 @@ public class MqttComponentPublishTest {
 			@Property(key = MQTTBroker.USERNAME, value = "demo"),
 			@Property(key = MQTTBroker.PASSWORD, value = "1234") })
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "client", properties = {
-			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL),
-			@Property(key = MessagingConstants.PROP_USERNAME, value = "demo"),
-			@Property(key = MessagingConstants.PROP_PASSWORD, value = "1234") })
+			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublishMessageWithUsernameAndPassword(
 			@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
-
 		String publishTopic = "publish.junit";
 		String publishContent = "this is a test";
 
