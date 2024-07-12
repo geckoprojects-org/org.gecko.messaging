@@ -22,14 +22,14 @@ public @interface MqttConfig {
 	String brokerUrl();
 
 	@AttributeDefinition(description = "User name")
-	String username();
+	String username() default "guest";
 
 	@AttributeDefinition(description = "Password of the user. Deprecated use _password instead.")
 	@Deprecated
-	String password();
+	String password() default "guest";
 	
 	@AttributeDefinition(type = AttributeType.PASSWORD, description = "Password of the user")
-	String _password();
+	String _password() default "guest";
 
 	@AttributeDefinition(description = "Type of persistence")
 	PersistenceType inflightPersistence() default PersistenceType.MEMORY;
