@@ -8,9 +8,6 @@ Bundle-Vendor: Data In Motion Consulting GmbH
 	org.osgi.service.cm;version=latest,\
 	com.h2database.mvstore
 
-javac.source: 17
-javac.target: 17
-
 Bundle-Version: 0.0.1.${tstamp}-SNAPSHOT
 
 -conditionalpackage: \
