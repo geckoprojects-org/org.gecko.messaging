@@ -56,16 +56,6 @@ public class MqttPushEventSource implements SimplePushEventSource<Message> {
 		source.connectPromise().onResolve(this::initMQTTClient);
 	}
 
-	void disconnect() {
-		if (mqttClient != null) {
-			if (mqttClient.isConnected()) {
-				mqttClient.disconnect();
-			}
-			mqttClient.close();
-		}
-	}
-
-
 	@Override
 	public AutoCloseable open(PushEventConsumer<? super Message> aec) throws Exception {
 		return source.open(aec);
@@ -74,7 +64,12 @@ public class MqttPushEventSource implements SimplePushEventSource<Message> {
 	@Override
 	public void close() {
 		source.close();
-		disconnect();
+		if (mqttClient != null) {
+			if (mqttClient.isConnected()) {
+				mqttClient.disconnect();
+			}
+			mqttClient.close();
+		}
 	}
 
 	@Override

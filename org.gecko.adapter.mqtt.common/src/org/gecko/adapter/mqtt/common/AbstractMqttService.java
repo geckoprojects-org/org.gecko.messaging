@@ -30,7 +30,6 @@ import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.MessagingService;
 import org.gecko.util.pushstream.PushStreamHelper;
-import org.osgi.framework.BundleContext;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.util.pushstream.PushEvent;
@@ -54,18 +53,10 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 	private MqttConfig config;
 
 	@Activate
-	public void doActivate(MqttConfig config, BundleContext context) throws Exception {
+	public void doActivate(MqttConfig config) throws Exception {
 		this.config = config;
-		String id = UUID.randomUUID().toString();
-		try {
-			mqtt = createClient(config, id);
-			mqtt.connectionLost(this::startReconnectTimer);
-		} catch (Exception e) {
-			System.err.println("Error connecting to MQTT broker " + config.brokerUrl());
-			throw e;
-		}
 	}
-	
+
 	@Deactivate
 	public void doDeactivate() throws Exception {
 		close();
@@ -91,7 +82,7 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 			}
 			mqtt.close();
 		}
-		subscriptions.values().forEach(MqttPushEventSource::disconnect);
+		subscriptions.values().forEach(MqttPushEventSource::close);
 	}
 
 	@Override
@@ -128,6 +119,17 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 
 	@Override
 	public void publish(String topic, ByteBuffer content, MessagingContext context) throws Exception {
+		if (mqtt == null) {
+			String id = UUID.randomUUID().toString();
+			try {
+				mqtt = createClient(config, id);
+				mqtt.connectionLost(this::startReconnectTimer);
+			} catch (Exception e) {
+				logger.log(Level.SEVERE, "Error connecting to MQTT broker " + config.brokerUrl(), e);
+				throw e;
+			}
+		}
+
 		QoS qos = QoS.AT_MOST_ONE;
 		boolean retained = false;
 		if (context != null && context instanceof MQTTContext) {
