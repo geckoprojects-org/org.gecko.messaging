@@ -3,27 +3,9 @@ Bundle-License: Eclipse Public License v1.0
 Bundle-Vendor: Data In Motion Consulting GmbH
 
 -buildpath: \
-	io.moquette:moquette-broker,\
+	moquette-broker,\
 	org.osgi.framework;version=latest,\
 	org.osgi.service.cm;version=latest,\
 	com.h2database.mvstore
 
 Bundle-Version: 0.0.1.${tstamp}-SNAPSHOT
-
--conditionalpackage: \
-    io.moquette, \
-    io.moquette.*, \
-    org.h2.*
-
-#Export-Package: \
-#	org.gecko.moquette.broker, \
-#	io.moquette.broker,*
-
-Import-Package: \
-    !com.bugsnag, \
-    !com.codahale.metrics, \
-    !com.librato.metrics.*, \
-    !com.zaxxer.hikari.*, \
-    !org.apache.commons.codec.*, \
-    *
-#    !org.h2.*, \

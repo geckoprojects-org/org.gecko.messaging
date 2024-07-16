@@ -1,2 +1,247 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<repository xmlns="http://www.osgi.org/xmlns/repository/v1.0.0" name="Local" increment="1705766238532"/>
+<repository xmlns="http://www.osgi.org/xmlns/repository/v1.0.0" name="Local" increment="1721059917446">
+  <resource>
+    <capability namespace="osgi.identity">
+      <attribute name="license" value="&quot;The Apache License, Version 2.0&quot;;link=&quot;http://www.apache.org/licenses/LICENSE-2.0.txt&quot;,&quot;Eclipse Public License - Version 1.0&quot;;link=&quot;http://www.eclipse.org/org/documents/epl-v10.php&quot;"/>
+      <attribute name="osgi.identity" value="moquette-broker"/>
+      <attribute name="documentation" value="http://moquette.io/moquette-broker"/>
+      <attribute name="description" value="Moquette lightweight MQTT Broker"/>
+      <attribute name="type" value="osgi.bundle"/>
+      <attribute name="version" value="0.18.0.202407151611" type="Version"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="1184544086" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker.config,io.moquette.broker.scheduler,io.moquette.broker.security,io.moquette.broker.subscriptions,io.moquette.interception,io.netty.buffer,io.netty.channel,io.netty.handler.codec.mqtt,io.netty.handler.ssl,io.netty.util"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="2078405470,1089455986,-1950553857,100364053,2074754429,-89510102,-1080826438,144007742,-1590703486,1117219762,-279316745,1644909376,2696178,1148520012,284148720,1395830624,-6595497,149419531,-374132083,-130819267,286652706,1878762888,1933440986,1957304783,1449499139,-887491313,-1785172976,412122054,-321596736,-558156070,-1572391347,1344787204,1676510136,-623116593,815642595,-482458064,-1808614382,-487558234,-728164084,-810178660,-1695807773,393213040,-1821959325,1662535421,656385544,-645326218,1720634357,-249902247,1497119368,-242671401,-814382368,-1753775773,609934571,1274769366,-1668099495,1232379890,1712380115,-1081994353,2024260576,82059409" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.config"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="1604631710,30233749,676024957,1508037688,1750068019,1380463676,1012793076,1195704317,479683581,592949406,-1907665685,343591034,1429354090,391576515,-2138264445" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker.config,io.netty.channel"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.metrics"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="-763056648,-230066827,1794513458,1104531713,26652595,810901212,765953297,915103950" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.scheduler"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="-2040936896,-1742724904,1349086201" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker.config,io.moquette.broker.subscriptions,org.slf4j"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.security"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="-1565332283,1605267098,1475846639,-586608551,-1725238669,-1253828203,1895597947,985627109,146875118,1443651545,874903863,67920810,1286429517,1915629451,337101465,-2025516758,-748488731" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker,io.netty.handler.codec.mqtt"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.subscriptions"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="64309477,1955883606,507549669,-181675638,2067852946,-885424482,64491261,-511097133,-1580740548,69850603,-748632128,421746410,1645848130,505523517,-127922833,-964260410,80009334,80988633,80993551" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.unsafequeues"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="1282299348,708278345,-684694627,78391537,-1083816354,264320796,204499384,-1223865216,264393901,-656591085,1158613048,1177883562,-1965977390" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker.config,io.moquette.broker.subscriptions,io.moquette.interception.messages,io.netty.handler.codec.mqtt"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.interception"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="1809556618,-130268052,1075057736,-723997179" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker.subscriptions,io.netty.buffer,io.netty.handler.codec.mqtt"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.interception.messages"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="853965955,-672082236,1573508509,409038079,-1839711485,-1048465591,2047844730,1337179397,-663206598,798037023,-922900424" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.interception"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.logging"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="-739513166" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.package">
+      <directive name="uses" value="io.moquette.broker,io.moquette.broker.subscriptions,io.moquette.broker.unsafequeues,io.netty.buffer,io.netty.handler.codec.mqtt,org.h2.mvstore,org.h2.mvstore.type"/>
+      <attribute name="bundle-symbolic-name" value="moquette-broker"/>
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.persistence"/>
+      <attribute name="version" value="0.18.0" type="Version"/>
+      <attribute name="bnd.hashes" value="-1826400433,794775489,-950661216,1849066321,430677616,-1371345679,-1909941080,-1701873320,-228882835,-433264405,1611092195,-1223612177,949840085,-1138407855,1316301899,-1581829024,746343371,-1510930343,1472166798,-1995624810,-1774197048,-1046003585,-1026303881,-992658982,1423109913,560544039,-1241479256,-198394598,-377136129" type="List&lt;Long&gt;"/>
+    </capability>
+    <capability namespace="osgi.wiring.bundle">
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.bundle" value="moquette-broker"/>
+    </capability>
+    <capability namespace="osgi.wiring.host">
+      <attribute name="bundle-version" value="0.18.0.202407151611" type="Version"/>
+      <attribute name="osgi.wiring.host" value="moquette-broker"/>
+    </capability>
+    <capability namespace="osgi.content">
+      <attribute name="size" value="361743" type="Long"/>
+      <attribute name="mime" value="application/vnd.osgi.bundle"/>
+      <attribute name="url" value="moquette-broker/moquette-broker-0.18.0.jar"/>
+      <attribute name="osgi.content" value="EDA17BC0415A676D001D3718616A7CAF01E8A6CC1E3707DAA98C968B7B4FB474"/>
+    </capability>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.broker)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.broker.config)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.config"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.broker.metrics)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.metrics"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.broker.scheduler)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.scheduler"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.broker.security)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.security"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.broker.subscriptions)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.subscriptions"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.broker.unsafequeues)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.broker.unsafequeues"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.interception)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.interception"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.interception.messages)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.interception.messages"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.logging)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.logging"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=io.moquette.persistence)"/>
+      <attribute name="osgi.wiring.package" value="io.moquette.persistence"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.bootstrap)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.bootstrap"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.buffer)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.buffer"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.channel)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.channel"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.channel.epoll)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.channel.epoll"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.channel.kqueue)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.channel.kqueue"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.channel.nio)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.channel.nio"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.channel.socket)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.channel.socket"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.channel.socket.nio)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.channel.socket.nio"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.handler.codec)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.handler.codec"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.handler.codec.http)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.handler.codec.http"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.handler.codec.http.websocketx)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.handler.codec.http.websocketx"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.handler.codec.mqtt)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.handler.codec.mqtt"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.handler.ssl)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.handler.ssl"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.handler.timeout)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.handler.timeout"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.util)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.util"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=io.netty.util.concurrent)(version&gt;=4.1.0)(!(version&gt;=5.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="io.netty.util.concurrent"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(osgi.wiring.package=javax.net.ssl)"/>
+      <attribute name="osgi.wiring.package" value="javax.net.ssl"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=org.h2.mvstore)(version&gt;=2.1.0)(!(version&gt;=3.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="org.h2.mvstore"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=org.h2.mvstore.type)(version&gt;=2.1.0)(!(version&gt;=3.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="org.h2.mvstore.type"/>
+    </requirement>
+    <requirement namespace="osgi.wiring.package">
+      <directive name="filter" value="(&amp;(osgi.wiring.package=org.slf4j)(version&gt;=1.7.0)(!(version&gt;=2.0.0)))"/>
+      <attribute name="osgi.wiring.package" value="org.slf4j"/>
+    </requirement>
+    <requirement namespace="osgi.ee">
+      <directive name="filter" value="(&amp;(osgi.ee=JavaSE)(version=1.8))"/>
+    </requirement>
+  </resource>
+</repository>
