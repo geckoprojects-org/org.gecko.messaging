@@ -27,6 +27,7 @@ import org.eclipse.paho.client.mqttv3.MqttClientPersistence;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.eclipse.paho.client.mqttv3.persist.MqttDefaultFilePersistence;
 import org.gecko.adapter.mqtt.MQTTContextBuilder;
 import org.gecko.adapter.mqtt.MqttConfig;
@@ -45,6 +46,7 @@ import org.gecko.osgi.messaging.SimpleMessage;
  * @since Jul 11, 2024
  */
 public class PahoV3Client implements GeckoMqttClient {
+
 	private static final Logger logger = Logger.getLogger(PahoV3Client.class.getName());
 
 	private IMqttClient client;
@@ -54,13 +56,15 @@ public class PahoV3Client implements GeckoMqttClient {
 	 */
 	public PahoV3Client(MqttConfig config, String id) {
 
-		MqttClientPersistence persistence = null;
+		MqttClientPersistence persistence;
 		if (PersistenceType.FILE.equals(config.inflightPersistence())) {
 			if (!config.filePersistencePath().isEmpty() && !config.filePersistencePath().equals("")) {
 				persistence = new MqttDefaultFilePersistence(config.filePersistencePath());
 			} else {
 				persistence = new MqttDefaultFilePersistence();
 			}
+		} else {
+			persistence = new MemoryPersistence();
 		}
 		try {
 			if (config.maxThreads() > 0) {
@@ -109,12 +113,19 @@ public class PahoV3Client implements GeckoMqttClient {
 		}
 	}
 
+	@SuppressWarnings("deprecation")
 	private MqttConnectOptions getConnectionOptions(MqttConfig config) {
 		MqttConnectOptions options = new MqttConnectOptions();
-		if (config.username() != null && config.username().length() != 0) {
+		if (config.username() != null && !config._password().equals(DEFAULT_PASSWORD)) {
 			options.setUserName(config.username());
-			if (config._password() != null && config._password().length() != 0)
+			if (!DEFAULT_PASSWORD.equals(config._password())) {
 				options.setPassword(config._password().toCharArray());
+			} else if (config.password().length() != 0) {
+				options.setPassword(config.password().toCharArray());
+				if (!DEFAULT_PASSWORD.equals(config.password())) {
+					logger.log(Level.WARNING, "Using deprecated \"password\" attribute in MqttConfig. Please use \".password\" instead.");
+				}
+			}
 		}
 		options.setMaxInflight(config.maxInflight());
 		options.setAutomaticReconnect(true);

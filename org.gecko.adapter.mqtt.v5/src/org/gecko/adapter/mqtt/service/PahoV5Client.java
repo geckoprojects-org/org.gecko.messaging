@@ -27,6 +27,7 @@ import org.eclipse.paho.mqttv5.client.MqttClientPersistence;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptions;
 import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
 import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
+import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
 import org.eclipse.paho.mqttv5.client.persist.MqttDefaultFilePersistence;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
@@ -48,6 +49,7 @@ import org.gecko.osgi.messaging.SimpleMessage;
  * @since Jul 11, 2024
  */
 public class PahoV5Client implements GeckoMqttClient {
+
 	private static final Logger logger = Logger.getLogger(PahoV5Client.class.getName());
 
 	private IMqttClient client;
@@ -57,7 +59,7 @@ public class PahoV5Client implements GeckoMqttClient {
 	 */
 	public PahoV5Client(MqttConfig config, String id) {
 
-		MqttClientPersistence persistence = null;
+		MqttClientPersistence persistence = new MemoryPersistence();
 		if (PersistenceType.FILE.equals(config.inflightPersistence())) {
 			if (!config.filePersistencePath().isEmpty() && !config.filePersistencePath().equals("")) {
 				persistence = new MqttDefaultFilePersistence(config.filePersistencePath());
@@ -112,12 +114,20 @@ public class PahoV5Client implements GeckoMqttClient {
 		}
 	}
 
+	@SuppressWarnings("deprecation")
 	private MqttConnectionOptions getConnectionOptions(MqttConfig config) {
 		MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
 		if (config.username() != null && config.username().length() != 0) {
 			ob.username(config.username());
-			if (config._password() != null && config._password().length() != 0)
+			if (!DEFAULT_PASSWORD.equals(config._password())) {
 				ob.password(config._password().getBytes());
+			} else if (config.password().length() != 0) {
+				ob.password(config.password().getBytes());
+				if (!DEFAULT_PASSWORD.equals(config.password())) {
+					logger.log(Level.WARNING,
+							"Using deprecated \"password\" attribute in MqttConfig. Please use \".password\" instead.");
+				}
+			}
 		}
 		ob.automaticReconnect(true);
 		return ob.build();
@@ -153,7 +163,8 @@ public class PahoV5Client implements GeckoMqttClient {
 
 			@Override
 			public void messageArrived(String topic, MqttMessage message) throws Exception {
-				logger.log(Level.WARNING, "message for client " + client.getClientId() + " not expected topic =  " + topic);
+				logger.log(Level.WARNING,
+						"message for client " + client.getClientId() + " not expected topic =  " + topic);
 			}
 
 			@Override
@@ -192,7 +203,7 @@ public class PahoV5Client implements GeckoMqttClient {
 	public String toString() {
 		return client.getClientId();
 	}
-	
+
 	private static Message fromPahoMessage(MqttMessage msg, String topic) {
 		ByteBuffer content = ByteBuffer.wrap(msg.getPayload());
 		MessagingContext context = new MQTTContextBuilder().setRetained(msg.isRetained())
