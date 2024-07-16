@@ -15,8 +15,8 @@
  */
 package org.eclipse.paho.mqttv5.client.logging;
 
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-
 /**
  * LoggerFactory will create a logger instance ready for use by the caller. 
  * 
@@ -28,15 +28,17 @@ import java.lang.reflect.Method;
  */
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
+
 /**
- * A factory that returns a logger for use by the MQTT client. 
+ * A factory that returns a logger for use by the MQTT client.
  * 
  * The default log and trace facility uses Java's build in log facility:-
- * java.util.logging.  For systems where this is not available or where
- * an alternative logging framework is required the logging facility can be 
- * replaced using {@link org.eclipse.paho.mqttv5.client.logging.LoggerFactory#setLogger(String)}
- * which takes an implementation of the {@link org.eclipse.paho.mqttv5.client.logging.Logger}
- * interface.
+ * java.util.logging. For systems where this is not available or where an
+ * alternative logging framework is required the logging facility can be
+ * replaced using
+ * {@link org.eclipse.paho.mqttv5.client.logging.LoggerFactory#setLogger(String)}
+ * which takes an implementation of the
+ * {@link org.eclipse.paho.mqttv5.client.logging.Logger} interface.
  */
 public class LoggerFactory {
 	/**
@@ -44,32 +46,32 @@ public class LoggerFactory {
 	 */
 	public final static String MQTT_CLIENT_MSG_CAT = "org.eclipse.paho.mqttv5.client.internal.nls.logcat";
 	private static final String CLASS_NAME = LoggerFactory.class.getName();
-	
+
 	private static String overrideloggerClassName = null;
 	/**
-	 * Default logger that uses java.util.logging. 
+	 * Default logger that uses java.util.logging.
 	 */
 	private static String jsr47LoggerClassName = JSR47Logger.class.getName();
-	
+
 	/**
-	 * Find or create a logger for a named package/class. 
-	 * If a logger has already been created with the given name 
-	 * it is returned. Otherwise a new logger is created. By default a logger
-	 * that uses java.util.logging will be returned.
+	 * Find or create a logger for a named package/class. If a logger has already
+	 * been created with the given name it is returned. Otherwise a new logger is
+	 * created. By default a logger that uses java.util.logging will be returned.
 	 * 
-	 * @param messageCatalogName the resource bundle containing the logging messages.
-	 * @param loggerID  unique name to identify this logger.
+	 * @param messageCatalogName the resource bundle containing the logging
+	 *                           messages.
+	 * @param loggerID           unique name to identify this logger.
 	 * @return a suitable Logger.
 	 */
 	public static Logger getLogger(String messageCatalogName, String loggerID) {
 		String loggerClassName = overrideloggerClassName;
 		Logger logger = null;
-		
+
 		if (loggerClassName == null) {
 			loggerClassName = jsr47LoggerClassName;
 		}
 //			logger = getJSR47Logger(ResourceBundle.getBundle(messageCatalogName), loggerID, null) ;
-		logger = getLogger(loggerClassName, ResourceBundle.getBundle(messageCatalogName), loggerID, null) ;
+		logger = getLogger(loggerClassName, ResourceBundle.getBundle(messageCatalogName), loggerID, null);
 //		}
 
 		if (null == logger) {
@@ -79,20 +81,21 @@ public class LoggerFactory {
 		return logger;
 	}
 
-
 	/**
 	 * Return an instance of a logger
 	 * 
-	 * @param the class name of the load to load
-	 * @param messageCatalog  the resource bundle containing messages 
-	 * @param loggerID  an identifier for the logger 
-	 * @param resourceName a name or context to associate with this logger instance.  
+	 * @param the            class name of the load to load
+	 * @param messageCatalog the resource bundle containing messages
+	 * @param loggerID       an identifier for the logger
+	 * @param resourceName   a name or context to associate with this logger
+	 *                       instance.
 	 * @return a ready for use logger
 	 */
-	private static Logger getLogger(String loggerClassName, ResourceBundle messageCatalog, String loggerID, String resourceName) { //, FFDC ffdc) {
-		Logger logger  = null;
-		Class logClass = null;
-		
+	private static Logger getLogger(String loggerClassName, ResourceBundle messageCatalog, String loggerID,
+			String resourceName) { // , FFDC ffdc) {
+		Logger logger = null;
+		Class<?> logClass = null;
+
 		try {
 			logClass = Class.forName(loggerClassName);
 		} catch (NoClassDefFoundError ncdfe) {
@@ -103,14 +106,9 @@ public class LoggerFactory {
 		if (null != logClass) {
 			// Now instantiate the log
 			try {
-				logger = (Logger)logClass.newInstance();
-			} catch (IllegalAccessException e) {
-				return null;
-			} catch (InstantiationException e) {
-				return null;
-			} catch (ExceptionInInitializerError e) {
-				return null;
-			} catch (SecurityException e) {
+				logger = (Logger) logClass.getDeclaredConstructor().newInstance();
+			} catch (InstantiationException | IllegalAccessException | IllegalArgumentException
+					| InvocationTargetException | NoSuchMethodException | SecurityException e) {
 				return null;
 			}
 			logger.initialise(messageCatalog, loggerID, resourceName);
@@ -120,9 +118,10 @@ public class LoggerFactory {
 	}
 
 	/**
-	 * When run in JSR47, this allows access to the properties in the logging.properties
-	 * file.
-	 * If not run in JSR47, or the property isn't set, returns null.
+	 * When run in JSR47, this allows access to the properties in the
+	 * logging.properties file. If not run in JSR47, or the property isn't set,
+	 * returns null.
+	 * 
 	 * @param name the property to return
 	 * @return the property value, or null if it isn't set or JSR47 isn't being used
 	 */
@@ -131,12 +130,12 @@ public class LoggerFactory {
 		try {
 			// Hide behind reflection as java.util.logging is guaranteed to be
 			// available.
-			Class logManagerClass = Class.forName("java.util.logging.LogManager");
-			Method m1 = logManagerClass.getMethod("getLogManager", new Class[]{});
-			Object logManagerInstance = m1.invoke(null, null);
-			Method m2 = logManagerClass.getMethod("getProperty", new Class[]{String.class});
-			result = (String)m2.invoke(logManagerInstance,new Object[]{name});
-		} catch(Exception e) {
+			Class<?> logManagerClass = Class.forName("java.util.logging.LogManager");
+			Method m1 = logManagerClass.getMethod("getLogManager", new Class[] {});
+			Object logManagerInstance = m1.invoke(null, (Object[]) null);
+			Method m2 = logManagerClass.getMethod("getProperty", new Class[] { String.class });
+			result = (String) m2.invoke(logManagerInstance, new Object[] { name });
+		} catch (Exception e) {
 			// Any error, assume JSR47 isn't available and return null
 			result = null;
 		}
@@ -144,9 +143,9 @@ public class LoggerFactory {
 	}
 
 	/**
-	 * Set the class name of the logger that the LoggerFactory will load
-	 * If not set getLogger will attempt to create a logger 
-	 * appropriate for the platform.
+	 * Set the class name of the logger that the LoggerFactory will load If not set
+	 * getLogger will attempt to create a logger appropriate for the platform.
+	 * 
 	 * @param loggerClassName - Logger implementation class name to use.
 	 */
 	public static void setLogger(String loggerClassName) {

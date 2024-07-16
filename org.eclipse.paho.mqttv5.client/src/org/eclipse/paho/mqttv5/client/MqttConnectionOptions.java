@@ -54,8 +54,6 @@ import org.eclipse.paho.mqttv5.common.util.MqttTopicValidator;
  */
 public class MqttConnectionOptions {
 
-	private static final String CLIENT_ID_PREFIX = "paho";
-
 	// Connection Behaviour Properties
 	private String[] serverURIs = null; // List of Servers to connect to in order
 	private boolean automaticReconnect = false; // Automatic Reconnect
