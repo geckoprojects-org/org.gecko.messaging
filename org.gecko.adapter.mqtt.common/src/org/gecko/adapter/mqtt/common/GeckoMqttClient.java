@@ -22,6 +22,8 @@ import org.osgi.util.pushstream.PushEventSource;
  */
 public interface GeckoMqttClient {
 
+	static final String DEFAULT_PASSWORD = "guest";
+
 	/**
 	 * Connect the client with a given configuration {@link MqttConfig}.
 	 * 
