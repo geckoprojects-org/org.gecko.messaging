@@ -132,7 +132,7 @@ org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5
 com.rabbitmq:amqp-client:5.20.0
 
 
-io.moquette:moquette-broker:0.18-SNAPSHOT
+#io.moquette:moquette-broker:0.18.0-SNAPSHOT
 
 #io.dropwizard.metrics:metrics-core:4.2.26
 #com.librato.metrics:metrics-librato:5.0.5

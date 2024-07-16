@@ -51,6 +51,7 @@ public class MQTTBroker {
 		config = new MemoryConfig(new Properties());
 		config.setProperty(IConfig.HOST_PROPERTY_NAME, cfg.get(HOST));
 		config.setProperty(IConfig.PORT_PROPERTY_NAME, cfg.get(PORT));
+		config.setProperty(IConfig.PERSISTENCE_ENABLED_PROPERTY_NAME, "false");
 		if (cfg.containsKey(USERNAME) && cfg.containsKey(PASSWORD)) {
 			validUsername = cfg.get(USERNAME);
 			validPassword = cfg.get(PASSWORD);
