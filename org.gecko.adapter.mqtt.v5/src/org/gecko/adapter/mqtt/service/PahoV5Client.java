@@ -139,9 +139,7 @@ public class PahoV5Client implements GeckoMqttClient {
 	public void subscribe(String topic, int qos, MqttPushEventSource source) {
 		try {
 			client.subscribe(topic, qos, (topic1, message) -> {
-				if (!source.isConnected()) {
-					source.close();
-				} else {
+				if (source.isConnected()) {
 					try {
 						Message msg = fromPahoMessage(message, topic1);
 						source.publish(msg);

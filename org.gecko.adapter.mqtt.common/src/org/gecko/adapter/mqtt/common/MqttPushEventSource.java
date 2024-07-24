@@ -66,12 +66,6 @@ public class MqttPushEventSource implements SimplePushEventSource<Message> {
 	@Override
 	public void close() {
 		source.close();
-		if (mqttClient != null) {
-			if (mqttClient.isConnected()) {
-				mqttClient.disconnect();
-			}
-			mqttClient.close();
-		}
 	}
 
 	@Override

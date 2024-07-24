@@ -118,7 +118,7 @@ public class PahoV3Client implements GeckoMqttClient {
 	@SuppressWarnings("deprecation")
 	private MqttConnectOptions getConnectionOptions(MqttConfig config) {
 		MqttConnectOptions options = new MqttConnectOptions();
-		if (config.username() != null && !config._password().equals(DEFAULT_PASSWORD)) {
+		if (config.username() != null && config.username().length() != 0) {
 			options.setUserName(config.username());
 			if (!DEFAULT_PASSWORD.equals(config._password())) {
 				options.setPassword(config._password().toCharArray());
