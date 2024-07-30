@@ -22,10 +22,10 @@ import java.util.Hashtable;
 import java.util.Properties;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import javax.net.SocketFactory;
+
 import org.eclipse.paho.mqttv5.client.internal.ClientComms;
 import org.eclipse.paho.mqttv5.client.internal.ConnectActionListener;
 import org.eclipse.paho.mqttv5.client.internal.DisconnectedMessageBuffer;
@@ -33,11 +33,11 @@ import org.eclipse.paho.mqttv5.client.internal.MqttConnectionState;
 import org.eclipse.paho.mqttv5.client.internal.MqttSessionState;
 import org.eclipse.paho.mqttv5.client.internal.NetworkModule;
 import org.eclipse.paho.mqttv5.client.internal.NetworkModuleService;
+import org.eclipse.paho.mqttv5.client.logging.Logger;
+import org.eclipse.paho.mqttv5.client.logging.LoggerFactory;
 import org.eclipse.paho.mqttv5.client.persist.MemoryPersistence;
 import org.eclipse.paho.mqttv5.client.persist.MqttDefaultFilePersistence;
 import org.eclipse.paho.mqttv5.client.util.Debug;
-import org.eclipse.paho.mqttv5.client.logging.Logger;
-import org.eclipse.paho.mqttv5.client.logging.LoggerFactory;
 import org.eclipse.paho.mqttv5.common.ExceptionHelper;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
@@ -667,17 +667,6 @@ public class MqttAsyncClient implements MqttClientInterface, IMqttAsyncClient {
 		NetworkModule netModule = NetworkModuleService.createInstance(address, options, mqttSession.getClientId());
 
 		return netModule;
-	}
-
-	private String getHostName(String uri) {
-		int portIndex = uri.indexOf(':');
-		if (portIndex == -1) {
-			portIndex = uri.indexOf('/');
-		}
-		if (portIndex == -1) {
-			portIndex = uri.length();
-		}
-		return uri.substring(0, portIndex);
 	}
 
 	/*

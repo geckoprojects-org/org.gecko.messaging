@@ -21,8 +21,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.Map;
+
 import javax.net.SocketFactory;
 
 import org.eclipse.paho.mqttv5.client.internal.TCPNetworkModule;
