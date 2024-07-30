@@ -12,14 +12,12 @@ header:
       SPDX-License-Identifier: EPL-2.0
       
       Contributors:
-          Data In Motion - initial API and implementation
     pattern: |
       This program and the accompanying materials are made
       available under the terms of the Eclipse Public License 2.0
       which is available at https://www.eclipse.org/legal/epl-2.0/
   paths-ignore:
     - 'dist'
-    - 'org.eclipse.paho.mqttv5.client'
     - 'licenses'
     - '**/package-info.java'
     - '**/packageinfo'
@@ -43,7 +41,6 @@ header:
     - '**/*.ftl'
     - '**/*.aird'
     - '**/*.basic'
-    - '**/*.json'
     - '**/.classpath'
     - 'LICENSE'
     - 'Jenkinsfile'
