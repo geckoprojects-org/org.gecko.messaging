@@ -1,0 +1,11 @@
+Bundle-Copyright: Data In Motion Consulting GmbH
+Bundle-License: Eclipse Public License v1.0
+Bundle-Vendor: Data In Motion Consulting GmbH
+
+-buildpath: \
+	moquette-broker,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
+	com.h2database.mvstore
+
+Bundle-Version: 0.0.1.${tstamp}-SNAPSHOT
