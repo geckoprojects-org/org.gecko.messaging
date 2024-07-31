@@ -13,7 +13,6 @@
 
 package org.gecko.adapter.mqtt.common;
 
-import java.net.ConnectException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Timer;
@@ -166,14 +165,8 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 				if (!mqtt.isConnected()) {
 					logger.log(Level.INFO, "Reconnect");
 					mqtt.connect(config, e -> {
-						if (e.getCause() instanceof ConnectException) {
-							logger.log(Level.SEVERE, "Error trying to reconnect to MQTT broker.", e);
-							startReconnectTimer(exception);
-						} else {
-							logger.log(Level.SEVERE,
-									"Fatal error trying to reconnect to MQTT broker. No further reconnection will be attempted",
-									e);
-						}
+						logger.log(Level.SEVERE, "Error trying to reconnect to MQTT broker.", e);
+						startReconnectTimer(exception);
 						return false;
 					});
 				}
