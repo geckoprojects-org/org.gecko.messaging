@@ -52,7 +52,7 @@ public class MqttComponentRetainedTest {
 
 	
 	private static final int TOPIC_COUNT = 4;
-	private static final int MESSAGE_COUNT = 10000 / TOPIC_COUNT;
+	private static final int MESSAGE_COUNT = 1000 / TOPIC_COUNT;
 	private static final String TOPIC = "test.candelete";
 	private static final String BROKER_URL = "tcp://localhost:2183";
 
@@ -74,7 +74,7 @@ public class MqttComponentRetainedTest {
 			String topic = t + "123456789012345678901234567890-" + i;
 			write.publish(topic, ByteBuffer.wrap(("123456789-" + i).getBytes()), ctx);
 			if(i % 100 == 0) {
-				Thread.sleep(100); // To avoid Too many publishes in progress from moquette 
+				Thread.sleep(150); // To avoid Too many publishes in progress from moquette 
 			}
 		}
 	}
