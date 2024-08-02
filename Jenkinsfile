@@ -39,6 +39,26 @@ pipeline  {
                 sh "./gradlew clean release --info --stacktrace -Dmaven.repo.local=${WORKSPACE}/.m2"
             }
         }
+        stage('Other branch') {
+            when {
+                allOf {
+                    not {
+                        branch 'develop'
+                    }
+                    not {
+                        branch 'main'
+                    }
+                    not {
+                        branch 'aicas'
+                    }
+                }
+            }
+            steps  {
+                echo "I am building on ${env.JOB_NAME}"
+                sh "./gradlew clean build --info --stacktrace -Dmaven.repo.local=${WORKSPACE}/.m2"
+            }
+        }
+
     }
 
 }
