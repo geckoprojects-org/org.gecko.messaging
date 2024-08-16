@@ -32,6 +32,7 @@ sonarqube {
     property "sonar.organization", "geckoprojects-org"
     property "sonar.host.url", "https://sonarcloud.io"
     property "sonar.coverage.jacoco.xmlReportPaths", "${rootDir}/build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml"
+    property "sonar.exclusions", "org.eclipse.paho.mqttv5.client/**/*.java, org.gecko.*.tests/**/*.java"
     //property "sonar.exclusions", "org.gecko.project/**/*.java, org.gecko.other.project/**/*.java"
   }
 }

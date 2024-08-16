@@ -15,6 +15,8 @@ package org.gecko.adapter.mqtt.tests;
 
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
 import org.eclipse.paho.mqttv5.client.MqttClient;
@@ -26,6 +28,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 public class MqttPahoRetainedTest {
+	private static final Logger LOGGER = Logger.getLogger( MqttPahoRetainedTest.class.getName() );
 
 //	private static final String TOPIC = "test.candelete/" + UUID.randomUUID() + "/";
 	private static final String TOPIC1 = "test.candelete1/";
@@ -92,32 +95,24 @@ public class MqttPahoRetainedTest {
 			sub(TOPIC4, mqtt,mqtt2);
 			System.out.println();
 		} catch (Exception e) {
-			e.printStackTrace();
+			LOGGER.log( Level.SEVERE, e.getMessage(), e );
 		} finally {
 			mqtt.disconnect();
 			mqtt.close();
 		}
 	}
 
-	/**
-	 * @param topic TODO
-	 * @param mqtt
-	 * @param mqtt2 
-	 * @throws MqttException
-	 * @throws MqttSecurityException
-	 * @throws InterruptedException
-	 */
 	private void sub(String topic, MqttClient mqtt, MqttClient mqtt2) throws MqttException, MqttSecurityException, InterruptedException {
 		CountDownLatch messageLatch = new CountDownLatch(MESSAGE_COUNT);
 		mqtt.subscribe(topic + "#", 1, new IMqttMessageListener() {
 
 			@Override
 			public void messageArrived(String topic, MqttMessage message) throws Exception {
-				System.out.println(topic);
+				LOGGER.log( Level.INFO, topic);
 				try {
 					mqtt2.publish("g6/"+topic, message);
 				} catch (Exception e) {
-					e.printStackTrace();
+					 LOGGER.log( Level.SEVERE, e.getMessage(), e );
 				}
 				messageLatch.countDown();
 			}

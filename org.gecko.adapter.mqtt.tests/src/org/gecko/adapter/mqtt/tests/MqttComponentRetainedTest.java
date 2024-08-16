@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.gecko.adapter.mqtt.MQTTContextBuilder;
 import org.gecko.adapter.mqtt.QoS;
@@ -49,7 +51,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
 @WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 		@Property(key = MQTTBroker.HOST, value = "localhost"), @Property(key = MQTTBroker.PORT, value = "2183") })
 public class MqttComponentRetainedTest {
-
+	private static final Logger LOGGER = Logger.getLogger( MqttComponentRetainedTest.class.getName() );
 	
 	private static final int TOPIC_COUNT = 4;
 	private static final int MESSAGE_COUNT = 10000 / TOPIC_COUNT;
@@ -103,18 +105,17 @@ public class MqttComponentRetainedTest {
 		}
 		boolean result = messageLatch.await(10, TimeUnit.SECONDS);
 		assertTrue(result, "Missing " + messageLatch.getCount() + " messages.");
-		System.out.println();
 	}
 
 	private void sub(MessagingService readMessagingService, MessagingContext ctx, String topic, CountDownLatch messageLatch)
 			throws Exception, InterruptedException {
 		readMessagingService.subscribe(topic, ctx).forEach(m -> {
-			System.out.println(m.topic());
+			LOGGER.log( Level.INFO, m.topic());
 			messageLatch.countDown();
 			try {
 				readMessagingService.publish("forward/" + m.topic(), m.payload());
 			} catch (Exception e) {
-				e.printStackTrace();
+				 LOGGER.log( Level.SEVERE, e.getMessage(), e );
 			}
 		});
 	}

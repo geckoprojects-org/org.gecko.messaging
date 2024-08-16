@@ -144,11 +144,11 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 	}
 
 	private void startReconnectTimer(Throwable exception) {
-		if (exception != null)
-			exception.printStackTrace();
-		logger.log(Level.INFO,
-				"Connection to MQTT broker lost: " + exception.getMessage() + ". Waiting before reconnecting.");
-
+		if (exception != null) {
+			logger.log(Level.INFO,
+					"Connection to MQTT broker lost: " + exception.getMessage() + ". Waiting before reconnecting.",
+					exception);
+		}
 		if (reconnectTimer != null) {
 			reconnectTimer.cancel();
 			reconnectTimer = null;
