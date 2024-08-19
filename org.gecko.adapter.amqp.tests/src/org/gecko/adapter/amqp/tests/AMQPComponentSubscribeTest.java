@@ -75,6 +75,7 @@ public class AMQPComponentSubscribeTest {
 
 	@AfterEach
 	public void teardown() throws Exception {
+		checkClient.purgeChannel("test_#");
 		checkClient.disconnect();
 		if (clientConfig != null) {
 			clientConfig.delete();
@@ -92,7 +93,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 
-		String publishTopic = "test_q";
+		String publishTopic = "test_SubscribeMessage";
 		String publishContent = "this is an AMQP test";
 
 		// has to be a new configuration
@@ -137,7 +138,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 		
-		String publishTopic = "test_fan";
+		String publishTopic = "test_SubscribeFanout";
 		String publishContent = "this is an AMQP test";
 		
 		// has to be a new configuration
@@ -191,7 +192,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 		
-		String publishTopic = "test_dir";
+		String publishTopic = "test_SubscribeDirectMulticast";
 		String publishContent = "this is an AMQP test";
 		
 		// has to be a new configuration
@@ -245,7 +246,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 		
-		String publishTopic = "test_dir";
+		String publishTopic = "test_SubscribeDirectSelective";
 		String publishContent = "this is an AMQP test";
 		
 		// has to be a new configuration
@@ -299,7 +300,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 		
-		String publishTopic = "test_q";
+		String publishTopic = "test_SubscribeMessageEnv";
 		String publishContent = "this is an AMQP test";
 		
 		// has to be a new configuration
@@ -350,7 +351,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 		
-		String publishTopic = "test_q";
+		String publishTopic = "test_SubscribeMessageConfigureEventSource";
 		String publishContent = "this is an AMQP test";
 		
 		// has to be a new configuration
@@ -397,7 +398,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 
-		String publishTopic = "test_q";
+		String publishTopic = "test_SubscribeMessageMany";
 		String publishContent = "this is an AMQP test";
 
 		// has to be a new configuration
@@ -448,7 +449,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 
-		String publishTopic = "test_dir";
+		String publishTopic = "test_SubscribeManyMessageManyr";
 		String publishContent = "this is an AMQP test";
 
 		// has to be a new configuration
@@ -529,7 +530,7 @@ public class AMQPComponentSubscribeTest {
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
 
-		String publishTopic = "test_q";
+		String publishTopic = "test_SubscribeMessageWrongQueue";
 		String publishContent = "this is an AMQP test";
 
 		// has to be a new configuration
