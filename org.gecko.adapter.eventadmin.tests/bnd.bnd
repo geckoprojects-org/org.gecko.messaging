@@ -12,7 +12,8 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.eclipse.paho.client.mqttv3;version=latest,\
 	org.gecko.util.pushstream;version=latest,\
 	org.gecko.osgi.messaging;version=snapshot,\
-	org.gecko.adapter.eventadmin;version=snapshot
+	org.gecko.adapter.eventadmin;version=snapshot,\
+	org.osgi.test.junit5.cm
 
 Bundle-Name: MQTT Messaging Integration Test
 Private-Package: org.gecko.adapter.eventadmin.tests

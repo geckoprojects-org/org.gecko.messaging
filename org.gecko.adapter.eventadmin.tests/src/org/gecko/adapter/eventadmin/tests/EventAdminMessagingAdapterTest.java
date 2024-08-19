@@ -35,11 +35,9 @@ import org.gecko.osgi.messaging.SimpleMessagingContextBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.osgi.framework.BundleContext;
 import org.osgi.service.event.Event;
 import org.osgi.service.event.EventAdmin;
 import org.osgi.service.event.EventHandler;
-import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.service.ServiceAware;
 import org.osgi.test.junit5.context.BundleContextExtension;
@@ -51,8 +49,6 @@ import org.osgi.util.pushstream.PushStream;
 @ExtendWith(BundleContextExtension.class)
 public class EventAdminMessagingAdapterTest {
 
-	@InjectBundleContext
-	BundleContext contex;
 	@InjectService
 	EventAdmin ea;
 	

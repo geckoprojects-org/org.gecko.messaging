@@ -8,7 +8,6 @@
 -runee: JavaSE-17
 
 -runbundles: \
-	org.apache.felix.scr;version='[2.2.6,2.2.7)',\
 	org.gecko.adapter.eventadmin;version=snapshot,\
 	org.gecko.osgi.messaging;version=snapshot,\
 	org.gecko.util.common;version='[1.2.0,1.2.1)',\
@@ -30,7 +29,8 @@
 	org.mockito.mockito-core;version='[4.11.0,4.11.1)',\
 	org.objenesis;version='[3.3.0,3.3.1)',\
 	org.opentest4j;version='[1.3.0,1.3.1)',\
-	org.osgi.service.cm;version='[1.6.1,1.6.2)',\
 	org.osgi.test.common;version='[1.2.1,1.2.2)',\
 	org.osgi.test.junit5;version='[1.2.1,1.2.2)',\
-	org.apache.felix.eventadmin;version='[1.6.4,1.6.5)'
+	org.apache.felix.eventadmin;version='[1.6.4,1.6.5)',\
+	org.apache.felix.scr;version='[2.2.12,2.2.13)',\
+	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)'
