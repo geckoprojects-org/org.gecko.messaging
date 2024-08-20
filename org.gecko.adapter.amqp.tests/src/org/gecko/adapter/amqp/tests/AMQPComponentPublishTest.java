@@ -61,7 +61,6 @@ public class AMQPComponentPublishTest {
 
 	private String amqpHost = System.getProperty("amqp.host", "devel.data-in-motion.biz");
 	private String brokerUrl = "amqp://demo:1234@" + amqpHost + ":5672/test";
-	public static final String PUBLISH_TOPIC = "test_q";
 	public static final String PUBLISH_FAN_TOPIC = "test_pfan";
 	public static final String PUBLISH_DIR_TOPIC = "test_pdir";
 	private AMQPClient checkClient;
@@ -78,7 +77,6 @@ public class AMQPComponentPublishTest {
 
 	@AfterEach
 	public void teardown() throws Exception {
-		checkClient.purgeChannel(PUBLISH_TOPIC);
 		checkClient.disconnect();
 		if (clientConfig != null) {
 			clientConfig.delete();
@@ -97,6 +95,7 @@ public class AMQPComponentPublishTest {
 		clientConfig = getConfiguration("AMQPService");
 		assertNotNull(clientConfig);
 
+		String topic = "test_PublishMessage";
 		String publishContent = "this is an AMQP test";
 
 		// has to be a new configuration
@@ -111,7 +110,7 @@ public class AMQPComponentPublishTest {
 		// holder for the result
 		AtomicReference<String> result = new AtomicReference<>();
 
-		connectClient(PUBLISH_TOPIC, resultLatch, result);
+		connectClient(topic, resultLatch, result);
 				
 		// starting adapter with the given properties
 		clientConfig.update(p);
@@ -121,7 +120,7 @@ public class AMQPComponentPublishTest {
 		assertNotNull(messagingService);
 
 		//send message and wait for the result
-		messagingService.publish(PUBLISH_TOPIC, ByteBuffer.wrap(publishContent.getBytes()));
+		messagingService.publish(topic, ByteBuffer.wrap(publishContent.getBytes()));
 
 		// wait and compare the received message
 		resultLatch.await(5, TimeUnit.SECONDS);
@@ -252,7 +251,7 @@ public class AMQPComponentPublishTest {
 		
 		assertTrue(msAware.isEmpty());
 		clientConfig = getConfiguration("AMQPService");
-		
+		String publishTopic = "test_PublishMessageEnv";
 		String publishContent = "this is an AMQP test";
 		
 		// has to be a new configuration
@@ -274,7 +273,7 @@ public class AMQPComponentPublishTest {
 		// holder for the result
 		AtomicReference<String> result = new AtomicReference<>();
 		
-		connectClient(PUBLISH_TOPIC, resultLatch, result);
+		connectClient(publishTopic, resultLatch, result);
 		
 		// starting adapter with the given properties
 		clientConfig.update(p);
@@ -284,7 +283,7 @@ public class AMQPComponentPublishTest {
 		assertNotNull(messagingService);
 		
 		//send message and wait for the result
-		messagingService.publish(PUBLISH_TOPIC, ByteBuffer.wrap(publishContent.getBytes()));
+		messagingService.publish(publishTopic, ByteBuffer.wrap(publishContent.getBytes()));
 		
 		// wait and compare the received message
 		resultLatch.await(5, TimeUnit.SECONDS);
