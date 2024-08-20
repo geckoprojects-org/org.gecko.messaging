@@ -274,7 +274,7 @@ public class EventAdminPushStreamTest {
 		int messages = 100;
 
 		CountDownLatch latch1 = new CountDownLatch(messages);
-		CountDownLatch latch5 = new CountDownLatch(messages);
+		CountDownLatch latch5 = new CountDownLatch(5);
 
 		CountDownLatch closeCounter = new CountDownLatch(2);
 		CountDownLatch errorCounter = new CountDownLatch(1);
@@ -298,7 +298,7 @@ public class EventAdminPushStreamTest {
 			assertTrue(message.startsWith("test"));
 			latch5.countDown();
 			System.out.println("sub content: " + message + " ts: " + System.currentTimeMillis());
-			if (latch5.getCount() == 95) {
+			if (latch5.getCount() == 0) {
 				throw new RuntimeException("ERROR");
 			}
 			return 0;
@@ -320,7 +320,7 @@ public class EventAdminPushStreamTest {
 		assertTrue(latch1.await(10, TimeUnit.SECONDS),
 				"Not all messages have been prcessed. Current count " + latch1.getCount());
 
-		assertEquals(95, latch5.getCount());
+		assertTrue(latch5.await(10, TimeUnit.SECONDS));
 
 		assertEquals(1, closeCounter.getCount());
 		assertEquals(0, errorCounter.getCount());

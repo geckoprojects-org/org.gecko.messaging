@@ -76,7 +76,7 @@ public class MqttComponentRetainedTest {
 			String topic = t + "123456789012345678901234567890-" + i;
 			write.publish(topic, ByteBuffer.wrap(("123456789-" + i).getBytes()), ctx);
 			if(i % 100 == 0) {
-				Thread.sleep(150); // To avoid Too many publishes in progress from moquette 
+				Thread.sleep(200); // To avoid Too many publishes in progress from moquette 
 			}
 		}
 	}
