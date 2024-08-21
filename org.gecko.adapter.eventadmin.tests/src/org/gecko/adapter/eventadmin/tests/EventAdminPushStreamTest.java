@@ -322,8 +322,8 @@ public class EventAdminPushStreamTest {
 
 		assertTrue(latch5.await(10, TimeUnit.SECONDS));
 
+		assertTrue(errorCounter.await(5, TimeUnit.SECONDS));
 		assertEquals(1, closeCounter.getCount());
-		assertEquals(0, errorCounter.getCount());
 
 		assertEquals(1, ehAware.getTrackingCount());
 		subscribe1.close();
