@@ -14,6 +14,7 @@
 package org.gecko.moquette.broker;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Properties;
 
@@ -90,7 +91,7 @@ public class MQTTBroker {
 
 		@Override
 		public boolean checkValid(String clientId, String username, byte[] password) {
-			return validUsername.equals(username) && validPassword.getBytes().equals(password);
+			return validUsername.equals(username) && Arrays.equals(validPassword.getBytes(),password);
 		}
 
 	}

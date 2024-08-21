@@ -36,8 +36,6 @@ import com.rabbitmq.client.Channel;
  */
 public abstract class BasicRPCWorkerService extends BasicReSubscriber<Void> implements MessagingResubscribingPubOnSub {
 
-	protected PromiseFactory pf;
-
 	public void activate(AMQPConfiguration config, Map<String, Object> properties) throws Exception {
 		super.activate(config, properties);
 		ThreadFactory tf = NamedThreadFactory.newNamedFactory(String.format("RPCWorker-%s", config.name()));

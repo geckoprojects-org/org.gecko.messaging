@@ -139,40 +139,40 @@ public abstract class BasicAMQPService {
 	protected ConnectionFactory configureConnectionFactory() throws ConfigurationException {
 		boolean useUrl = false;
 		ConnectionFactory conFactory = new ConnectionFactory();
-		if (getConfiguration().brokerUrl() != null && getConfiguration().brokerUrl().startsWith("amqp://")) {
+		AMQPConfiguration cfg = getConfiguration();
+		if (cfg.brokerUrl() != null && cfg.brokerUrl().startsWith("amqp://")) {
 			try {
-				conFactory.setUri(getConfiguration().brokerUrl());
+				conFactory.setUri(cfg.brokerUrl());
 				useUrl = true;
 			} catch (KeyManagementException | NoSuchAlgorithmException | URISyntaxException e) {
-				logger.log(Level.SEVERE, "Error setting the URI to connection factroy " + getConfiguration().brokerUrl(), e);
+				logger.log(Level.SEVERE, "Error setting the URI to connection factroy " + cfg.brokerUrl(), e);
 			}
 		} 
 		if (!useUrl) {
-			if (getConfiguration().tls()) {
-				configureTLSConnection(conFactory, getConfiguration());
+			if (!validateConfiguration(cfg)) {
+				throw new ConfigurationException("amqp.configuration", "Error validating AMQP configuration, there are missing mandatory values");
 			}
-			conFactory.setPort(getConfiguration().port());
-			conFactory.setHost(getConfiguration().host());
-			conFactory.setVirtualHost(getConfiguration().virtualHost());
-			if (getConfiguration().username() != null && !getConfiguration().username().isEmpty()) {
-				conFactory.setUsername(getConfiguration().username());
+			if (cfg.tls()) {
+				configureTLSConnection(conFactory, cfg);
+			}
+			conFactory.setPort(cfg.port());
+			conFactory.setHost(cfg.host());
+			conFactory.setVirtualHost(cfg.virtualHost());
+			if (cfg.username() != null && !cfg.username().isEmpty()) {
+				conFactory.setUsername(cfg.username());
 			} else {
 				Object userValue = PropertyHelper.createHelper().getValue(properties, "username");
 				if (userValue != null) {
 					conFactory.setUsername(userValue.toString());
 				}
 			}
-			if (getConfiguration().password() != null && !getConfiguration().password().isEmpty()) {
-				conFactory.setPassword(getConfiguration().password());
+			if (cfg.password() != null && !cfg.password().isEmpty()) {
+				conFactory.setPassword(cfg.password());
 			} else {
 				Object passValue = PropertyHelper.createHelper().getValue(properties, "password");
 				if (passValue != null) {
 					conFactory.setPassword(passValue.toString());
 				}
-			}
-		} else {
-			if (!useUrl) {
-				throw new ConfigurationException("amqp.configuration", "Error validating AMQP configuration, there are missing mandatory values");
 			}
 		}
 //		if (getConfiguration().autoRecovery()) {
@@ -230,8 +230,11 @@ public abstract class BasicAMQPService {
 	protected Connection ensureOpenConnection() {
 		try {
 			connectionPromise.getValue();
-		} catch (InvocationTargetException | InterruptedException e) {
-			throw new IllegalStateException("Getting a connection was interrupted");
+		} catch (InvocationTargetException e) {
+			throw new IllegalStateException("Getting a connection failed.", e.getCause());
+		} catch (InterruptedException e) {
+			logger.log(Level.SEVERE, "Getting a connection was interrupted.", e);
+			Thread.currentThread().interrupt();
 		}
 		Connection connection = connectionRef.get();
 		if (nonNull(connection) && connection.isOpen()) {
@@ -253,7 +256,7 @@ public abstract class BasicAMQPService {
 				config.port() > 0 && 
 				queueOrExchange &&
 				nonNull(config.host()) && !config.host().isEmpty();
-				if (config.tls()) {
+				if (nonNull(config) && config.tls()) {
 					return basicResult &&
 							nonNull(config.keyStore()) && !config.keyStore().isBlank() &&
 							nonNull(config.trustStore()) && !config.trustStore().isBlank();
@@ -270,7 +273,7 @@ public abstract class BasicAMQPService {
 	 */
 	protected Channel configureImmediateChannel(Connection connection) throws IOException, TimeoutException, ConfigurationException {
 		requireNonNull(connection);
-		Channel channel = connection.createChannel();
+		Channel channel = connection.createChannel(); //NOSONAR
 		String exchangeName = getConfiguration().exchange();
 		String queueName = getConfiguration().topic();
 		String routingKey = getConfiguration().routingKey();
@@ -335,7 +338,7 @@ public abstract class BasicAMQPService {
 			throw new IllegalStateException("Error connecting to exchange with invalid context configuration");
 		}
 		AMQPProperties amqpProps = context.getProperties();
-		Channel channel = ensureOpenConnection().createChannel();
+		Channel channel = ensureOpenConnection().createChannel(); //NOSONAR
 		String exchangeName = context.getExchangeName();
 		String queueName = context.getQueueName();
 		String routingKey = context.getRoutingKey();
@@ -389,7 +392,7 @@ public abstract class BasicAMQPService {
 		if (validateQueueContext(context)) {
 			throw new IllegalStateException("Error connecting to queue with invalid context configuration");
 		}
-		Channel channel = ensureOpenConnection().createChannel();
+		Channel channel = ensureOpenConnection().createChannel(); //NOSONAR
 		String queueName = context.getQueueName();
 		if (channelMap.containsKey(queueName)) {
 			logger.fine("Channel already created for queue: " + queueName);

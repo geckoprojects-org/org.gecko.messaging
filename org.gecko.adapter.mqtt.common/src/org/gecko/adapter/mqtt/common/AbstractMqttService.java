@@ -14,7 +14,6 @@
 package org.gecko.adapter.mqtt.common;
 
 import java.nio.ByteBuffer;
-import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
@@ -50,7 +49,7 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 	private static final int RECONNECT_DELAY_MS = 5000;
 	private Timer reconnectTimer;
 	protected GeckoMqttClient mqtt;
-	private volatile Map<String, MqttPushEventSource> subscriptions = new ConcurrentHashMap<>();
+	private volatile ConcurrentHashMap<String, MqttPushEventSource> subscriptions = new ConcurrentHashMap<>();
 	private MqttConfig config;
 
 	@Activate
