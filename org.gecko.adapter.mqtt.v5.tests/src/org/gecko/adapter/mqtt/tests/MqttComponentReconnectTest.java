@@ -73,13 +73,13 @@ public class MqttComponentReconnectTest {
 
 		messageLatch = new CountDownLatch(1);
 
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		
-		MessagingService readMessagingService = read.getService();
+		MessagingService readMessagingService = read.waitForService(1000);
 		assertNotNull(readMessagingService);
 		readMessagingService.subscribe(TOPIC).forEach(m -> handle(m));
 
-		MessagingService writeMessageService = write.getService();
+		MessagingService writeMessageService = write.waitForService(1000);
 		assertNotNull(writeMessageService);
 		TestPublisher publisher = new TestPublisher(writeMessageService);
 		ExecutorService executor = Executors.newSingleThreadExecutor();

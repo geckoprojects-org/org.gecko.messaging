@@ -55,7 +55,7 @@ public class MqttComponentRetainedTest {
 	
 	private static final int TOPIC_COUNT = 4;
 	private static final int MESSAGE_COUNT = 1000 / TOPIC_COUNT;
-	private static final String TOPIC = "test.candelete";
+	private static final String TOPIC = "testv5.candelete";
 	private static final String BROKER_URL = "tcp://localhost:2183";
 
 	@BeforeEach

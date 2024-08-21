@@ -77,12 +77,12 @@ public class MqttComponentSubscribeTest {
 	public void testSubscribeMessage_NoMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
-		String publishTopic = "test.junit";
+		String publishTopic = "test.SubscribeMessage_NoMessage";
 //		String subscribeTopic = publishTopic;
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
-		MessagingService messagingService = msAware.getService();
+		MessagingService messagingService = msAware.waitForService(1000);
 		assertNotNull(messagingService);
 		
 		//send message and wait for the result
@@ -102,12 +102,12 @@ public class MqttComponentSubscribeTest {
 	public void testSubscribeOftenMessage_NoMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
-		String publishTopic = "test.junit";
+		String publishTopic = "test.SubscribeOftenMessage_NoMessage";
 //		String subscribeTopic = publishTopic;
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
-		MessagingService messagingService = msAware.getService();
+		MessagingService messagingService = msAware.waitForService(1000);
 		assertNotNull(messagingService);
 		
 		//send message and wait for the result
@@ -131,13 +131,13 @@ public class MqttComponentSubscribeTest {
 	public void testSubscribeMessage_Message(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
-		String publishTopic = "test.junit";
+		String publishTopic = "test.SubscribeMessage_Message";
 		String publishContent = "this is a test";
 
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
-		MessagingService messagingService = msAware.getService();
+		MessagingService messagingService = msAware.waitForService(1000);
 		// count down latch to wait for the message
 		CountDownLatch resultLatch = new CountDownLatch(1);
 		// holder for the result
@@ -160,21 +160,17 @@ public class MqttComponentSubscribeTest {
 		
 	}
 	
-	/**
-	 * Tests publishing a message
-	 * @throws Exception
-	 */
 	@Test
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeMessage_Wildcard(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
-		String publishTopic = "test/junit";
-		String subscribeTopic = "test/#";
+		String publishTopic = "test.SubscribeMessage/Wildcard";
+		String subscribeTopic = "test.SubscribeMessage/#";
 		String publishContent = "this is a test";
 
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
 		// count down latch to wait for the message
@@ -182,7 +178,7 @@ public class MqttComponentSubscribeTest {
 		// holder for the result
 		AtomicReference<String> result = new AtomicReference<>();
 		
-		MessagingService messagingService = msAware.getService();
+		MessagingService messagingService = msAware.waitForService(1000);
 		assertNotNull(messagingService);
 		
 		//send message and wait for the result
@@ -211,11 +207,11 @@ public class MqttComponentSubscribeTest {
 	public void testSubscribeOftenMessage_Message(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
-		String publishTopic = "test-junit";
+		String publishTopic = "test.SubscribeOftenMessage_Message";
 //		String subscribeTopic = publishTopic;
 		String publishContent = "this is a test";
 
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
 		// count down latch to wait for the message
@@ -224,7 +220,7 @@ public class MqttComponentSubscribeTest {
 		AtomicReference<String> result01 = new AtomicReference<>();
 		AtomicReference<String> result02 = new AtomicReference<>();
 		
-		MessagingService mqttService = msAware.getService();
+		MessagingService mqttService = msAware.waitForService(1000);
 		assertNotNull(mqttService);
 		
 		//send message and wait for the result

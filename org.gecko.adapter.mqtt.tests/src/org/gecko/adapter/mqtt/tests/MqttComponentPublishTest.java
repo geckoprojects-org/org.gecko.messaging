@@ -82,9 +82,9 @@ public class MqttComponentPublishTest {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublishMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
-		String publishTopic = "publish.junit";
+		String publishTopic = "testv3.PublishMessage";
 		String publishContent = "this is a test";
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
 		// count down latch to wait for the message
@@ -95,7 +95,7 @@ public class MqttComponentPublishTest {
 		connectClient(publishTopic, resultLatch, result);
 
 		// check for service
-		MessagingService messagingService = msAware.getService();
+		MessagingService messagingService = msAware.waitForService(1000);
 		assertNotNull(messagingService);
 
 		// send message and wait for the result
@@ -121,10 +121,10 @@ public class MqttComponentPublishTest {
 	public void testPublishMessageWithUsernameAndPassword(
 			@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
-		String publishTopic = "publish.junit";
+		String publishTopic = "testv3.PublishMessageWithUsernameAndPassword";
 		String publishContent = "this is a test";
 
-		MQTTBroker broker = bAware.getService();
+		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 		// count down latch to wait for the message
 		CountDownLatch resultLatch = new CountDownLatch(1);
@@ -134,7 +134,7 @@ public class MqttComponentPublishTest {
 		connectClient(publishTopic, resultLatch, result);
 
 		// check for service
-		MessagingService messagingService = msAware.getService();
+		MessagingService messagingService = msAware.waitForService(1000);
 		assertNotNull(messagingService);
 
 		// send message and wait for the result
