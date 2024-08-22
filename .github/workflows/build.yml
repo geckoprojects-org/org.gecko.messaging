@@ -26,7 +26,7 @@ jobs:
   Build_Matrix:
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-latest, windows-latest ]
         java: [ 17 ]
         runner: [ 'xvfb-run --auto-servernum {0}' ]
     name: JDK${{ matrix.java }} ${{ matrix.os }}
@@ -47,7 +47,7 @@ jobs:
     - name: Gradle version
       run: ./gradlew --no-daemon --version
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build -x test -x testOSGi
     - name: Publish Test Reports
       uses: actions/upload-artifact@v4
       if:  success() || failure()

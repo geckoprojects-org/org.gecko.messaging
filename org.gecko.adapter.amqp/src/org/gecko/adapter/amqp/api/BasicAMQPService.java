@@ -148,10 +148,7 @@ public abstract class BasicAMQPService {
 				logger.log(Level.SEVERE, "Error setting the URI to connection factroy " + cfg.brokerUrl(), e);
 			}
 		} 
-		if (!useUrl) {
-			if (!validateConfiguration(cfg)) {
-				throw new ConfigurationException("amqp.configuration", "Error validating AMQP configuration, there are missing mandatory values");
-			}
+		if (!useUrl && validateConfiguration(cfg)) {
 			if (cfg.tls()) {
 				configureTLSConnection(conFactory, cfg);
 			}
@@ -173,6 +170,10 @@ public abstract class BasicAMQPService {
 				if (passValue != null) {
 					conFactory.setPassword(passValue.toString());
 				}
+			}
+		} else {
+			if (!useUrl) {
+				throw new ConfigurationException("amqp.configuration", "Error validating AMQP configuration, there are missing mandatory values");
 			}
 		}
 //		if (getConfiguration().autoRecovery()) {
