@@ -1,0 +1,15 @@
+-resourceonly: true
+-include: ${.}/buildpath.bnd	
+mavendeps: ${sjoin;\n; ${template;-maven-dependencies;${@}}}
+
+-includeresource: {resources}
+	
+Provide-Capability: \
+	${gecko-base}
+
+gecko-base:\
+    bnd.library;\
+        bnd.library     = geckoMessaging; \
+        path            = template
+Bundle-Name: Gecko Messaging Workspace Library
+Bundle-Description: Gecko Messaging Workspace Library

@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) 2012 - 2024 Data In Motion and others.
+ * All rights reserved. 
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *     Data In Motion - initial API and implementation
+ */
+
 /**
  * 
  */
@@ -23,6 +36,8 @@ import org.osgi.util.pushstream.QueuePolicyOption;
  */
 public class SimpleMessagingContext implements MessagingContext {
 	
+	private String id;
+	private String source;
 	private String queueName;
 	private String routingKey;
 	private String contentType = null;
@@ -350,6 +365,40 @@ public class SimpleMessagingContext implements MessagingContext {
 	
 	public void setReplyToPolicy(ReplyToPolicy replyToPolicy) {
 		this.replyToPolicy = replyToPolicy;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContext#getSoure()
+	 */
+	@Override
+	public String getSoure() {
+		return source;
+	}
+	
+	/**
+	 * Sets the source.
+	 * @param source the source to set
+	 */
+	void setSource(String source) {
+		this.source = source;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContext#getId()
+	 */
+	@Override
+	public String getId() {
+		return id;
+	}
+	
+	/**
+	 * Sets the id.
+	 * @param id the id to set
+	 */
+	void setId(String id) {
+		this.id = id;
 	}
 
 }

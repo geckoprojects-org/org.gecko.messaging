@@ -1,14 +1,16 @@
-/**
-	 * Copyright (c) 2012 - 2018 Data In Motion and others.
+/*
+ * Copyright (c) 2012 - 2024 Data In Motion and others.
  * All rights reserved. 
- * 
- * This program and the accompanying materials are made available under the terms of the 
- * Eclipse Public License v1.0 which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * SPDX-License-Identifier: EPL-2.0
+ *
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
+
 package org.gecko.adapter.amqp.pubsub.consumer;
 
 import java.io.IOException;
@@ -17,6 +19,7 @@ import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.gecko.adapter.amqp.api.WorkerFunction;
 import org.gecko.adapter.amqp.client.AMQPMessage;
 import org.gecko.adapter.amqp.consumer.AMQPMessageImpl;
 import org.gecko.util.pushstream.PushStreamContext;
@@ -48,7 +51,7 @@ public class AMQPPubOnSubConsumer extends DefaultConsumer {
 	 * Creates a new instance.
 	 * @param channel
 	 */
-	public AMQPPubOnSubConsumer(Channel channel, Function<AMQPMessage, ByteBuffer> function, PushStreamContext<AMQPMessage> psCtx) {
+	public AMQPPubOnSubConsumer(Channel channel, WorkerFunction function, PushStreamContext<AMQPMessage> psCtx) {
 		super(channel);
 		this.function = function;
 		responseStream = PushStreamHelper.createPushStream(eventSource, psCtx);

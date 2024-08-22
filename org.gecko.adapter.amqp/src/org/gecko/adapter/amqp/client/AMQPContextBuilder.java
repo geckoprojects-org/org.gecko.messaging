@@ -1,20 +1,27 @@
-/**
- * Copyright (c) 2012 - 2018 Data In Motion and others.
+/*
+ * Copyright (c) 2012 - 2024 Data In Motion and others.
  * All rights reserved. 
- * 
- * This program and the accompanying materials are made available under the terms of the 
- * Eclipse Public License v1.0 which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * SPDX-License-Identifier: EPL-2.0
+ *
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
+
 package org.gecko.adapter.amqp.client;
+
+import static java.util.Objects.isNull;
+import static org.gecko.adapter.amqp.consumer.AMQPHelper.validateExchangeConfiguration;
+import static org.gecko.adapter.amqp.consumer.AMQPHelper.validateQueueConfiguration;
 
 import java.util.Date;
 
+import org.gecko.adapter.amqp.api.AMQPConfiguration;
+import org.gecko.adapter.amqp.api.AMQPProperties;
 import org.gecko.adapter.amqp.client.AMQPContext.RoutingType;
-import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.SimpleMessagingContextBuilder;
 
 /**
@@ -26,13 +33,36 @@ public class AMQPContextBuilder extends SimpleMessagingContextBuilder {
 	
 	private AMQPContext context = new AMQPContext();
 	
+	public static AMQPContextBuilder createBuilder(AMQPConfiguration configuration) {
+		if (isNull(configuration)) {
+			return new AMQPContextBuilder();
+		}
+		AMQPContextBuilder builder = new AMQPContextBuilder();
+		if (validateExchangeConfiguration(configuration)) {
+			builder = builder.durable().exchange(configuration.exchange(), configuration.routingKey());
+		}
+		if (validateQueueConfiguration(configuration)) {
+			if (validateExchangeConfiguration(configuration)) {
+				builder = builder.queue(configuration.topic());
+			} else {
+				builder = builder.topic().durable().queue(configuration.topic());
+			}
+		}
+		return builder;
+	}
+	
 	/* 
 	 * (non-Javadoc)
 	 * @see org.gecko.osgi.messaging.MessageContextBuilder#build()
 	 */
 	@Override
-	public MessagingContext build() {
+	public AMQPContext build() {
 		return buildContext(context);
+	}
+	
+	public AMQPContextBuilder properties(AMQPProperties props) {
+		context.setProperties(props);
+		return this;
 	}
 	
 	public AMQPContextBuilder durable() {
@@ -95,6 +125,11 @@ public class AMQPContextBuilder extends SimpleMessagingContextBuilder {
 	
 	public AMQPContextBuilder autoAcknowledge() {
 		context.setAutoAcknowledge(true);
+		return this;
+	}
+	
+	public AMQPContextBuilder asRPCRequest() {
+		context.setRpc(true);
 		return this;
 	}
 	

@@ -1,0 +1,15 @@
+-buildpath: \
+	org.osgi.util.pushstream;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.gecko.osgi.messaging,\
+	org.gecko.util.pushstream,\
+	osgi.core
+
+-testpath: \
+	${junit}
+
+Bundle-Version: 1.0.0.SNAPSHOT
+Bundle-Vendor: Data In Motion Consulting
+Bundle-Name: MQTT Messaging Common 
+

@@ -1,14 +1,16 @@
-/**
- * Copyright (c) 2012 - 2018 Data In Motion and others.
+/*
+ * Copyright (c) 2012 - 2024 Data In Motion and others.
  * All rights reserved. 
- * 
- * This program and the accompanying materials are made available under the terms of the 
- * Eclipse Public License v1.0 which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * SPDX-License-Identifier: EPL-2.0
+ *
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
+
 package org.gecko.adapter.amqp.consumer;
 
 import java.nio.ByteBuffer;
@@ -29,6 +31,7 @@ public class AMQPMessageImpl extends SimpleMessage implements AMQPMessage {
 	private String contentType;
 	private String replyTo;
 	private String correlationId;
+	private String messageId;
 	private long deliveryTag;
 	
 	/**
@@ -43,6 +46,23 @@ public class AMQPMessageImpl extends SimpleMessage implements AMQPMessage {
 	 */
 	public AMQPMessageImpl(String topic, ByteBuffer content, SimpleMessagingContext context) {
 		super(topic, content, context);
+	}
+	
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.adapter.amqp.client.AMQPMessage#getMessageId()
+	 */
+	@Override
+	public String getMessageId() {
+		return messageId;
+	}
+	
+	/**
+	 * Sets the messageId.
+	 * @param messageId the messageId to set
+	 */
+	public void setMessageId(String messageId) {
+		this.messageId = messageId;
 	}
 
 	/* 

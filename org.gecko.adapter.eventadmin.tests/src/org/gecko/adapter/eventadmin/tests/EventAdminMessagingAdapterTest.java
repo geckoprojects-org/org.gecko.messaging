@@ -1,14 +1,16 @@
-/**
- * Copyright (c) 2012 - 2018 Data In Motion and others.
+/*
+ * Copyright (c) 2012 - 2024 Data In Motion and others.
  * All rights reserved. 
- * 
- * This program and the accompanying materials are made available under the terms of the 
- * Eclipse Public License v1.0 which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * SPDX-License-Identifier: EPL-2.0
+ *
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
+
 package org.gecko.adapter.eventadmin.tests;
 
 
@@ -33,11 +35,9 @@ import org.gecko.osgi.messaging.SimpleMessagingContextBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.osgi.framework.BundleContext;
 import org.osgi.service.event.Event;
 import org.osgi.service.event.EventAdmin;
 import org.osgi.service.event.EventHandler;
-import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.service.ServiceAware;
 import org.osgi.test.junit5.context.BundleContextExtension;
@@ -49,8 +49,6 @@ import org.osgi.util.pushstream.PushStream;
 @ExtendWith(BundleContextExtension.class)
 public class EventAdminMessagingAdapterTest {
 
-	@InjectBundleContext
-	BundleContext contex;
 	@InjectService
 	EventAdmin ea;
 	

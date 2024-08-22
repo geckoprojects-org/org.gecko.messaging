@@ -1,20 +1,23 @@
-/**
- * Copyright (c) 2012 - 2018 Data In Motion and others.
+/*
+ * Copyright (c) 2012 - 2024 Data In Motion and others.
  * All rights reserved. 
- * 
- * This program and the accompanying materials are made available under the terms of the 
- * Eclipse Public License v1.0 which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
- * 
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * SPDX-License-Identifier: EPL-2.0
+ *
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
+
 package org.gecko.adapter.amqp.client;
 
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.gecko.adapter.amqp.api.AMQPProperties;
 import org.gecko.osgi.messaging.SimpleMessagingContext;
 
 /**
@@ -31,6 +34,7 @@ public class AMQPContext extends SimpleMessagingContext {
 		HEADER
 	}
 	
+	private String exchange = null;
 	private String appId = null;
 	private String clusterId = null;
 	private String expiration = null;
@@ -49,6 +53,23 @@ public class AMQPContext extends SimpleMessagingContext {
 	private boolean exchangeMode = false;
 	private boolean autoAcknowledge = false;
 	private boolean rpc = false;
+	private AMQPProperties properties = null;
+	
+	/**
+	 * Sets the properties.
+	 * @param properties the properties to set
+	 */
+	void setProperties(AMQPProperties properties) {
+		this.properties = properties;
+	}
+	
+	/**
+	 * Returns the properties.
+	 * @return the properties
+	 */
+	public AMQPProperties getProperties() {
+		return properties;
+	}
 	
 	/**
 	 * Adds a header
@@ -97,7 +118,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @return the exchangeName
 	 */
 	public String getExchangeName() {
-		return getRoutingKey() != null ? getQueueName() : null;
+		return exchange;
 	}
 	
 	/**
@@ -105,8 +126,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @param exchangeName the exchangeName to set
 	 */
 	void setExchangeName(String exchangeName) {
-		this.setQueueName(exchangeName);
-		this.setRoutingKey(null);
+		this.exchange = exchangeName;
 	}
 
 	/**
@@ -170,7 +190,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @param queueMode the queueMode to set
 	 */
 	void setQueueMode(boolean queueMode) {
-		this.queueMode = queueMode;
+		this.queueMode = isExchangeMode() ? false : queueMode;
 	}
 
 	/**
@@ -186,7 +206,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * @param exchangeMode the exchangeMode to set
 	 */
 	void setExchangeMode(boolean exchangeMode) {
-		this.exchangeMode = exchangeMode;
+		this.exchangeMode = isQueueMode() ? false : exchangeMode;
 	}
 
 	/**
@@ -317,7 +337,7 @@ public class AMQPContext extends SimpleMessagingContext {
 	 * Sets the messageId.
 	 * @param messageId the messageId to set
 	 */
-	void setMessageId(String messageId) {
+	public void setMessageId(String messageId) {
 		this.messageId = messageId;
 	}
 

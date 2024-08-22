@@ -1,3 +1,16 @@
+/*
+ * Copyright (c) 2012 - 2024 Data In Motion and others.
+ * All rights reserved. 
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *     Data In Motion - initial API and implementation
+ */
+
 /**
  * 
  */
@@ -21,6 +34,8 @@ import org.osgi.util.pushstream.PushbackPolicy;
  */
 public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 
+	private String id;
+	private String source;
 	private String queueName;
 	private String routingKey;
 	private String contentType = null;
@@ -111,6 +126,12 @@ public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 			ctx.setQueuePolicyOption(pushstreamContext.getQueuePolicyOption());
 			ctx.setBufferQueue(pushstreamContext.getBufferQueue());
 		}
+		if (id != null) {
+			ctx.setId(id);
+		}
+		if (source != null) {
+			ctx.setSource(source);
+		}
 		return ctx;
 	}
 
@@ -119,7 +140,7 @@ public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 	 */
 	@Override
 	public MessagingContextBuilder withBuffer(int size) {
-		if (bufferSize > 0) {
+		if (size > 0) {
 			this.bufferSize = size;
 		}
 		return this;
@@ -295,6 +316,26 @@ public class SimpleMessagingContextBuilder implements MessagingContextBuilder {
 		if (context != null) {
 			this.pushstreamContext = context;
 		}
+		return this;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContextBuilder#source(java.lang.String)
+	 */
+	@Override
+	public MessagingContextBuilder source(String source) {
+		this.source = source;
+		return this;
+	}
+
+	/* 
+	 * (non-Javadoc)
+	 * @see org.gecko.osgi.messaging.MessagingContextBuilder#id(java.lang.String)
+	 */
+	@Override
+	public MessagingContextBuilder id(String id) {
+		this.id = id;
 		return this;
 	}
 

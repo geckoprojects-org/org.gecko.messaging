@@ -1,3 +1,4 @@
+    
 Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
 
 -library: enableOSGi-Test
@@ -9,9 +10,13 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.osgi.util.tracker;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	org.osgi.util.pushstream;version=latest,\
-	org.eclipse.paho.client.mqttv3;version=latest,\
 	org.gecko.adapter.mqtt;version=snapshot,\
-	org.gecko.osgi.messaging;version=snapshot
+	org.gecko.osgi.messaging;version=snapshot,\
+	org.eclipse.paho.mqttv5.client;version=latest,\
+	org.osgi.test.junit5.cm,\
+	org.gecko.moquette.broker;version=latest,\
+	org.osgi.util.converter,\
+	org.gecko.adapter.mqtt.common;version=snapshot
 
 Bundle-Name: MQTT Messaging Integration Test
 Private-Package: org.gecko.adapter.mqtt.tests

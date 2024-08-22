@@ -8,9 +8,8 @@
 -runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
 -runee: JavaSE-17
 
--runprogramargs: -Damqp.host=devel.data-in-motion.biz
+-runvm: -Damqp.host=devel.data-in-motion.biz
 
-amqp.host: devel.data-in-motion.biz
 -runbundles: \
 	com.rabbitmq.client;version='[5.20.0,5.20.1)',\
 	junit-jupiter-api;version='[5.10.1,5.10.2)',\
@@ -18,7 +17,6 @@ amqp.host: devel.data-in-motion.biz
 	junit-platform-commons;version='[1.10.1,1.10.2)',\
 	net.bytebuddy.byte-buddy;version='[1.14.9,1.14.10)',\
 	net.bytebuddy.byte-buddy-agent;version='[1.14.9,1.14.10)',\
-	org.apache.felix.scr;version='[2.2.6,2.2.7)',\
 	org.gecko.adapter.amqp.core;version=snapshot,\
 	org.gecko.adapter.amqp.pubsub;version=snapshot,\
 	org.gecko.adapter.amqp.tests;version=snapshot,\
@@ -29,7 +27,6 @@ amqp.host: devel.data-in-motion.biz
 	org.mockito.mockito-core;version='[4.11.0,4.11.1)',\
 	org.objenesis;version='[3.3.0,3.3.1)',\
 	org.opentest4j;version='[1.3.0,1.3.1)',\
-	org.osgi.service.cm;version='[1.6.1,1.6.2)',\
 	org.osgi.service.component;version='[1.5.1,1.5.2)',\
 	org.osgi.test.common;version='[1.2.1,1.2.2)',\
 	org.osgi.test.junit5;version='[1.2.1,1.2.2)',\
@@ -39,4 +36,6 @@ amqp.host: devel.data-in-motion.biz
 	slf4j.api;version='[1.7.36,1.7.37)',\
 	slf4j.simple;version='[1.7.36,1.7.37)',\
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
-	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)'
+	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)',\
+	org.osgi.util.converter;version='[1.0.9,1.0.10)',\
+	org.apache.felix.scr;version='[2.2.12,2.2.13)'
