@@ -77,7 +77,7 @@ public class PahoV3Client implements GeckoMqttClient {
 			}
 			client.connect(getConnectionOptions(config));
 		} catch (MqttException e) {
-			logger.log(Level.SEVERE, "Fatal error trying to initalize MQTT client in connetion " + id + ".", e);
+			logger.log(Level.SEVERE, e, () -> "Fatal error trying to initalize MQTT client in connetion " + id + ".");
 			throw new RuntimeException(e);
 		}
 	}
@@ -92,7 +92,8 @@ public class PahoV3Client implements GeckoMqttClient {
 		try {
 			client.disconnect();
 		} catch (MqttException e) {
-			logger.log(Level.SEVERE, "Fatal error while disconnectiong connetion " + client.getClientId() + ".", e);
+			logger.log(Level.SEVERE, e,
+					() -> "Fatal error while disconnectiong connetion " + client.getClientId() + ".");
 		}
 	}
 
@@ -101,7 +102,7 @@ public class PahoV3Client implements GeckoMqttClient {
 		try {
 			client.close();
 		} catch (MqttException e) {
-			logger.log(Level.SEVERE, "Fatal error while close connetion " + client.getClientId() + ".", e);
+			logger.log(Level.SEVERE, e, () -> "Fatal error while close connetion " + client.getClientId() + ".");
 		}
 	}
 
@@ -125,7 +126,8 @@ public class PahoV3Client implements GeckoMqttClient {
 			} else if (config.password().length() != 0) {
 				options.setPassword(config.password().toCharArray());
 				if (!DEFAULT_PASSWORD.equals(config.password())) {
-					logger.log(Level.WARNING, "Using deprecated \"password\" attribute in MqttConfig. Please use \".password\" instead.");
+					logger.log(Level.WARNING,
+							"Using deprecated \"password\" attribute in MqttConfig. Please use \".password\" instead.");
 				}
 			}
 		}
@@ -146,14 +148,14 @@ public class PahoV3Client implements GeckoMqttClient {
 						source.publish(msg);
 					} catch (Exception e) {
 						source.error(e);
-						logger.log(Level.SEVERE, "Fatal error while publish to push event source in connetion "
-								+ client.getClientId() + ".", e);
+						logger.log(Level.SEVERE, e, () -> "Fatal error while publish to push event source in connetion "
+								+ client.getClientId() + ".");
 					}
 				}
 			});
 		} catch (MqttException e) {
-			logger.log(Level.SEVERE,
-					"Fatal error trying to subscribe to \"" + topic + "\" MQTT broker while reconnect.", e);
+			logger.log(Level.SEVERE, e,
+					() -> "Fatal error trying to subscribe to \"" + topic + "\" MQTT broker while reconnect.");
 		}
 
 	}
@@ -168,7 +170,7 @@ public class PahoV3Client implements GeckoMqttClient {
 
 			@Override
 			public void deliveryComplete(IMqttDeliveryToken token) {
-				logger.log(Level.FINER, "deliveryComplete " + token);
+				logger.log(Level.FINER, () -> "deliveryComplete " + token);
 			}
 
 			@Override
@@ -187,7 +189,7 @@ public class PahoV3Client implements GeckoMqttClient {
 	public String toString() {
 		return client.getClientId();
 	}
-	
+
 	private static Message fromPahoMessage(MqttMessage msg, String topic) {
 		ByteBuffer content = ByteBuffer.wrap(msg.getPayload());
 		MessagingContext context = new MQTTContextBuilder().setRetained(msg.isRetained())

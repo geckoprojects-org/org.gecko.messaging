@@ -13,17 +13,20 @@
 
 package org.gecko.adapter.mqtt.tests;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import org.gecko.moquette.broker.MQTTBroker;
 import org.gecko.osgi.messaging.Message;
@@ -54,7 +57,6 @@ public class MqttComponentReconnectTest {
 	private static final String BROKER_URL = "tcp://localhost:2183";
 	private CountDownLatch messageLatch;
 
-
 	/**
 	 * Tests reconnect client
 	 * 
@@ -74,10 +76,10 @@ public class MqttComponentReconnectTest {
 		messageLatch = new CountDownLatch(1);
 
 		MQTTBroker broker = bAware.waitForService(1000);
-		
+
 		MessagingService readMessagingService = read.waitForService(1000);
 		assertNotNull(readMessagingService);
-		readMessagingService.subscribe(TOPIC).forEach(m -> handle(m));
+		readMessagingService.subscribe(TOPIC).forEach(this::handle);
 
 		MessagingService writeMessageService = write.waitForService(1000);
 		assertNotNull(writeMessageService);
@@ -86,23 +88,28 @@ public class MqttComponentReconnectTest {
 		try {
 			// start publishing
 			executor.execute(publisher);
-			messageLatch.await(1, TimeUnit.SECONDS);
-			publisher.waitSuccess(1);
+			assertTrue(messageLatch.await(3, TimeUnit.SECONDS));
+			assertTrue(publisher.waitSuccess(10));
 			assertTrue(publisher.isPublishing);
+			List<String> clientIds = broker.getConnectedClientIds().stream().filter(id -> id.startsWith("gecko"))
+					.collect(Collectors.toList());
+			assertEquals(2, clientIds.size());
 
 			// stop Server
 			broker.stop();
-			publisher.waitError(3);
+			Thread.sleep(5000);
+			assertTrue(publisher.waitError(3));
 			assertFalse(publisher.isPublishing);
 
 			// start Server
 			broker.start();
 
 			// waiting for reconnect
-			publisher.waitSuccess(3);
-			messageLatch = new CountDownLatch(1);
-			messageLatch.await(3, TimeUnit.SECONDS);
+			assertTrue(publisher.waitSuccess(10));
+			messageLatch = new CountDownLatch(3);
+			assertTrue(messageLatch.await(10, TimeUnit.SECONDS));
 			assertTrue(publisher.isPublishing);
+			assertThat(broker.getConnectedClientIds()).doesNotContainAnyElementsOf(clientIds);
 		} finally {
 			executor.shutdownNow();
 		}
@@ -111,13 +118,14 @@ public class MqttComponentReconnectTest {
 	private void handle(Message msg) {
 		String v = new String(msg.payload().array());
 		assertEquals("42", v);
+		System.out.println("---- 42");
 		messageLatch.countDown();
 	}
 
 	private static final class TestPublisher implements Runnable {
 		private final MessagingService messagingService;
 		private boolean isPublishing;
-		private final CountDownLatch successLatch;
+		private CountDownLatch successLatch;
 		private CountDownLatch errorLatch;
 
 		private TestPublisher(MessagingService messagingService) {
@@ -134,8 +142,8 @@ public class MqttComponentReconnectTest {
 					messagingService.publish(TOPIC, ByteBuffer.wrap("42".getBytes()));
 					if (isPublishing == false) {
 						isPublishing = true;
-						successLatch.countDown();
 					}
+					successLatch.countDown();
 				} catch (Exception e) {
 					if (isPublishing == true) {
 						isPublishing = false;
@@ -143,18 +151,19 @@ public class MqttComponentReconnectTest {
 					}
 				}
 				try {
-					Thread.sleep(10);
+					Thread.sleep(100);
 				} catch (InterruptedException e) {
 				}
 			}
 		}
 
-		private void waitError(int seconds) throws InterruptedException {
-			errorLatch.await(seconds, TimeUnit.SECONDS);
+		private boolean waitError(int seconds) throws InterruptedException {
+			return errorLatch.await(seconds, TimeUnit.SECONDS);
 		}
 
-		private void waitSuccess(int seconds) throws InterruptedException {
-			successLatch.await(seconds, TimeUnit.SECONDS);
+		private boolean waitSuccess(int seconds) throws InterruptedException {
+			this.successLatch = new CountDownLatch(1);
+			return successLatch.await(seconds, TimeUnit.SECONDS);
 		}
 	}
 

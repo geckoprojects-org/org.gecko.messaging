@@ -13,7 +13,11 @@
 
 package org.gecko.adapter.mqtt.common;
 
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.gecko.adapter.mqtt.MQTTContext;
 import org.gecko.adapter.mqtt.MqttConfig;
@@ -26,11 +30,14 @@ import org.osgi.util.pushstream.PushEventConsumer;
 import org.osgi.util.pushstream.SimplePushEventSource;
 
 public class MqttPushEventSource implements SimplePushEventSource<Message> {
+	private static final Logger logger = Logger.getLogger(MqttPushEventSource.class.getName());
+	private static final int RECONNECT_DELAY_MS = 5000;
+	
+	private Timer reconnectTimer;
 	private String topic;
 	private SimplePushEventSource<Message> source;
-	private GeckoMqttClient mqttClient;
+	private GeckoMqttClient mqtt;
 	private int qos;
-	private String id;
 	private MqttConfig config;
 
 	private MqttClientFactory<GeckoMqttClient> clientFactory;
@@ -43,10 +50,9 @@ public class MqttPushEventSource implements SimplePushEventSource<Message> {
 		this.topic = topic;
 		this.config = config;
 		this.clientFactory = clientFactory;
-		this.id = UUID.randomUUID() + "-" + topic;
 
 		QoS qos = QoS.AT_LEAST_ONE;
-		if (context != null && context instanceof MQTTContext) {
+		if (context instanceof MQTTContext) {
 			MQTTContext ctx = (MQTTContext) context;
 			if (ctx.getQoS() != null) {
 				qos = ctx.getQoS();
@@ -94,8 +100,41 @@ public class MqttPushEventSource implements SimplePushEventSource<Message> {
 	}
 
 	private void initMQTTClient() {
-		mqttClient = clientFactory.createClient(config, id);
-		mqttClient.subscribe(this.topic, this.qos, this);
+		mqtt = clientFactory.createClient(config, "gecko" + UUID.randomUUID() + "-" + topic);
+		mqtt.subscribe(this.topic, this.qos, this);
+		mqtt.connectionLost(this::startReconnectTimer);
+	}
+
+	private void startReconnectTimer(Throwable exception) {
+		if (exception != null) {
+			logger.log(Level.INFO, exception, () -> "Connection to MQTT broker lost: " + exception.getMessage()
+					+ ". Waiting before reconnecting.");
+		}
+		if (reconnectTimer != null) {
+			reconnectTimer.cancel();
+			reconnectTimer = null;
+		}
+
+		reconnectTimer = new Timer();
+		reconnectTimer.schedule(new TimerTask() {
+			@Override
+			public void run() {
+				if (mqtt == null) {
+					logger.log(Level.SEVERE, "Trying to reconnect a null client.");
+					return;
+				}
+				if (!mqtt.isConnected()) {
+					logger.log(Level.INFO, "Create new client and subscribe to {0}", topic);
+					mqtt.close();
+					try {
+						initMQTTClient();
+					} catch (Exception e) {
+						logger.log(Level.SEVERE, e, () -> "Error trying to reconnect to MQTT broker.");
+						startReconnectTimer(exception);
+					}
+				}
+			}
+		}, RECONNECT_DELAY_MS);
 	}
 
 }
