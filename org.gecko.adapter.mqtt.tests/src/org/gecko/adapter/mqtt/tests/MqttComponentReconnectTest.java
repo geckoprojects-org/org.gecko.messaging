@@ -118,7 +118,6 @@ public class MqttComponentReconnectTest {
 	private void handle(Message msg) {
 		String v = new String(msg.payload().array());
 		assertEquals("42", v);
-		System.out.println("---- 42");
 		messageLatch.countDown();
 	}
 
