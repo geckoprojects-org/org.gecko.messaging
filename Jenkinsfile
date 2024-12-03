@@ -9,6 +9,18 @@ pipeline  {
     }
 
     stages {
+        stage('Clean Workspace') {
+            steps {
+                // Cleanup before starting the stage
+                cleanWs()
+            }
+        }
+        stage('Checkout') {
+            steps {
+                // Checkout the repository
+                checkout scm                                                    
+            }
+        }
         stage('Unit & Integration Tests') {
             steps {
                 script {
