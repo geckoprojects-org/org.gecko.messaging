@@ -15,8 +15,10 @@ package org.gecko.moquette.broker;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -94,5 +96,9 @@ public class MQTTBroker {
 			return validUsername.equals(username) && Arrays.equals(validPassword.getBytes(),password);
 		}
 
+	}
+	
+	public List<String> getConnectedClientIds() {
+		return server.listConnectedClients().stream().map(c -> c.getClientID()).collect(Collectors.toList());
 	}
 }

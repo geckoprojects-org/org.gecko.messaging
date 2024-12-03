@@ -78,7 +78,7 @@ public class PahoV5Client implements GeckoMqttClient {
 			}
 			client.connect(getConnectionOptions(config));
 		} catch (MqttException e) {
-			logger.log(Level.SEVERE, "Fatal error trying to initalize MQTT client in connetion " + id + ".", e);
+			logger.log(Level.SEVERE,e, () -> "Fatal error trying to initalize MQTT client in connetion " + id + ".");
 			throw new RuntimeException(e);
 		}
 	}
@@ -145,8 +145,8 @@ public class PahoV5Client implements GeckoMqttClient {
 						source.publish(msg);
 					} catch (Exception e) {
 						source.error(e);
-						logger.log(Level.SEVERE, "Fatal error while publish to push event source in connetion "
-								+ client.getClientId() + ".", e);
+						logger.log(Level.SEVERE, e, ()-> "Fatal error while publish to push event source in connetion "
+								+ client.getClientId() + ".");
 					}
 				}
 			});
@@ -164,7 +164,7 @@ public class PahoV5Client implements GeckoMqttClient {
 			@Override
 			public void messageArrived(String topic, MqttMessage message) throws Exception {
 				logger.log(Level.WARNING,
-						"message for client " + client.getClientId() + " not expected topic =  " + topic);
+						() -> "message for client " + client.getClientId() + " not expected topic =  " + topic);
 			}
 
 			@Override
@@ -174,17 +174,17 @@ public class PahoV5Client implements GeckoMqttClient {
 
 			@Override
 			public void deliveryComplete(IMqttToken token) {
-				logger.log(Level.FINER, "deliveryComplete " + token);
+				logger.log(Level.FINER, () -> "deliveryComplete " + token);
 			}
 
 			@Override
 			public void connectComplete(boolean reconnect, String serverURI) {
-				logger.log(Level.INFO, "connect to " + serverURI + " complete reconnect = " + reconnect);
+				logger.log(Level.INFO, () -> "connect to " + serverURI + " complete reconnect = " + reconnect);
 			}
 
 			@Override
 			public void authPacketArrived(int reasonCode, MqttProperties properties) {
-				logger.log(Level.FINER, "auth packet arrived reasonCode = " + reasonCode);
+				logger.log(Level.FINER, () -> "auth packet arrived reasonCode = " + reasonCode);
 			}
 
 			@Override

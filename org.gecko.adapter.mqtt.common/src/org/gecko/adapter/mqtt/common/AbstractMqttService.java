@@ -54,7 +54,7 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 	private MqttConfig config;
 
 	@Activate
-	public void doActivate(MqttConfig config) throws Exception {
+	public void doActivate(MqttConfig config) {
 		this.config = config;
 	}
 
@@ -94,17 +94,12 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 
 	@Override
 	public PushStream<Message> subscribe(String topic, MessagingContext context) throws Exception {
-		String filter = topic.replaceAll("\\*", "#"); // replace MQTT # sign with * for filters
+		String filter = topic.replace('*', '#'); // replace MQTT # sign with * for filters
 		SimplePushEventSource<Message> source = subscriptions.get(filter);
 		if (source == null) {
 			synchronized (subscriptions) {
-				source = subscriptions.get(filter);
-				if (source == null) {
-					final MqttPushEventSource newSource = new MqttPushEventSource(topic, context, config,
-							this::createClient);
-					subscriptions.put(filter, newSource);
-					source = newSource;
-				}
+				source = subscriptions.computeIfAbsent(filter,
+						k -> new MqttPushEventSource(topic, context, config, this::createClient));
 			}
 		}
 		PushStreamBuilder<Message, BlockingQueue<PushEvent<? extends Message>>> buildStream = PushStreamHelper
@@ -121,19 +116,18 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 	@Override
 	public void publish(String topic, ByteBuffer content, MessagingContext context) throws Exception {
 		if (mqtt == null) {
-			String id = UUID.randomUUID().toString();
 			try {
-				mqtt = createClient(config, id);
+				mqtt = createClient(config, generateClientId());
 				mqtt.connectionLost(this::startReconnectTimer);
 			} catch (Exception e) {
-				logger.log(Level.SEVERE, "Error connecting to MQTT broker " + config.brokerUrl(), e);
+				logger.log(Level.SEVERE, e, () -> "Error connecting to MQTT broker " + config.brokerUrl());
 				throw e;
 			}
 		}
 
 		QoS qos = QoS.AT_MOST_ONE;
 		boolean retained = false;
-		if (context != null && context instanceof MQTTContext) {
+		if (context instanceof MQTTContext) {
 			MQTTContext ctx = (MQTTContext) context;
 			if (ctx.getQoS() != null) {
 				qos = ctx.getQoS();
@@ -143,11 +137,14 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 		mqtt.publish(topic, content.array(), qos.ordinal(), retained);
 	}
 
+	private String generateClientId() {
+		return "gecko-" + UUID.randomUUID().toString();
+	}
+
 	private void startReconnectTimer(Throwable exception) {
 		if (exception != null) {
-			logger.log(Level.INFO,
-					"Connection to MQTT broker lost: " + exception.getMessage() + ". Waiting before reconnecting.",
-					exception);
+			logger.log(Level.INFO, exception, () -> "Connection to MQTT broker lost: " + exception.getMessage()
+					+ ". Waiting before reconnecting.");
 		}
 		if (reconnectTimer != null) {
 			reconnectTimer.cancel();
@@ -163,12 +160,15 @@ public abstract class AbstractMqttService implements MessagingService, AutoClose
 					return;
 				}
 				if (!mqtt.isConnected()) {
-					logger.log(Level.INFO, "Reconnect");
-					mqtt.connect(config, e -> {
-						logger.log(Level.SEVERE, "Error trying to reconnect to MQTT broker.", e);
+					logger.log(Level.INFO, "Create new client and reconnect");
+					mqtt.close();
+					try {
+						mqtt = createClient(config, generateClientId());
+						mqtt.connectionLost(AbstractMqttService.this::startReconnectTimer);
+					} catch (Exception e) {
+						logger.log(Level.SEVERE, e, () -> "Error trying to reconnect to MQTT broker.");
 						startReconnectTimer(exception);
-						return false;
-					});
+					}
 				}
 			}
 		}, RECONNECT_DELAY_MS);
