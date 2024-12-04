@@ -46,4 +46,5 @@
 	org.eclipse.paho.client.mqttv3;version='[1.2.5,1.2.6)',\
 	org.gecko.adapter.mqtt.common;version=snapshot,\
 	org.apache.felix.scr;version='[2.2.12,2.2.13)',\
-	io.netty.transport-classes-kqueue;version='[4.1.111,4.1.112)'
+	io.netty.transport-classes-kqueue;version='[4.1.111,4.1.112)',\
+	assertj-core;version='[3.24.2,3.24.3)'

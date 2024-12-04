@@ -46,5 +46,4 @@
 	org.gecko.adapter.mqtt.v5.tests;version=snapshot,\
 	org.gecko.adapter.mqtt.common;version=snapshot,\
 	org.apache.felix.scr;version='[2.2.12,2.2.13)',\
-	com.h2database.mvstore;version='[2.2.224,2.2.225)',\
-	moquette-broker;version='[0.18.0,0.18.1)'
+	org.osgi.service.cm;version='[1.6.1,1.6.2)'

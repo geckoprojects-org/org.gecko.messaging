@@ -8,7 +8,7 @@
 	org.eclipse.paho.mqttv5.client,\
 	org.gecko.adapter.mqtt.common;version=latest
 
-Bundle-Version: 1.1.0.SNAPSHOT
+Bundle-Version: 1.1.1.SNAPSHOT
 Bundle-Vendor: Data In Motion Consulting
 Bundle-Name: MQTT Messaging Implementation v5
 
