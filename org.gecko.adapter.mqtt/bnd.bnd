@@ -8,7 +8,7 @@
 	org.osgi.util.promise;version=latest,\
 	org.gecko.adapter.mqtt.common;version=latest
 
-Bundle-Version: 1.1.0.SNAPSHOT
+Bundle-Version: 1.1.1.SNAPSHOT
 Bundle-Vendor: Data In Motion Consulting
 Bundle-Name: MQTT V3 Messaging Implementation
 

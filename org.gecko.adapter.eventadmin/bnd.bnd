@@ -10,6 +10,6 @@
 	org.gecko.util.pushstream;version=latest,\
 	org.gecko.osgi.messaging;version=project
 
-Bundle-Version: 3.1.0.SNAPSHOT
+Bundle-Version: 3.1.1.SNAPSHOT
 
 Provide-Capability: osgi.service;objectClass:List<String>="org.osgi.util.pushstream.PushStream"
