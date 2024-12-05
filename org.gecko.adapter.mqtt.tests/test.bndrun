@@ -45,7 +45,6 @@
 	net.bytebuddy.byte-buddy;version='[1.14.18,1.14.19)',\
 	net.bytebuddy.byte-buddy-agent;version='[1.14.18,1.14.19)',\
 	org.gecko.adapter.mqtt.common;version='[1.0.1,1.0.2)',\
-	org.gecko.adapter.mqtt.v5;version=snapshot,\
 	org.osgi.test.common;version='[1.3.0,1.3.1)',\
 	org.osgi.test.junit5;version='[1.3.0,1.3.1)',\
 	org.osgi.test.junit5.cm;version='[1.3.0,1.3.1)'
