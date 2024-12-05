@@ -29,7 +29,6 @@ import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.MessagingService;
 import org.gecko.osgi.messaging.SimpleMessagingContextBuilder;
 import org.gecko.osgi.messaging.annotations.RequireMQTTv3;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -56,32 +55,7 @@ public class MqttComponentRetainedTest {
 	private static final int TOPIC_COUNT = 4;
 	private static final int MESSAGE_COUNT = 10000 / TOPIC_COUNT;
 	private static final String TOPIC = "test.candelete";
-//	private static final String BROKER_URL = "tcp://datainmotion.de:1883";
-//	private static final String BROKER_URL = "tcp://localhost:1883";
 	private static final String BROKER_URL = "tcp://localhost:2183";
-
-	@BeforeEach
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "write", properties = {
-			@Property(key = MessagingConstants.PROP_USERNAME, value = "demo"),
-			@Property(key = MessagingConstants.PROP_PASSWORD, value = "1234"),
-			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
-	public void setup(@InjectService(cardinality = 0) ServiceAware<MessagingService> writeAware) throws Exception {
-		MessagingService write = writeAware.waitForService(10000);
-		for (int i = 0; i < TOPIC_COUNT; i++) {
-			publish(write, TOPIC+i+"/");
-		}
-	}
-
-	private void publish(MessagingService write, String t) throws Exception {
-		MessagingContext ctx = new MQTTContextBuilder().retained().withQoS(QoS.AT_LEAST_ONE).build();
-		for (int i = 0; i < MESSAGE_COUNT; i++) {
-			String topic = t + "123456789012345678901234567890-" + i;
-			write.publish(topic, ByteBuffer.wrap(("123456789-" + i).getBytes()), ctx);
-			if(i % 100 == 0) {
-				Thread.sleep(200); // To avoid Too many publishes in progress from moquette 
-			}
-		}
-	}
 
 	/**
 	 * Tests reconnect client
@@ -93,8 +67,18 @@ public class MqttComponentRetainedTest {
 			@Property(key = MessagingConstants.PROP_USERNAME, value = "demo"),
 			@Property(key = MessagingConstants.PROP_PASSWORD, value = "1234"),
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
+	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "write", properties = {
+			@Property(key = MessagingConstants.PROP_USERNAME, value = "demo"),
+			@Property(key = MessagingConstants.PROP_PASSWORD, value = "1234"),
+			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testForward(@InjectService(cardinality = 0) MQTTBroker broker,
-			@InjectService(cardinality = 0) ServiceAware<MessagingService> readAware) throws Exception {
+			@InjectService(cardinality = 0) ServiceAware<MessagingService> readAware,
+			@InjectService(cardinality = 0) ServiceAware<MessagingService> writeAware) throws Exception {
+
+		MessagingService write = writeAware.waitForService(10000);
+		for (int i = 0; i < TOPIC_COUNT; i++) {
+			publish(write, TOPIC+i+"/");
+		}
 
 		MessagingService readMessagingService = readAware.waitForService(10000);
 		MessagingContext ctx = SimpleMessagingContextBuilder.builder().withBuffer(100 * MESSAGE_COUNT).build();
@@ -106,9 +90,20 @@ public class MqttComponentRetainedTest {
 		boolean result = messageLatch.await(10, TimeUnit.SECONDS);
 		assertTrue(result, "Missing " + messageLatch.getCount() + " messages.");
 	}
+	
+	private void publish(MessagingService write, String t) throws Exception {
+		MessagingContext ctx = new MQTTContextBuilder().retained().withQoS(QoS.AT_LEAST_ONE).build();
+		for (int i = 0; i < MESSAGE_COUNT; i++) {
+			String topic = t + "123456789012345678901234567890-" + i;
+			write.publish(topic, ByteBuffer.wrap(("123456789-" + i).getBytes()), ctx);
+			if(i % 100 == 0) {
+				Thread.sleep(200); // To avoid Too many publishes in progress from moquette 
+			}
+		}
+	}
 
 	private void sub(MessagingService readMessagingService, MessagingContext ctx, String topic, CountDownLatch messageLatch)
-			throws Exception, InterruptedException {
+			throws Exception {
 		readMessagingService.subscribe(topic, ctx).forEach(m -> {
 			LOGGER.log( Level.INFO, m.topic());
 			messageLatch.countDown();

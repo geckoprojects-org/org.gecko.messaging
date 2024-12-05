@@ -29,7 +29,6 @@ import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.MessagingService;
 import org.gecko.osgi.messaging.SimpleMessagingContextBuilder;
 import org.gecko.osgi.messaging.annotations.RequireMQTTv5;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -58,16 +57,30 @@ public class MqttComponentRetainedTest {
 	private static final String TOPIC = "testv5.candelete";
 	private static final String BROKER_URL = "tcp://localhost:2183";
 
-	@BeforeEach
+	@Test
+	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "write", properties = {
 			@Property(key = MessagingConstants.PROP_USERNAME, value = "demo"),
 			@Property(key = MessagingConstants.PROP_PASSWORD, value = "1234"),
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
-	public void setup(@InjectService(cardinality = 0) ServiceAware<MessagingService> writeAware) throws Exception {
+	public void testForward(@InjectService(cardinality = 0) MQTTBroker broker,
+			@InjectService(cardinality = 0) ServiceAware<MessagingService> readAware,
+			@InjectService(cardinality = 0) ServiceAware<MessagingService> writeAware) throws Exception {
 		MessagingService write = writeAware.waitForService(10000);
 		for (int i = 0; i < TOPIC_COUNT; i++) {
 			publish(write, TOPIC+i+"/");
 		}
+
+		MessagingService readMessagingService = readAware.waitForService(10000);
+		MessagingContext ctx = SimpleMessagingContextBuilder.builder().withBuffer(100 * MESSAGE_COUNT).build();
+
+		CountDownLatch messageLatch = new CountDownLatch(MESSAGE_COUNT*TOPIC_COUNT);
+		for (int i = 0; i < TOPIC_COUNT; i++) {
+			sub(readMessagingService, ctx, TOPIC+i+"/#",messageLatch);
+		}
+		boolean result = messageLatch.await(10, TimeUnit.SECONDS);
+		assertTrue(result, "Missing " + messageLatch.getCount() + " messages.");
 	}
 
 	private void publish(MessagingService write, String t) throws Exception {
@@ -81,25 +94,8 @@ public class MqttComponentRetainedTest {
 		}
 	}
 
-	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
-			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
-	public void testForward(@InjectService(cardinality = 0) MQTTBroker broker,
-			@InjectService(cardinality = 0) ServiceAware<MessagingService> readAware) throws Exception {
-
-		MessagingService readMessagingService = readAware.waitForService(10000);
-		MessagingContext ctx = SimpleMessagingContextBuilder.builder().withBuffer(100 * MESSAGE_COUNT).build();
-
-		CountDownLatch messageLatch = new CountDownLatch(MESSAGE_COUNT*TOPIC_COUNT);
-		for (int i = 0; i < TOPIC_COUNT; i++) {
-			sub(readMessagingService, ctx, TOPIC+i+"/#",messageLatch);
-		}
-		boolean result = messageLatch.await(10, TimeUnit.SECONDS);
-		assertTrue(result, "Missing " + messageLatch.getCount() + " messages.");
-	}
-
 	private void sub(MessagingService readMessagingService, MessagingContext ctx, String topic, CountDownLatch messageLatch)
-			throws Exception, InterruptedException {
+			throws Exception {
 		readMessagingService.subscribe(topic, ctx).forEach(m -> {
 			LOGGER.log( Level.INFO, m.topic());
 			messageLatch.countDown();
