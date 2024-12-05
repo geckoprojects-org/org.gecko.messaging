@@ -16,7 +16,6 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.gecko.adapter.amqp;version=project,\
 	org.gecko.osgi.messaging;version=project
 
-Bundle-Version: 1.0.5-SNAPSHOT
 Private-Package: org.gecko.adapter.amqp.tests
 Bundle-Name: AMQP Adapter Tests
 Bundle-Description: Integration tests for the AMQP message adapter implementation

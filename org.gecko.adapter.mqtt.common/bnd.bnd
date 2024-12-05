@@ -9,7 +9,5 @@
 -testpath: \
 	${junit}
 
-Bundle-Version: 1.0.1.SNAPSHOT
-Bundle-Vendor: Data In Motion Consulting
 Bundle-Name: MQTT Messaging Common 
 

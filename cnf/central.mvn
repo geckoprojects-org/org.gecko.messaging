@@ -119,9 +119,9 @@ com.fasterxml.jackson.core:jackson-core:2.13.2
 com.fasterxml.jackson.core:jackson-databind:2.13.2
 com.fasterxml.jackson.core:jackson-annotations:2.13.2
 
-org.geckoprojects.bnd:org.gecko.bnd.dimc.library:1.5.0
-org.geckoprojects.bnd:org.gecko.bnd.jacoco.library:1.5.0
-org.geckoprojects.bnd:org.gecko.bnd.osgitest.library:1.5.0
+org.geckoprojects.bnd:org.gecko.bnd.dimc.library:1.6.0
+org.geckoprojects.bnd:org.gecko.bnd.jacoco.library:1.6.0
+org.geckoprojects.bnd:org.gecko.bnd.osgitest.library:1.6.0
 org.geckoprojects.utils:org.gecko.util.bnd.library.workspace:1.0.0
 org.geckoprojects.emf:org.gecko.emf.osgi.bnd.library.workspace:6.0.2
 

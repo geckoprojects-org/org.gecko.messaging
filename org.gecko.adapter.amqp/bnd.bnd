@@ -13,7 +13,4 @@
 
 Bundle-Version: 2.2.2.SNAPSHOT
 
-Bundle-Copyright: Data In Motion Consulting GmbH
-Bundle-License: Eclipse Public License v1.0
-Bundle-Vendor: Data In Motion Consulting GmbH
 -sub: *.bnd

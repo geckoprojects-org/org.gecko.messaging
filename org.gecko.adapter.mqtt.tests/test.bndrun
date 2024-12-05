@@ -6,11 +6,6 @@
 -runee: JavaSE-17
 
 -runbundles: \
-	junit-jupiter-api;version='[5.10.1,5.10.2)',\
-	junit-jupiter-params;version='[5.10.1,5.10.2)',\
-	junit-platform-commons;version='[1.10.1,1.10.2)',\
-	net.bytebuddy.byte-buddy;version='[1.14.9,1.14.10)',\
-	net.bytebuddy.byte-buddy-agent;version='[1.14.9,1.14.10)',\
 	org.apache.felix.configadmin;version='[1.9.26,1.9.27)',\
 	org.gecko.adapter.mqtt;version=snapshot,\
 	org.gecko.adapter.mqtt.tests;version=snapshot,\
@@ -22,8 +17,6 @@
 	org.objenesis;version='[3.3.0,3.3.1)',\
 	org.opentest4j;version='[1.3.0,1.3.1)',\
 	org.osgi.service.component;version='[1.5.1,1.5.2)',\
-	org.osgi.test.common;version='[1.2.1,1.2.2)',\
-	org.osgi.test.junit5;version='[1.2.1,1.2.2)',\
 	org.osgi.util.function;version='[1.2.0,1.2.1)',\
 	org.osgi.util.promise;version='[1.3.0,1.3.1)',\
 	org.osgi.util.pushstream;version='[1.1.0,1.1.1)',\
@@ -41,10 +34,18 @@
 	io.netty.transport-native-unix-common;version='[4.1.111,4.1.112)',\
 	slf4j.api;version='[1.7.36,1.7.37)',\
 	slf4j.simple;version='[1.7.36,1.7.37)',\
-	org.osgi.test.junit5.cm;version='[1.2.1,1.2.2)',\
 	org.gecko.moquette.broker;version=snapshot,\
 	org.eclipse.paho.client.mqttv3;version='[1.2.5,1.2.6)',\
-	org.gecko.adapter.mqtt.common;version=snapshot,\
 	org.apache.felix.scr;version='[2.2.12,2.2.13)',\
 	io.netty.transport-classes-kqueue;version='[4.1.111,4.1.112)',\
-	assertj-core;version='[3.24.2,3.24.3)'
+	assertj-core;version='[3.26.3,3.26.4)',\
+	junit-jupiter-api;version='[5.10.3,5.10.4)',\
+	junit-jupiter-params;version='[5.10.3,5.10.4)',\
+	junit-platform-commons;version='[1.10.3,1.10.4)',\
+	net.bytebuddy.byte-buddy;version='[1.14.18,1.14.19)',\
+	net.bytebuddy.byte-buddy-agent;version='[1.14.18,1.14.19)',\
+	org.gecko.adapter.mqtt.common;version='[1.0.1,1.0.2)',\
+	org.gecko.adapter.mqtt.v5;version=snapshot,\
+	org.osgi.test.common;version='[1.3.0,1.3.1)',\
+	org.osgi.test.junit5;version='[1.3.0,1.3.1)',\
+	org.osgi.test.junit5.cm;version='[1.3.0,1.3.1)'
