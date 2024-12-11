@@ -1,5 +1,0 @@
-Bundle-Name: Paho MQTT Client
-Bundle-Vendor: Eclipse.org - Paho, Data In Motion Consuling GmbH
-Bundle-Version: 1.2.7-SNAPSHOT
--buildpath: \
-	biz.aQute.bnd.annotation;version=latest
