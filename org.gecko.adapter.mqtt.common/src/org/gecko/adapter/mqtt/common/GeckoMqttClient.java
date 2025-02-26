@@ -17,6 +17,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.gecko.adapter.mqtt.MqttConfig;
+import org.gecko.osgi.messaging.Message;
+import org.osgi.util.promise.Promise;
 import org.osgi.util.pushstream.PushEventSource;
 
 /**
@@ -61,7 +63,17 @@ public interface GeckoMqttClient {
 	 * @param src   {@link PushEventSource} for incoming messages
 	 */
 	void subscribe(String topic, int qos, MqttPushEventSource src);
-
+	
+	/**
+	 * Subscribes to a topic with a quality of service. Incoming messages are set on
+	 * the returned {@link Promise}
+	 * 
+	 * @param topic Topic
+	 * @param qos   Quality of Service
+	 * @return Promise
+	 */
+	Promise<Message> subscribe(String topic, int qos);
+		
 	/**
 	 * Publish content to a broker  
 	 * 

@@ -43,6 +43,9 @@ import org.gecko.adapter.mqtt.common.MqttPushEventSource;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.SimpleMessage;
+import org.osgi.util.promise.Deferred;
+import org.osgi.util.promise.Promise;
+import org.osgi.util.promise.PromiseFactory;
 
 /**
  * Facade for Paho MQTT client Version 3
@@ -55,6 +58,8 @@ public class PahoV5Client implements GeckoMqttClient {
 	private static final Logger logger = Logger.getLogger(PahoV5Client.class.getName());
 
 	private IMqttClient client;
+
+	private PromiseFactory promiseFactory = new PromiseFactory(Executors.newCachedThreadPool());
 
 	/**
 	 * Creates a new instance.
@@ -152,9 +157,30 @@ public class PahoV5Client implements GeckoMqttClient {
 			});
 		} catch (MqttException e) {
 			logger.log(Level.SEVERE,
-					"Fatal error trying to subscribe to \"" + topic + "\" MQTT broker while reconnect.", e);
+					"Fatal error trying to subscribe to \"" + topic + "\".", e);
 		}
 
+	}
+	
+	@Override
+	public Promise<Message> subscribe(String topic, int qos) {
+		Deferred<Message> deferred = promiseFactory.deferred();
+		try {
+			client.subscribe(topic, qos, (topic1, message) -> {
+					try {
+						Message msg = fromPahoMessage(message, topic1);
+						deferred.resolve(msg);
+					} catch (Exception e) {
+						deferred.fail(e);
+						logger.log(Level.SEVERE, e, ()-> "Fatal error while publish to push event source in connetion "
+								+ client.getClientId() + ".");
+					}
+			});
+		} catch (MqttException e) {
+			logger.log(Level.SEVERE,
+					"Fatal error trying to subscribe to \"" + topic + "\".", e);
+		}
+		return deferred.getPromise();
 	}
 
 	@Override
