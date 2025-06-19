@@ -1,4 +1,4 @@
-    
+
 Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
 
 -library: enableOSGi-Test
@@ -13,7 +13,7 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.gecko.adapter.mqtt;version=snapshot,\
 	org.gecko.osgi.messaging;version=snapshot,\
 	org.osgi.test.junit5.cm,\
-	org.gecko.moquette.broker;version=latest,\
+	org.gecko.moquette.broker;version=snapshot,\
 	org.osgi.util.converter,\
 	org.gecko.adapter.mqtt.common;version=snapshot,\
 	org.eclipse.paho.client.mqttv3

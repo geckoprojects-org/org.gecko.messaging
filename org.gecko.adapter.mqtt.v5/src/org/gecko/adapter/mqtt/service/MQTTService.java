@@ -19,6 +19,7 @@ import org.gecko.adapter.mqtt.common.GeckoMqttClient;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingService;
 import org.osgi.annotation.bundle.Capability;
+import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -30,11 +31,16 @@ import org.osgi.service.metatype.annotations.Designate;
 @Capability(namespace = MessagingConstants.CAPABILITY_NAMESPACE, name = "mqtt.adapter", version = "1.0.0", attribute = {
 		"vendor=Gecko.io", "implementation=Paho", "mqttVersion=5" })
 @Designate(factory = true, ocd = MqttConfig.class)
-@Component(service = MessagingService.class, name = "MQTTService", scope = ServiceScope.PROTOTYPE)
+@Component(service = MessagingService.class, name = "MQTTServiceV5", scope = ServiceScope.PROTOTYPE)
 public class MQTTService extends AbstractMqttService {
 
 	public MQTTService() {
 		// to be used with @Activate
+	}
+	@Activate
+	@Override
+	public void doActivate(MqttConfig config) {
+		super.doActivate(config);
 	}
 
 	public MQTTService(GeckoMqttClient mqtt) {

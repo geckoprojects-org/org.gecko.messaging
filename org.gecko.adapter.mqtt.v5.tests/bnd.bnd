@@ -12,10 +12,10 @@ Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.
 	org.osgi.util.pushstream;version=latest,\
 	org.gecko.osgi.messaging;version=snapshot,\
 	org.osgi.test.junit5.cm,\
-	org.gecko.moquette.broker;version=latest,\
-	org.gecko.adapter.mqtt.v5;version=latest,\
+	org.gecko.moquette.broker;version=snapshot,\
+	org.gecko.adapter.mqtt.v5;version=snapshot,\
 	org.eclipse.paho.mqttv5.client;version=latest,\
-	org.gecko.adapter.mqtt.common
+	org.gecko.adapter.mqtt.common;version=snapshot
 
 Bundle-Name: MQTT Messaging v5 Integration Test
 Private-Package: org.gecko.adapter.mqtt.tests

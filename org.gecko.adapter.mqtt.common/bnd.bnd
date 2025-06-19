@@ -2,8 +2,8 @@
 	org.osgi.util.pushstream;version=latest,\
 	org.osgi.util.function;version=latest,\
 	org.osgi.util.promise;version=latest,\
-	org.gecko.osgi.messaging,\
-	org.gecko.util.pushstream,\
+	org.gecko.osgi.messaging;version=snapshot,\
+	org.gecko.util.pushstream;version=latest,\
 	osgi.core
 
 -testpath: \

@@ -31,7 +31,7 @@ import org.osgi.service.metatype.annotations.Designate;
 @Capability(namespace = MessagingConstants.CAPABILITY_NAMESPACE, name = "mqtt.rpc.adapter", version = "1.0.0", attribute = {
 		"vendor=Gecko.io", "implementation=Paho", "mqttVersion=5" })
 @Designate(factory = true, ocd = MqttConfig.class)
-@Component(service = MessagingRPCService.class, name = "MQTTRPCService", scope = ServiceScope.PROTOTYPE)
+@Component(service = MessagingRPCService.class, name = "MQTTRPCServiceV5", scope = ServiceScope.PROTOTYPE)
 public class MqttRPCService extends AbstractMqttRPCService {
 
 	public MqttRPCService() {

@@ -18,6 +18,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
 import org.osgi.service.component.annotations.Activate;
@@ -40,6 +42,7 @@ import io.moquette.broker.security.IAuthenticator;
  */
 @Component(service = MQTTBroker.class, configurationPid = "MQTTBroker", configurationPolicy = ConfigurationPolicy.REQUIRE, immediate = true)
 public class MQTTBroker {
+	private static final Logger logger = Logger.getLogger(MQTTBroker.class.getName());
 
 	public static final String HOST = "HOST";
 	public static final String PORT = "PORT";
@@ -52,6 +55,7 @@ public class MQTTBroker {
 
 	@Activate
 	public void activate(Map<String, String> cfg) throws IOException {
+		logger.log(Level.FINE, "Activate MQTTBroker");
 		server = new Server();
 		config = new MemoryConfig(new Properties());
 		config.setProperty(IConfig.HOST_PROPERTY_NAME, cfg.get(HOST));
@@ -64,16 +68,20 @@ public class MQTTBroker {
 			config.setProperty(IConfig.AUTHENTICATOR_CLASS_NAME, TestAuthenticator.class.getName());
 		}
 		server.startServer(config);
+		logger.log(Level.FINE, "MQTTBroker started");
 	}
 
 	@Modified
 	public void modify(Map<String, String> cfg) throws IOException {
+		logger.log(Level.FINE, "MQTTBroker config modified");
 		deactivate();
 		activate(cfg);
 	}
 
 	@Deactivate
 	public void deactivate() {
+		logger.log(Level.FINE, "MQTTBroker deactivate");
+		
 		if (server != null) {
 			for (ClientDescriptor client : server.listConnectedClients()) {
 				server.disconnectAndPurgeClientState(client.getClientID());

@@ -58,9 +58,9 @@ public class MqttComponentRetainedTest {
 	private static final String BROKER_URL = "tcp://localhost:2183";
 
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "write", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "write", properties = {
 			@Property(key = MessagingConstants.PROP_USERNAME, value = "demo"),
 			@Property(key = MessagingConstants.PROP_PASSWORD, value = "1234"),
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })

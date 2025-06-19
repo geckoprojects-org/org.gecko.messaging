@@ -30,34 +30,30 @@ import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.MessagingRPCService;
-import org.gecko.osgi.messaging.annotations.RequireMQTTv3;
+import org.gecko.osgi.messaging.annotations.RequireRPCv3;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.osgi.framework.BundleContext;
-import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.annotation.Property;
 import org.osgi.test.common.annotation.config.WithFactoryConfiguration;
 import org.osgi.test.junit5.cm.ConfigurationExtension;
-import org.osgi.test.junit5.context.BundleContextExtension;
 import org.osgi.test.junit5.service.ServiceExtension;
 import org.osgi.util.promise.Promise;
 
 @ExtendWith(MockitoExtension.class)
 @ExtendWith(ServiceExtension.class)
 @ExtendWith(ConfigurationExtension.class)
-@ExtendWith(BundleContextExtension.class)
-@RequireMQTTv3	
+@RequireRPCv3	
+@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
+		@Property(key = MQTTBroker.HOST, value = "localhost"), //
+		@Property(key = MQTTBroker.PORT, value = "2183") })
 public class MqttRPCComponentTest {
 
 	private static final String BROKER_URL = "tcp://localhost:2183";
 	private MqttClient checkClient;
 
-	@InjectBundleContext
-	BundleContext bctx;
-	
 	@AfterEach
 	public void teardown() throws MqttException {
 		if (checkClient != null) {
@@ -69,13 +65,10 @@ public class MqttRPCComponentTest {
 	}
 	
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
 	@WithFactoryConfiguration(factoryPid = "MQTTRPCService", location = "?", name = "rpc", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublish(@InjectService MQTTBroker broker,
-			@InjectService(timeout = 500) MessagingRPCService messagingService) throws Exception {
+			@InjectService(timeout = 1500) MessagingRPCService messagingService) throws Exception {
 		String publishTopic = "testv3.rpc";
 		String publishContent = "This is test content";
 		
@@ -87,13 +80,10 @@ public class MqttRPCComponentTest {
 	}
 
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
 	@WithFactoryConfiguration(factoryPid = "MQTTRPCService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublishDiffReplyTo(@InjectService MQTTBroker broker,
-			@InjectService(timeout = 500) MessagingRPCService messagingService) throws Exception {
+			@InjectService(timeout = 1500) MessagingRPCService messagingService) throws Exception {
 		
 		String publishTopic = "testv3.rpc";
 		String publishContent = "This is test content";

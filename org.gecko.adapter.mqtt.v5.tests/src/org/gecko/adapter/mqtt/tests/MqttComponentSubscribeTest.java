@@ -68,7 +68,7 @@ public class MqttComponentSubscribeTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), //
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeMessage_NoMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
@@ -92,7 +92,7 @@ public class MqttComponentSubscribeTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), //
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeOftenMessage_NoMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
@@ -120,7 +120,7 @@ public class MqttComponentSubscribeTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), //
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeMessage_Message(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
@@ -158,7 +158,7 @@ public class MqttComponentSubscribeTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), //
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeMessage_Wildcard(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
@@ -198,7 +198,7 @@ public class MqttComponentSubscribeTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), //
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testSubscribeOftenMessage_Message(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {

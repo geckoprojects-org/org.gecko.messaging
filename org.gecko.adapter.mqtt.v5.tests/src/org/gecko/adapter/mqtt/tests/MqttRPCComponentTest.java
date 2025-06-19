@@ -30,7 +30,7 @@ import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingContext;
 import org.gecko.osgi.messaging.MessagingRPCService;
-import org.gecko.osgi.messaging.annotations.RequireMQTTv5;
+import org.gecko.osgi.messaging.annotations.RequireRPCv5;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,7 +45,10 @@ import org.osgi.util.promise.Promise;
 @ExtendWith(MockitoExtension.class)
 @ExtendWith(ServiceExtension.class)
 @ExtendWith(ConfigurationExtension.class)
-@RequireMQTTv5
+@RequireRPCv5
+@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
+		@Property(key = MQTTBroker.HOST, value = "localhost"), //
+		@Property(key = MQTTBroker.PORT, value = "2183") })
 public class MqttRPCComponentTest {
 
 	private static final String BROKER_URL = "tcp://localhost:2183";
@@ -63,13 +66,10 @@ public class MqttRPCComponentTest {
 	}
 	
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTRPCService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTRPCServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublish(@InjectService MQTTBroker broker,
-			@InjectService MessagingRPCService messagingService) throws Exception {
+			@InjectService(timeout = 1500) MessagingRPCService messagingService) throws Exception {
 
 		String publishTopic = "testv5.rpc";
 		String publishContent = "This is test content";
@@ -83,13 +83,10 @@ public class MqttRPCComponentTest {
 	}
 
 	@Test
-	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
-			@Property(key = MQTTBroker.HOST, value = "localhost"), //
-			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTRPCService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTRPCServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublishDiffReplyTo(@InjectService MQTTBroker broker,
-			@InjectService MessagingRPCService messagingService) throws Exception {
+			@InjectService(timeout = 1500) MessagingRPCService messagingService) throws Exception {
 		
 		String publishTopic = "testv5.rpc";
 		String publishContent = "This is test content";

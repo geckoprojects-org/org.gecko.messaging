@@ -78,7 +78,7 @@ public class MqttComponentPublishTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), //
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublishMessage(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
@@ -116,7 +116,7 @@ public class MqttComponentPublishTest {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), @Property(key = MQTTBroker.PORT, value = "2183"),
 			@Property(key = MQTTBroker.USERNAME, value = "demo"),
 			@Property(key = MQTTBroker.PASSWORD, value = "1234") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "client", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "client", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL),
 			@Property(key = MessagingConstants.PROP_USERNAME, value = "demo"),
 			@Property(key = MessagingConstants.PROP_PASSWORD, value = "1234") })

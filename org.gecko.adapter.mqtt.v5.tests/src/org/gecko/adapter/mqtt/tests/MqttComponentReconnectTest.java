@@ -64,9 +64,9 @@ public class MqttComponentReconnectTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"),
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
-	@WithFactoryConfiguration(factoryPid = "MQTTService", location = "?", name = "write", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTServiceV5", location = "?", name = "write", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testReconnect(@InjectService(cardinality = 0) ServiceAware<MQTTBroker> bAware,
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> read, @InjectService(cardinality = 0) ServiceAware<MessagingService> write) throws Exception {

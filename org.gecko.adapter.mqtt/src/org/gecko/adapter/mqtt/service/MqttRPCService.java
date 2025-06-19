@@ -13,6 +13,9 @@
 
 package org.gecko.adapter.mqtt.service;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 import org.gecko.adapter.mqtt.MqttConfig;
 import org.gecko.adapter.mqtt.common.AbstractMqttRPCService;
 import org.gecko.adapter.mqtt.common.GeckoMqttClient;
@@ -33,18 +36,22 @@ import org.osgi.service.metatype.annotations.Designate;
 @Designate(factory = true, ocd = MqttConfig.class)
 @Component(service = MessagingRPCService.class, name = "MQTTRPCService", scope = ServiceScope.PROTOTYPE)
 public class MqttRPCService extends AbstractMqttRPCService {
+	private static final Logger logger = Logger.getLogger(MqttRPCService.class.getName());
 
 	public MqttRPCService() {
+		logger.log(Level.INFO, "+++Constructor MqttRPCService v3");
 		// to be used with @Activate
 	}
 
 	public MqttRPCService(GeckoMqttClient mqtt) {
+		logger.log(Level.INFO, "+++ Constructor MqttRPCService v3");
 		this.mqtt = mqtt;
 	}
 
 	@Override
 	@Activate
 	public void doActivate(MqttConfig config) {
+		logger.log(Level.INFO, "+++Activate MqttRPCService v3");
 		super.doActivate(config);
 	}
 	
