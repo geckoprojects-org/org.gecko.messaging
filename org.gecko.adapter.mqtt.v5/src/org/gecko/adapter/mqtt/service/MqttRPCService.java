@@ -19,6 +19,7 @@ import org.gecko.adapter.mqtt.common.GeckoMqttClient;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingRPCService;
 import org.osgi.annotation.bundle.Capability;
+import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -39,6 +40,12 @@ public class MqttRPCService extends AbstractMqttRPCService {
 
 	public MqttRPCService(GeckoMqttClient mqtt) {
 		this.mqtt = mqtt;
+	}
+
+	@Override
+	@Activate
+	public void doActivate(MqttConfig config) {
+		super.doActivate(config);
 	}
 
 	@Override

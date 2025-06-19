@@ -57,6 +57,7 @@ public class MQTTBroker {
 		config.setProperty(IConfig.HOST_PROPERTY_NAME, cfg.get(HOST));
 		config.setProperty(IConfig.PORT_PROPERTY_NAME, cfg.get(PORT));
 		config.setProperty(IConfig.PERSISTENCE_ENABLED_PROPERTY_NAME, "false");
+		config.setProperty(IConfig.DATA_PATH_PROPERTY_NAME, System.getProperty("java.io.tmpdir"));
 		if (cfg.containsKey(USERNAME) && cfg.containsKey(PASSWORD)) {
 			validUsername = cfg.get(USERNAME);
 			validPassword = cfg.get(PASSWORD);

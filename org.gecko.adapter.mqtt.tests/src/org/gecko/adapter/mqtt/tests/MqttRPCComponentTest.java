@@ -18,11 +18,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.nio.ByteBuffer;
 
-import org.eclipse.paho.mqttv5.client.IMqttMessageListener;
-import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
-import org.eclipse.paho.mqttv5.common.MqttException;
-import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.client.mqttv3.IMqttMessageListener;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.gecko.adapter.mqtt.MQTTContextBuilder;
 import org.gecko.adapter.mqtt.QoS;
 import org.gecko.moquette.broker.MQTTBroker;
@@ -35,22 +35,28 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.osgi.framework.BundleContext;
+import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.annotation.Property;
 import org.osgi.test.common.annotation.config.WithFactoryConfiguration;
 import org.osgi.test.junit5.cm.ConfigurationExtension;
+import org.osgi.test.junit5.context.BundleContextExtension;
 import org.osgi.test.junit5.service.ServiceExtension;
 import org.osgi.util.promise.Promise;
 
 @ExtendWith(MockitoExtension.class)
 @ExtendWith(ServiceExtension.class)
 @ExtendWith(ConfigurationExtension.class)
-@RequireMQTTv3
+@ExtendWith(BundleContextExtension.class)
+@RequireMQTTv3	
 public class MqttRPCComponentTest {
 
 	private static final String BROKER_URL = "tcp://localhost:2183";
 	private MqttClient checkClient;
 
+	@InjectBundleContext
+	BundleContext bctx;
 	
 	@AfterEach
 	public void teardown() throws MqttException {
@@ -66,14 +72,12 @@ public class MqttRPCComponentTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTBroker", location = "?", name = "broker", properties = {
 			@Property(key = MQTTBroker.HOST, value = "localhost"), //
 			@Property(key = MQTTBroker.PORT, value = "2183") })
-	@WithFactoryConfiguration(factoryPid = "MQTTRPCService", location = "?", name = "read", properties = {
+	@WithFactoryConfiguration(factoryPid = "MQTTRPCService", location = "?", name = "rpc", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublish(@InjectService MQTTBroker broker,
-			@InjectService MessagingRPCService messagingService) throws Exception {
-
+			@InjectService(timeout = 500) MessagingRPCService messagingService) throws Exception {
 		String publishTopic = "testv3.rpc";
 		String publishContent = "This is test content";
-
 		
 		//send message and wait for the result
 		Promise<Message> promise = messagingService.publishRPC(publishTopic,ByteBuffer.wrap(publishContent.getBytes()));
@@ -89,7 +93,7 @@ public class MqttRPCComponentTest {
 	@WithFactoryConfiguration(factoryPid = "MQTTRPCService", location = "?", name = "read", properties = {
 			@Property(key = MessagingConstants.PROP_BROKER, value = BROKER_URL) })
 	public void testPublishDiffReplyTo(@InjectService MQTTBroker broker,
-			@InjectService MessagingRPCService messagingService) throws Exception {
+			@InjectService(timeout = 500) MessagingRPCService messagingService) throws Exception {
 		
 		String publishTopic = "testv3.rpc";
 		String publishContent = "This is test content";
@@ -108,10 +112,10 @@ public class MqttRPCComponentTest {
 		
 	private void forward(String sourceTopic, String targetTopic) throws MqttException {
 		checkClient = new MqttClient(BROKER_URL, "test");
-		MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
-		ob.username("demo");
-		ob.password("1234".getBytes());
-		checkClient.connect(ob.build());
+		MqttConnectOptions ob = new MqttConnectOptions();
+		ob.setUserName("demo");
+		ob.setPassword("1234".toCharArray());
+		checkClient.connect(ob);
 		checkClient.subscribe(sourceTopic, QoS.AT_LEAST_ONE.ordinal(), new IMqttMessageListener() {
 			
 			@Override

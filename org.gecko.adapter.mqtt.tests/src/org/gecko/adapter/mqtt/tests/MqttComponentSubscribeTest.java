@@ -22,11 +22,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
-import org.eclipse.paho.mqttv5.common.MqttException;
-import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.eclipse.paho.mqttv5.common.MqttPersistenceException;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
+import org.eclipse.paho.client.mqttv3.MqttPersistenceException;
 import org.gecko.moquette.broker.MQTTBroker;
 import org.gecko.osgi.messaging.Message;
 import org.gecko.osgi.messaging.MessagingConstants;
@@ -78,7 +78,6 @@ public class MqttComponentSubscribeTest {
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
 		String publishTopic = "test.SubscribeMessage_NoMessage";
-//		String subscribeTopic = publishTopic;
 		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
@@ -103,7 +102,6 @@ public class MqttComponentSubscribeTest {
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
 		String publishTopic = "test.SubscribeOftenMessage_NoMessage";
-//		String subscribeTopic = publishTopic;
 		MQTTBroker broker = bAware.waitForService(1000);
 		assertNotNull(broker);
 
@@ -208,7 +206,6 @@ public class MqttComponentSubscribeTest {
 			@InjectService(cardinality = 0) ServiceAware<MessagingService> msAware) throws Exception {
 
 		String publishTopic = "test.SubscribeOftenMessage_Message";
-//		String subscribeTopic = publishTopic;
 		String publishContent = "this is a test";
 
 		MQTTBroker broker = bAware.waitForService(1000);
@@ -299,10 +296,10 @@ public class MqttComponentSubscribeTest {
 		MqttMessage message = new MqttMessage();
 		message.setPayload(messageString.getBytes());
 		checkClient = new MqttClient(BROKER_URL, "test");
-		MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
-		ob.username("demo");
-		ob.password("1234".getBytes());
-		checkClient.connect(ob.build());
+		MqttConnectOptions ob = new MqttConnectOptions();
+		ob.setUserName("demo");
+		ob.setPassword("1234".toCharArray());
+		checkClient.connect(ob);
 		checkClient.publish(topic, message);
 	}
 		

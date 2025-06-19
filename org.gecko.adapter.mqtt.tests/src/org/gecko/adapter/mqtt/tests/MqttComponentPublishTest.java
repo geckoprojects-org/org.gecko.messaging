@@ -23,14 +23,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.eclipse.paho.mqttv5.client.IMqttToken;
-import org.eclipse.paho.mqttv5.client.MqttCallback;
-import org.eclipse.paho.mqttv5.client.MqttClient;
-import org.eclipse.paho.mqttv5.client.MqttConnectionOptionsBuilder;
-import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
-import org.eclipse.paho.mqttv5.common.MqttException;
-import org.eclipse.paho.mqttv5.common.MqttMessage;
-import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttClient;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.gecko.moquette.broker.MQTTBroker;
 import org.gecko.osgi.messaging.MessagingConstants;
 import org.gecko.osgi.messaging.MessagingService;
@@ -302,46 +300,29 @@ public class MqttComponentPublishTest {
 	private void connectClient(String topic, CountDownLatch checkLatch, AtomicReference<String> resultContent)
 			throws MqttException {
 		checkClient = new MqttClient(BROKER_URL, "test");
-		MqttConnectionOptionsBuilder ob = new MqttConnectionOptionsBuilder();
-		ob.username("demo");
-		ob.password("1234".getBytes());
-		checkClient.connect(ob.build());
+		MqttConnectOptions ob = new MqttConnectOptions();
+		ob.setUserName("demo");
+		ob.setPassword("1234".toCharArray());
+		checkClient.connect(ob);
 		checkClient.subscribe(topic, 0);
 		checkClient.setCallback(new MqttCallback() {
-
+			
 			@Override
-			public void messageArrived(String arg0, MqttMessage arg1) throws Exception {
-				String v = new String(arg1.getPayload());
+			public void messageArrived(String topic, MqttMessage message) throws Exception {
+				String v = new String(message.getPayload());
 				resultContent.set(v);
 				checkLatch.countDown();
-
 			}
-
+			
 			@Override
-			public void disconnected(MqttDisconnectResponse disconnectResponse) {
-				fail("fail was not expected");
-			}
-
-			@Override
-			public void mqttErrorOccurred(MqttException exception) {
-				fail("fail was not expected");
-			}
-
-			@Override
-			public void deliveryComplete(IMqttToken token) {
+			public void deliveryComplete(IMqttDeliveryToken token) {
 				fail("delivery complete was not expected");
+				
 			}
-
+			
 			@Override
-			public void connectComplete(boolean reconnect, String serverURI) {
-				// TODO Auto-generated method stub
-
-			}
-
-			@Override
-			public void authPacketArrived(int reasonCode, MqttProperties properties) {
-				// TODO Auto-generated method stub
-
+			public void connectionLost(Throwable cause) {
+				fail("connection lost was not expected");
 			}
 		});
 	}
