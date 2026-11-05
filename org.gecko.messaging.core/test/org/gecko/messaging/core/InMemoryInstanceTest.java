@@ -261,6 +261,36 @@ class InMemoryInstanceTest {
 	}
 
 	@Test
+	void anInstanceWithCloudEventsTakesCloudEventsOnlyByDefault() throws Exception {
+		InMemoryInstance plainSender = start();
+		for (String mode : new String[] { "structured", "binary" }) {
+			InMemoryInstance strict = start(Map.of("cloudEvents", mode));
+			List<Message> received = collect(strict.subscribe("ce/" + mode));
+			await(() -> strict.getRuntimeDTO().subscriptions.length == 1);
+			plainSender.publish(text(plainSender, "ce/" + mode, "{\"temp\": 21}"), null).getValue();
+			await(() -> strict.getRuntimeDTO().subscriptions[0].droppedMessages == 1);
+			// a CloudEvent on the same channel still arrives, so the plain one was dropped, not late
+			strict.publish(text(strict, "ce/" + mode, "event"), null).getValue();
+			await(() -> received.size() == 1);
+			assertThat(received.get(0).getContext()).as(mode).isInstanceOf(CloudEventMessageContext.class);
+			assertThat(text(received.get(0))).isEqualTo("event");
+		}
+	}
+
+	@Test
+	void acceptPlainDeliversPlainMessagesUnchanged() throws Exception {
+		InMemoryInstance plainSender = start();
+		InMemoryInstance tolerant = start(Map.of("cloudEvents", "structured", "cloudEvents.acceptPlain", true));
+		List<Message> received = collect(tolerant.subscribe("ce/tolerant"));
+		await(() -> tolerant.getRuntimeDTO().subscriptions.length == 1);
+		plainSender.publish(text(plainSender, "ce/tolerant", "{\"temp\": 21}"), null).getValue();
+		await(() -> received.size() == 1);
+		assertThat(received.get(0).getContext()).as("nothing made up for it").isNotInstanceOf(CloudEventMessageContext.class);
+		assertThat(text(received.get(0))).isEqualTo("{\"temp\": 21}");
+		assertThat(tolerant.getRuntimeDTO().subscriptions[0].droppedMessages).isZero();
+	}
+
+	@Test
 	void anExpiredRetainedMessageReachesNoLateSubscriber() throws Exception {
 		InMemoryInstance i = start();
 		MessageContext shortLived = i.newBuilder().channel("kept/short").extensionEntry(EXTENSION_RETAIN, true)

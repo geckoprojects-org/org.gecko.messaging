@@ -14,20 +14,24 @@
 package org.gecko.messaging.tck;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.gecko.messaging.api.MessagingConstants.FEATURE_CLOUD_EVENTS;
-import static org.gecko.messaging.api.MessagingConstants.FEATURE_HEADERS;
+import static org.gecko.messaging.api.MessagingConstants.*;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 
 import org.gecko.messaging.api.Message;
+import org.gecko.messaging.api.MessagePublisher;
 import org.gecko.messaging.api.cloudevents.CloudEvent;
 import org.gecko.messaging.api.cloudevents.CloudEventConstants;
 import org.gecko.messaging.api.cloudevents.CloudEventMessageContext;
 import org.gecko.messaging.api.cloudevents.CloudEventMessageContextBuilder;
+import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.osgi.framework.ServiceReference;
 
 /**
  * Messages as CloudEvents 1.0, when the instance is configured for them.
@@ -92,6 +96,40 @@ public class CloudEventsTest extends AbstractMessagingTest {
 		tck.awaitSize(received, 1);
 		assertThat(Tck.text(received.get(0))).isEqualTo("plain");
 		assertThat(received.get(0).getContext()).isInstanceOf(CloudEventMessageContext.class);
+	}
+
+	@Test
+	void aMessageThatIsNoCloudEventIsDroppedByDefault() throws Exception {
+		Object acceptPlain = tck.reference(MessageServiceRuntime.class).getProperty("cloudEvents.acceptPlain");
+		assumeFalse(Boolean.TRUE.equals(acceptPlain) || "true".equals(acceptPlain), "configured to accept plain messages");
+		MessagePublisher plain = plainPublisherOnTheSameBroker();
+		assumeTrue(plain != null, "no instance without CloudEvents on the same broker in this run");
+		String channel = tck.channel("ce", "strict");
+		List<Message> received = collect(channel);
+		MessageServiceRuntime runtime = tck.service(MessageServiceRuntime.class);
+		tck.await("subscribed", () -> Arrays.stream(runtime.getRuntimeDTO().subscriptions)
+				.anyMatch(d -> channel.equals(d.channel.name) && d.channel.connected));
+		plain.publish(builder().channel(channel).content(Tck.bytes("{\"temp\": 21}")).buildMessage()).getValue();
+		tck.await("dropped", () -> Arrays.stream(runtime.getRuntimeDTO().subscriptions)
+				.anyMatch(d -> channel.equals(d.channel.name) && d.droppedMessages == 1));
+		publisher.publish(text(channel, "event")).getValue();
+		tck.awaitSize(received, 1);
+		assertThat(received).extracting(Tck::text).as("only the CloudEvent").containsExactly("event");
+	}
+
+	/** @return the publisher of another instance on the same broker without CloudEvents, or {@code null} */
+	private MessagePublisher plainPublisherOnTheSameBroker() throws Exception {
+		Object uri = tck.reference(MessageServiceRuntime.class).getProperty("uri");
+		Object name = tck.reference(MessageServiceRuntime.class).getProperty(MESSAGING_NAME_PROPERTY);
+		for (ServiceReference<MessagePublisher> r : bundleContext.getServiceReferences(MessagePublisher.class, null)) {
+			Object features = r.getProperty(MESSAGING_FEATURE_PROPERTY);
+			boolean cloudEvents = features instanceof String[] f && Arrays.asList(f).contains(FEATURE_CLOUD_EVENTS);
+			if (uri != null && uri.equals(r.getProperty("uri")) && !name.equals(r.getProperty(MESSAGING_NAME_PROPERTY))
+					&& !cloudEvents) {
+				return bundleContext.getService(r);
+			}
+		}
+		return null;
 	}
 
 }

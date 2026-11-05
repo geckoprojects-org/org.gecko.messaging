@@ -130,6 +130,7 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `replyChannelPrefix` | String | `osgi/messaging/reply/<clientId>` | Prefix of generated reply channels. |
 | `replyToAllowed` | String (comma-separated), String[] or Collection | `osgi/messaging/reply/` and, if set, `replyChannelPrefix` + `/` | Prefixes a reply-to channel of a received request must start with to be answered; `*` allows any (§9.6). A configured prefix matches as given: end it with the separator to allow a subtree. |
 | `cloudEvents` | String | `none` | `none`, `binary` or `structured` (case-insensitive) (§11). |
+| `cloudEvents.acceptPlain` | Boolean | `false` | With CloudEvents, also deliver received messages that are no CloudEvent, unchanged (§11.1). |
 | `cloudEvents.source` | String | `/osgi/messaging/<name>` | `source` of plain messages sent as CloudEvents. |
 | `cloudEvents.type` | String | `org.gecko.messaging.message` | `type` of plain messages sent as CloudEvents. |
 | `workerThreads` | int | `4` (min 1) | Delivery and handler threads. |
@@ -668,9 +669,21 @@ headers (as extensions), correlation (`correlationid`), reply-to (`replyto`) and
 `contentType`, `headers`, `replyTo`, `replyToMany`, `replyToSubscription`,
 `generateCorrelationId`, `generateReplyChannel`. Data is embedded as JSON for `application/json`
 or `*+json` content types if valid JSON, as string for `text/*`, otherwise as `data_base64`.
-Header names become attribute names: lower-case letters and digits only. On protocols without
-content type (mqtt3, websocket) a payload starting with `{` is taken as envelope. Native protocol
+Header names become attribute names: lower-case letters and digits only. Native protocol
 correlation id and reply-to take precedence over envelope values.
+
+### 11.1 Received Messages That Are No CloudEvent
+
+An instance with CloudEvents MUST by default take CloudEvents only: a received message that is no
+CloudEvent — in the binary mode one without the CloudEvents headers, in the structured mode one
+whose content type is not `application/cloudevents+json` or, on protocols without content type
+(mqtt3, websocket), one that does not parse as an envelope with `specversion` 1.0, `id`, `source`
+and `type` — is dropped, rejected without re-queue and counted in
+`SubscriptionDTO.droppedMessages`. With `cloudEvents.acceptPlain=true` such a message is delivered
+unchanged as a plain message: its context is no `CloudEventMessageContext`, and nothing is made up
+for it. A message announced as envelope by its content type that is not a valid one is dropped in
+both cases. Rationale: an instance configured for CloudEvents relies on their attributes; a
+message without them is not silently treated as one (§14).
 
 Envelope parsing limits are in §14.3.
 
@@ -694,7 +707,8 @@ state.
 | `subscriptions` | `SubscriptionDTO[]` — application subscriptions only (reply-to internals excluded) |
 | `replyToSubscriptions` | `ReplyToSubscriptionDTO[]` of bound handlers |
 
-`SubscriptionDTO`: `channel` (`ChannelDTO`), `receivedMessages`.
+`SubscriptionDTO`: `channel` (`ChannelDTO`), `receivedMessages`, `droppedMessages` (undecodable,
+or no CloudEvent on an instance that takes CloudEvents only).
 `ChannelDTO`: `name`, `extension`, `connected` (subscribed on the broker right now).
 `ReplyToSubscriptionDTO`: `handlerService`, `requestChannel`, `replyChannel` (or `null`), `many`,
 `handledRequests`, `refusedRequests`.
@@ -893,6 +907,9 @@ duplicate members, malformed escapes, control characters in strings, trailing co
 quoted in exception messages are cut to 64 characters with control characters replaced by `?`, so
 a sender can neither flood nor forge log lines.
 
+An instance with CloudEvents takes CloudEvents only unless `cloudEvents.acceptPlain` is set
+(§11.1): a message without the attributes is not treated as an event, and none are made up for it.
+
 ### 14.4 Credentials
 
 - Service properties and `MessagingRuntimeDTO.connectionURI` show `uri` without user info.
@@ -1019,7 +1036,7 @@ Example (`org.gecko.messaging.mqtt.tck/configs/tck.json`):
 | `ReplyToWhiteboardTest` | `requestNamingAForeignReplyChannelIsNotAnswered`, `singleHandlerAnswers`, `manyHandlerStreamsAndCompletes`, `defaultReplyChannelForRequestsWithout`, `handlerWithoutTargetIsNotBound`, `unregisteringUnbinds`, `aFailingHandlerFailsTheRequestAtOnce`, `aFailingResponseStreamEndsWithAnError` |
 | `RuntimeTest` | `subscriptionsAreListed`, `listenerIsToldTheCurrentState`, `listenerWithForeignTargetHearsNothing` |
 | `ReconnectTest` | `subscriptionsSurviveAConnectionLoss` (also asserts `DISCONNECTED` as previous state of the reconnect event), `publishFailsWhileDisconnectedAndWorksAfterwards` |
-| `CloudEventsTest` | `attributesAndDataTravel`, `extensionsAreHeaders`, `generatedIdAndTime`, `plainMessagesTravelAsCloudEventsToo` |
+| `CloudEventsTest` | `attributesAndDataTravel`, `extensionsAreHeaders`, `generatedIdAndTime`, `plainMessagesTravelAsCloudEventsToo`, `aMessageThatIsNoCloudEventIsDroppedByDefault` |
 
 ---
 
@@ -1079,28 +1096,27 @@ WebSocket, buffering of messages published while disconnected.
 
 ### 17.2 Behaviour to Decide
 
-3. **Structured CloudEvents without content type** (mqtt3, websocket): any payload starting with
-   `{` is taken as envelope (`AbstractMessagingInstance.java:963`); plain JSON that is no
-   CloudEvent is dropped as undecodable. Pending decision: tolerant (deliver as plain message) or
-   strict (drop, as now).
-4. **Reserved MQTT user properties** `requeued` and `content-encoding`
+3. **Reserved MQTT user properties** `requeued` and `content-encoding`
    (`MqttInstance.java:419-422`): an application header with these names is stripped or read as
    content encoding.
-5. **`autoCreate` and `durable` only effective on AMQP.** `autoCreate=false` is accepted
+4. **`autoCreate` and `durable` only effective on AMQP.** `autoCreate=false` is accepted
    everywhere, but MQTT, memory and WebSocket create channels implicitly (MSG180 Partly); MQTT does
    not announce `durable` (sessions via `cleanStart`/`sessionExpiryInterval`).
-6. **Unknown extension keys** (including unknown `osgi.messaging.*` keys) are ignored rather than
+5. **Unknown extension keys** (including unknown `osgi.messaging.*` keys) are ignored rather than
    refused; only known keys with unsupported values fail (MSG100a).
 
 ### 17.3 Gaps
 
-7. **No sequence numbers** (MSG210 Partly: correlation and per-subscription order only) and no
+6. **No sequence numbers** (MSG210 Partly: correlation and per-subscription order only) and no
    journalling (MSG250).
-8. **TCK coverage missing** for `durable`, `autoCreate`, a CloudEvents binary-mode run (all
+7. **TCK coverage missing** for `durable`, `autoCreate`, a CloudEvents binary-mode run (all
    CloudEvents runs are structured), and the envelope limits of §14.3, which are unit-tested in
    core only.
 
 ### 17.4 Resolved since the first draft
+
+- Received messages that are no CloudEvent: dropped and counted by default, delivered unchanged
+  with `cloudEvents.acceptPlain` (§11.1).
 
 Wildcard enforcement, size limits on AMQP and WebSocket, the previous state of reconnect events,
 feature names from `adapt()`, the `MessagePublisher`/`MessageSubscription` failure Javadoc,

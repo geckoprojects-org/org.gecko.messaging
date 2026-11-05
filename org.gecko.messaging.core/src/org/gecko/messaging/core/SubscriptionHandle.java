@@ -60,6 +60,7 @@ public final class SubscriptionHandle {
 	private final Sink sink;
 	private final boolean internal;
 	private final AtomicLong received = new AtomicLong();
+	private final AtomicLong dropped = new AtomicLong();
 	final Set<AcknowledgeSupport> openAcknowledgements = ConcurrentHashMap.newKeySet();
 	private volatile boolean connected;
 	private volatile boolean closed;
@@ -75,6 +76,11 @@ public final class SubscriptionHandle {
 	/** @return a unique id */
 	public long id() {
 		return id;
+	}
+
+	/** Counts a received message that was dropped. */
+	void dropped() {
+		dropped.incrementAndGet();
 	}
 
 	/** @return whether the subscription is on a point-to-point channel */
@@ -183,6 +189,7 @@ public final class SubscriptionHandle {
 		SubscriptionDTO dto = new SubscriptionDTO();
 		dto.channel = channelDTO(channel(), channelExtension(), connected);
 		dto.receivedMessages = received.get();
+		dto.droppedMessages = dropped.get();
 		return dto;
 	}
 

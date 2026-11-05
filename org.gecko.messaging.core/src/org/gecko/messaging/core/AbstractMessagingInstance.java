@@ -899,6 +899,16 @@ public abstract class AbstractMessagingInstance {
 			// remote input: no stack trace per message at WARNING, it would flood the log
 			LOG.warning(() -> "Dropping an undecodable message on " + h + ": " + e.getClass().getSimpleName());
 			LOG.log(Level.FINE, "Undecodable message", e);
+			h.dropped();
+			if (acknowledger != null) {
+				acknowledger.reject(false);
+			}
+			return;
+		}
+		if (message == null) {
+			// not a CloudEvent on an instance that takes CloudEvents only
+			LOG.fine(() -> "Dropping a message that is no CloudEvent on " + h);
+			h.dropped();
 			if (acknowledger != null) {
 				acknowledger.reject(false);
 			}
@@ -954,18 +964,40 @@ public abstract class AbstractMessagingInstance {
 		}
 	}
 
+	/**
+	 * Decodes a received message.
+	 *
+	 * @return the message, or {@code null} if it is no CloudEvent and the instance takes
+	 *         CloudEvents only
+	 * @throws RuntimeException if the message announces a CloudEvent it is not
+	 */
 	private SimpleMessage decode(SimpleMessageContext ctx, byte[] payload) {
 		if (!config.cloudEvents()) {
 			return SimpleMessage.ofOwned(payload, ctx);
 		}
+		// secure by default: CloudEvents only; plain messages on request, unchanged — nothing is
+		// made up for them
+		SimpleMessage plain = config.cloudEventsAcceptPlain() ? SimpleMessage.ofOwned(payload, ctx) : null;
 		if (CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
 			String ct = ctx.getContentType();
-			boolean envelope = ct == null ? looksLikeJsonObject(payload)
-					: ct.toLowerCase().startsWith(CloudEventConstants.STRUCTURED_JSON_CONTENT_TYPE);
-			if (!envelope) {
-				return SimpleMessage.ofOwned(payload, ctx);
+			CloudEventCodec.Structured s;
+			if (ct != null) {
+				if (!ct.toLowerCase().startsWith(CloudEventConstants.STRUCTURED_JSON_CONTENT_TYPE)) {
+					return plain;
+				}
+				// announced as envelope: one that is not is an error, not a plain message
+				s = CloudEventCodec.fromStructured(payload);
+			} else {
+				// no content type (MQTT 3.1.1, WebSocket): an envelope is what parses as one
+				if (!looksLikeJsonObject(payload)) {
+					return plain;
+				}
+				try {
+					s = CloudEventCodec.fromStructured(payload);
+				} catch (MessagingException e) {
+					return plain;
+				}
 			}
-			CloudEventCodec.Structured s = CloudEventCodec.fromStructured(payload);
 			MessageContextBuilder b = new SimpleMessageContextBuilder().withContext(ctx).contentType(s.contentType())
 					.contentEncoding(s.contentEncoding());
 			if (ctx.getCorrelationId() == null) {
@@ -978,7 +1010,7 @@ public abstract class AbstractMessagingInstance {
 		}
 		CloudEventCodec.Binary bin = CloudEventCodec.fromBinaryHeaders(ctx.getHeaders(), cloudEventHeaderPrefix());
 		if (bin.cloudEvent() == null) {
-			return SimpleMessage.ofOwned(payload, ctx);
+			return plain;
 		}
 		SimpleMessageContextBuilder b = new SimpleMessageContextBuilder();
 		b.withContext(ctx);

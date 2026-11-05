@@ -47,6 +47,9 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * its reply channel itself: without the check a sender could direct responses to any channel
  * the instance may write to.</li>
  * <li>{@code cloudEvents} — {@code none} (default), {@code binary} or {@code structured}</li>
+ * <li>{@code cloudEvents.acceptPlain} — with CloudEvents, also deliver received messages that are
+ * no CloudEvent, unchanged as plain messages; default {@code false}: an instance with
+ * CloudEvents takes CloudEvents only and drops (and counts) the rest</li>
  * <li>{@code workerThreads} — threads delivering messages, default 4</li>
  * <li>{@code bufferSize} — buffer per subscription, default 1024</li>
  * <li>{@code queuePolicy} — when a buffer is full: {@code BLOCK}, {@code DISCARD_OLDEST},
@@ -247,6 +250,11 @@ public final class MessagingConfiguration {
 	/** @return {@code none}, {@code binary} or {@code structured} */
 	public String cloudEventsMode() {
 		return string("cloudEvents", CLOUD_EVENTS_NONE).toLowerCase();
+	}
+
+	/** @return whether an instance with CloudEvents also delivers plain messages */
+	public boolean cloudEventsAcceptPlain() {
+		return bool("cloudEvents.acceptPlain", false);
 	}
 
 	/** @return whether CloudEvents are on */

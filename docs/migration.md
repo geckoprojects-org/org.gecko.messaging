@@ -40,7 +40,9 @@ change.
   size is limited to 1 MiB by default on mqtt, mqtt3, amqp and websocket. Wildcards on a binding
   without the `wildcard` feature fail; they are no longer taken literally. The WebSocket hub
   checks the `Origin` header. Plain-text schemes that carry credentials log a warning once.
-  CloudEvents are optional (`cloudEvents=binary|structured`).
+  CloudEvents are optional (`cloudEvents=binary|structured`). An instance with CloudEvents takes
+  CloudEvents only: received messages that are none are dropped and counted, unless
+  `cloudEvents.acceptPlain=true` delivers them unchanged.
 - **Responders can fail explicitly.** A response with the header `replyerror` fails the caller's
   promise or ends its stream of responses with an error.
 
@@ -270,7 +272,7 @@ bundles in the bndrun.
 | `maxThreads` (MQTT) | `workerThreads`. On WebSocket, `maxThreads` sizes the Jetty client |
 | `maxInflight` (MQTT) | `maxInflight` (mqtt3, default 100) / `receiveMaximum` (mqtt, default 100) |
 | none (old AMQP responders answered any `replyTo`) | `replyToAllowed`: prefixes of reply channels that are answered; default `osgi/messaging/reply/` and the own `replyChannelPrefix` subtree; `*` for any |
-| none | `clientId`, `connectTimeout`, `replyTimeout`, `replyChannelPrefix`, `replyToAllowed`, `cloudEvents`, `qos`, `keepAliveInterval`, `cleanSession` / `cleanStart`, `sessionExpiryInterval`, `sharedGroup`, `maxMessageSize`, `heartbeat`, `prefetch`, `maxPublishSessions` |
+| none | `clientId`, `connectTimeout`, `replyTimeout`, `replyChannelPrefix`, `replyToAllowed`, `cloudEvents`, `cloudEvents.acceptPlain`, `qos`, `keepAliveInterval`, `cleanSession` / `cleanStart`, `sessionExpiryInterval`, `sharedGroup`, `maxMessageSize`, `heartbeat`, `prefetch`, `maxPublishSessions` |
 
 Example (Configurator):
 

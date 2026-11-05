@@ -28,4 +28,10 @@ public class SubscriptionDTO extends DTO {
 	/** The number of messages received on this subscription. */
 	public long receivedMessages;
 
+	/**
+	 * The number of received messages dropped: undecodable, or not a CloudEvent on an instance
+	 * that takes CloudEvents only.
+	 */
+	public long droppedMessages;
+
 }
