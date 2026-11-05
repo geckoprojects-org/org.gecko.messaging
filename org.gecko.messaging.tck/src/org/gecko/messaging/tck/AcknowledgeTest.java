@@ -127,4 +127,26 @@ public class AcknowledgeTest extends AbstractMessagingTest {
 		assertThat(seen).containsExactly("again", "again");
 	}
 
+	@Test
+	void aMessageIsRequeuedAtMostOnce() throws Exception {
+		assumeTrue(tck.has(FEATURE_POINT_TO_POINT));
+		String channel = tck.channel("ack", "poison");
+		Object autoCreate = tck.has(FEATURE_AUTO_CREATE) ? Boolean.TRUE : null;
+		MessageContext ctx = builder().channel(channel).extensionEntry(EXTENSION_CHANNEL_TYPE, CHANNEL_TYPE_QUEUE)
+				.extensionEntry(EXTENSION_AUTO_CREATE, autoCreate).adapt(AcknowledgeMessageContextBuilder.class).manualAcknowledge()
+				.requeueOnReject(true).messageContextBuilder().buildContext();
+		List<String> seen = new CopyOnWriteArrayList<>();
+		// a receiver that rejects every message with re-queue: without a bound it would cycle for ever
+		track(subscription.subscribe(ctx)).forEach(m -> {
+			seen.add(Tck.text(m));
+			((AcknowledgeMessageContext) m.getContext()).getAcknowledgeHandler().reject();
+		});
+		MessageContext pub = builder().channel(channel).extensionEntry(EXTENSION_CHANNEL_TYPE, CHANNEL_TYPE_QUEUE)
+				.extensionEntry(EXTENSION_AUTO_CREATE, autoCreate).buildContext();
+		publisher.publish(builder().content(Tck.bytes("poison")).buildMessage(), pub).getValue();
+		tck.awaitSize(seen, 2);
+		tck.settle();
+		assertThat(seen).as("delivered, re-queued once, then dropped").containsExactly("poison", "poison");
+	}
+
 }

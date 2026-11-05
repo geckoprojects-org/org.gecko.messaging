@@ -80,6 +80,12 @@ public final class MqttInstance extends AbstractMessagingInstance {
 	/** The protocol name. */
 	public static final String PROTOCOL = "mqtt";
 
+	/**
+	 * User property marking a message published again after a reject with re-queue; such a
+	 * message is not re-queued a second time ({@link Acknowledger#MAX_REQUEUES}). Not a header.
+	 */
+	static final String REQUEUED_PROPERTY = "requeued";
+
 	/** User property carrying the content encoding, which MQTT 5 has no field for. */
 	public static final String CONTENT_ENCODING_PROPERTY = "content-encoding";
 
@@ -357,10 +363,21 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		}
 	}
 
-	/** Publishes a rejected message again, as it came; the broker picks the receiver anew. */
+	/**
+	 * Publishes a rejected message again, marked as re-queued; the broker picks the receiver anew.
+	 * A message re-queued before is dropped.
+	 */
 	private void requeue(MqttAsyncClient c, String topic, MqttMessage message) {
 		try {
 			MqttProperties props = message.getProperties();
+			List<UserProperty> user = props.getUserProperties() == null ? new ArrayList<>()
+					: new ArrayList<>(props.getUserProperties());
+			if (user.stream().anyMatch(u -> REQUEUED_PROPERTY.equals(u.getKey()))) {
+				LOG.fine(() -> "Dropping a rejected message on " + topic + ": it was re-queued before");
+				return;
+			}
+			user.add(new UserProperty(REQUEUED_PROPERTY, "1"));
+			props.setUserProperties(user);
 			// subscription identifiers belong to the received PUBLISH; a client must not send them
 			props.setSubscriptionIdentifiers(new ArrayList<>());
 			c.publish(topic, new MqttMessage(message.getPayload(), message.getQos(), false, props));
@@ -391,6 +408,9 @@ public final class MqttInstance extends AbstractMessagingInstance {
 			}
 			if (p.getUserProperties() != null) {
 				for (UserProperty u : p.getUserProperties()) {
+					if (REQUEUED_PROPERTY.equals(u.getKey())) {
+						continue;
+					}
 					if (CONTENT_ENCODING_PROPERTY.equals(u.getKey())) {
 						b.contentEncoding(u.getValue());
 					} else {

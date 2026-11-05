@@ -17,6 +17,8 @@ import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -92,6 +94,24 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	private volatile MqttAsyncClient client;
 	/** Broker subscriptions by topic filter, with the local subscriptions they feed. */
 	private final Map<String, Set<SubscriptionHandle>> filters = new ConcurrentHashMap<>();
+	/** Most fingerprints of re-queued messages kept, see {@link #requeue}. */
+	static final int REQUEUE_MEMORY = 1024;
+
+	/**
+	 * Fingerprints (topic and payload) of messages this instance published again after a reject:
+	 * MQTT 3.1.1 has no properties to mark such a message, so it is recognized by this bounded set
+	 * and dropped when rejected again ({@link Acknowledger#MAX_REQUEUES}). An equal message coming
+	 * later is at worst dropped instead of re-queued once. Guarded by itself.
+	 */
+	private final Map<Long, Boolean> requeued = new LinkedHashMap<>(16, 0.75f, false) {
+		private static final long serialVersionUID = 1L;
+
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<Long, Boolean> eldest) {
+			return size() > REQUEUE_MEMORY;
+		}
+	};
+
 	/** Turns of the local queue subscriptions, see {@link #dispatch}. */
 	private final AtomicInteger queueTurn = new AtomicInteger();
 
@@ -320,8 +340,19 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		}
 	}
 
-	/** Publishes a rejected message again, as it came; the broker picks the receiver anew. */
+	/**
+	 * Publishes a rejected message again, as it came; the broker picks the receiver anew. A message
+	 * re-queued before is dropped.
+	 */
 	private void requeue(MqttAsyncClient c, String topic, MqttMessage message) {
+		long fingerprint = ((long) topic.hashCode() << 32) ^ (Arrays.hashCode(message.getPayload()) & 0xffffffffL);
+		synchronized (requeued) {
+			if (requeued.remove(fingerprint) != null) {
+				LOG.fine(() -> "Dropping a rejected message on " + topic + ": it was re-queued before");
+				return;
+			}
+			requeued.put(fingerprint, Boolean.TRUE);
+		}
 		try {
 			c.publish(topic, message.getPayload(), message.getQos(), false);
 		} catch (MqttException | RuntimeException e) {

@@ -210,7 +210,7 @@ public final class InMemoryBroker {
 
 				@Override
 				public void reject(boolean requeue) {
-					if (requeue && redelivery < 10) {
+					if (requeue && redelivery < Acknowledger.MAX_REQUEUES) {
 						delivery.execute(() -> route(e, redelivery + 1));
 					}
 				}

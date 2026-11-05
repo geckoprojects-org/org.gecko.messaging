@@ -66,7 +66,8 @@ import com.rabbitmq.client.ShutdownSignalException;
  * <li>a queue is a named queue on the default exchange; several subscriptions of a queue are
  * competing consumers, the broker hands each message to one of them.</li>
  * </ul>
- * Publishing with QoS 1 waits for the publisher confirm; QoS 2 does not exist in AMQP and is
+ * A rejected message is re-queued at most once ({@code redelivered} flag of the broker), as is
+ * one redelivered after a lost connection. Publishing with QoS 1 waits for the publisher confirm; QoS 2 does not exist in AMQP and is
  * refused as unsupported feature before anything is sent, as is a queue with a channel extension.
  * Received messages are acknowledged manually (QoS 1, the default) or on delivery (QoS 0); a
  * rejected message is nacked, with re-queue if asked. The instance owns reconnecting: the client's
@@ -439,7 +440,8 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 
 					@Override
 					public void reject(boolean requeue) {
-						nack(tag, requeue);
+						// the broker flags a message it delivers again: re-queued once, it is dropped
+						nack(tag, requeue && !envelope.isRedeliver());
 					}
 				});
 			} else {

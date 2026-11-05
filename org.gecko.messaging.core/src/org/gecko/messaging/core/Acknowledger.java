@@ -18,13 +18,21 @@ package org.gecko.messaging.core;
  */
 public interface Acknowledger {
 
+	/**
+	 * How often one message is re-queued at most. A message every receiver rejects with re-queue
+	 * would otherwise cycle without end and keep the receivers busy; beyond this, a reject with
+	 * re-queue drops the message. Fixed by design, not configurable.
+	 */
+	int MAX_REQUEUES = 1;
+
 	/** Acknowledges the message on the broker. */
 	void acknowledge();
 
 	/**
 	 * Rejects the message on the broker.
 	 *
-	 * @param requeue {@code true} to re-queue it
+	 * @param requeue {@code true} to re-queue it; the protocol re-queues a message at most
+	 *        {@link #MAX_REQUEUES} times and drops it after that
 	 */
 	void reject(boolean requeue);
 
