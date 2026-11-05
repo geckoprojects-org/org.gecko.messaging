@@ -19,11 +19,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.eclipse.jetty.http.HttpHeader;
+import org.eclipse.jetty.http.HttpStatus;
+import org.eclipse.jetty.server.NetworkConnectionLimit;
+import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
+import org.eclipse.jetty.websocket.api.StatusCode;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -40,7 +45,11 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
  * {@code org.gecko.messaging.websocket.hub}.
  * <p>
  * The hub keeps nothing: a message reaches the sessions open at that moment. It has no
- * authentication and binds to localhost unless {@code host} says otherwise.
+ * authentication and binds to localhost unless {@code host} says otherwise. Limits against a
+ * peer that floods or does not read: message size, connections, and frames queued for a session
+ * — a session that falls that far behind is closed. A browser page could reach a hub on
+ * localhost as well, so an upgrade carrying an {@code Origin} is refused unless the origin is
+ * allowed; WebSocket clients outside a browser send none.
  */
 @Component(name = "org.gecko.messaging.websocket.hub", configurationPolicy = ConfigurationPolicy.REQUIRE, service = {})
 @Designate(ocd = WebSocketHub.Config.class, factory = true)
@@ -70,10 +79,22 @@ public class WebSocketHub {
 		@AttributeDefinition(description = "Most server threads")
 		int maxThreads() default 16;
 
+		/** @return the most connections */
+		@AttributeDefinition(description = "Most open connections")
+		int maxConnections() default 256;
+
+		/** @return the most frames queued for one session */
+		@AttributeDefinition(description = "Most frames queued for one session; a session behind that is closed")
+		int maxOutgoingFrames() default 64;
+
+		/** @return the origins a browser page may connect from */
+		@AttributeDefinition(description = "Origins a browser page may connect from; none by default")
+		String[] allowedOrigins() default {};
+
 	}
 
-	/** Open sessions by decoded path. */
-	private final Map<String, Set<Session>> paths = new ConcurrentHashMap<>();
+	/** Members by decoded path; joining and leaving are atomic per path. */
+	private final Map<String, Set<Member>> paths = new ConcurrentHashMap<>();
 	private Server server;
 
 	@Activate
@@ -85,11 +106,21 @@ public class WebSocketHub {
 		connector.setHost(config.host());
 		connector.setPort(config.port());
 		s.addConnector(connector);
+		s.addBean(new NetworkConnectionLimit(config.maxConnections(), s));
+		Set<String> origins = Set.of(config.allowedOrigins());
 		s.setHandler(WebSocketUpgradeHandler.from(s, container -> {
 			container.setIdleTimeout(Duration.ofSeconds(config.idleTimeout()));
 			container.setMaxBinaryMessageSize(config.maxMessageSize());
 			container.setMaxTextMessageSize(config.maxMessageSize());
-			container.addMapping("/*", (request, response, callback) -> new Member(request.getHttpURI().getDecodedPath()));
+			container.setMaxOutgoingFrames(config.maxOutgoingFrames());
+			container.addMapping("/*", (request, response, callback) -> {
+				String origin = request.getHeaders().get(HttpHeader.ORIGIN);
+				if (origin != null && !origins.contains(origin)) {
+					Response.writeError(request, response, callback, HttpStatus.FORBIDDEN_403);
+					return null;
+				}
+				return new Member(request.getHttpURI().getDecodedPath());
+			});
 		}));
 		s.start();
 		server = s;
@@ -109,7 +140,10 @@ public class WebSocketHub {
 	public final class Member implements Session.Listener.AutoDemanding {
 
 		private final String path;
-		private Session session;
+		private volatile Session session;
+		/** Closes this session when a frame to it cannot be queued: it does not keep up. */
+		private final Callback sent = Callback.from(() -> {
+		}, failure -> close(StatusCode.POLICY_VIOLATION, "Not reading fast enough"));
 
 		Member(String path) {
 			this.path = path;
@@ -118,7 +152,11 @@ public class WebSocketHub {
 		@Override
 		public void onWebSocketOpen(Session s) {
 			session = s;
-			paths.computeIfAbsent(path, p -> ConcurrentHashMap.newKeySet()).add(s);
+			paths.compute(path, (p, members) -> {
+				Set<Member> m = members == null ? ConcurrentHashMap.newKeySet() : members;
+				m.add(this);
+				return m;
+			});
 		}
 
 		@Override
@@ -127,21 +165,34 @@ public class WebSocketHub {
 			byte[] bytes = new byte[payload.remaining()];
 			payload.get(bytes);
 			callback.succeed();
-			for (Session s : members()) {
-				s.sendBinary(ByteBuffer.wrap(bytes), Callback.NOOP);
+			for (Member m : members()) {
+				Session s = m.session;
+				if (s != null) {
+					s.sendBinary(ByteBuffer.wrap(bytes), m.sent);
+				}
 			}
 		}
 
 		@Override
 		public void onWebSocketText(String text) {
-			for (Session s : members()) {
-				s.sendText(text, Callback.NOOP);
+			for (Member m : members()) {
+				Session s = m.session;
+				if (s != null) {
+					s.sendText(text, m.sent);
+				}
 			}
 		}
 
-		private Set<Session> members() {
-			Set<Session> members = paths.get(path);
+		private Set<Member> members() {
+			Set<Member> members = paths.get(path);
 			return members == null ? Set.of() : members;
+		}
+
+		private void close(int status, String reason) {
+			Session s = session;
+			if (s != null && s.isOpen()) {
+				s.close(status, reason, Callback.NOOP);
+			}
 		}
 
 		@Override
@@ -156,13 +207,10 @@ public class WebSocketHub {
 		}
 
 		private void leave() {
-			Set<Session> members = paths.get(path);
-			if (members != null && session != null) {
-				members.remove(session);
-				if (members.isEmpty()) {
-					paths.remove(path, members);
-				}
-			}
+			paths.computeIfPresent(path, (p, members) -> {
+				members.remove(this);
+				return members.isEmpty() ? null : members;
+			});
 		}
 
 	}
