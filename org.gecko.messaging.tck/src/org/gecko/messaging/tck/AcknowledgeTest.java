@@ -149,4 +149,24 @@ public class AcknowledgeTest extends AbstractMessagingTest {
 		assertThat(seen).as("delivered, re-queued once, then dropped").containsExactly("poison", "poison");
 	}
 
+	@Test
+	void aRejectOnATopicIsNotRequeued() throws Exception {
+		String channel = tck.channel("ack", "topic");
+		MessageContext rejecting = builder().channel(channel).adapt(AcknowledgeMessageContextBuilder.class).manualAcknowledge()
+				.requeueOnReject(true).messageContextBuilder().buildContext();
+		List<String> rejected = new CopyOnWriteArrayList<>();
+		track(subscription.subscribe(rejecting)).forEach(m -> {
+			rejected.add(Tck.text(m));
+			((AcknowledgeMessageContext) m.getContext()).getAcknowledgeHandler().reject();
+		});
+		List<Message> other = collect(channel);
+		publisher.publish(text(channel, "once")).getValue();
+		tck.awaitSize(other, 1);
+		tck.awaitSize(rejected, 1);
+		tck.settle();
+		// published again, it would reach every subscriber of the topic, not just the rejecting one
+		assertThat(rejected).containsExactly("once");
+		assertThat(other).hasSize(1);
+	}
+
 }

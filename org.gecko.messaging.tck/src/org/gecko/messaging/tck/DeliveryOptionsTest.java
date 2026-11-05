@@ -17,10 +17,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.gecko.messaging.api.MessagingConstants.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
+import org.gecko.messaging.api.MessagingException;
+import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -75,6 +78,16 @@ public class DeliveryOptionsTest extends AbstractMessagingTest {
 		assertThat(Tck.text(late.get(0))).isEqualTo("kept");
 		// clear the retained message again
 		publisher.publish(builder().buildMessage(), ctx).getValue();
+	}
+
+	@Test
+	void aMessageAboveTheAnnouncedLimitFails() throws Exception {
+		Object limit = tck.reference(MessageServiceRuntime.class).getProperty(MESSAGING_MAX_MESSAGE_SIZE_PROPERTY);
+		assumeTrue(limit instanceof Number, "the instance announces no size limit");
+		int max = ((Number) limit).intValue();
+		Throwable failure = publisher.publish(builder().content(ByteBuffer.allocate(max + 1)).buildMessage(),
+				builder().channel(tck.channel("big")).buildContext()).getFailure();
+		assertThat(failure).as("MSG205: a message above " + max + " bytes").isInstanceOf(MessagingException.class);
 	}
 
 }

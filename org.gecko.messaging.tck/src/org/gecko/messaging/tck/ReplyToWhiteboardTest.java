@@ -26,6 +26,7 @@ import java.util.List;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
+import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.dto.ReplyToSubscriptionDTO;
 import org.gecko.messaging.api.replyto.ReplyToManySubscriptionHandler;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
@@ -34,6 +35,7 @@ import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.osgi.util.pushstream.PushStreamProvider;
+import org.osgi.util.pushstream.SimplePushEventSource;
 
 /**
  * The responding side of reply-to: handlers registered as whiteboard services (MSG160).
@@ -155,6 +157,43 @@ public class ReplyToWhiteboardTest extends AbstractMessagingTest {
 		registration.unregister();
 		tck.await("handler unbound", () -> Arrays.stream(runtime.getRuntimeDTO().replyToSubscriptions)
 				.noneMatch(d -> channel.equals(d.requestChannel.name)));
+	}
+
+	@Test
+	void aFailingHandlerFailsTheRequestAtOnce() throws Exception {
+		String channel = tck.channel("wb", "failing");
+		register(ReplyToSingleSubscriptionHandler.class, (request, response) -> {
+			throw new IllegalStateException("internal detail");
+		}, handlerProperties(channel));
+		awaitBound(channel);
+		long start = System.currentTimeMillis();
+		Throwable failure = replyTo.publishWithReply(builder().content(Tck.bytes("x")).buildMessage(), request(channel, "e-1"))
+				.getFailure();
+		assertThat(failure).isInstanceOf(MessagingException.class).hasMessageContaining("responder failed")
+				.hasMessageNotContaining("internal detail");
+		assertThat(System.currentTimeMillis() - start).as("not by the reply timeout").isLessThan(tck.timeout());
+	}
+
+	@Test
+	void aFailingResponseStreamEndsWithAnError() throws Exception {
+		assumeTrue(tck.has(FEATURE_REPLY_TO_MANY));
+		String channel = tck.channel("wb", "failingMany");
+		PushStreamProvider psp = new PushStreamProvider();
+		// a stream that delivers one response and then fails, as an event source reports a failure
+		ReplyToManySubscriptionHandler handler = (request, responses) -> {
+			SimplePushEventSource<Message> source = psp.createSimpleEventSource(Message.class);
+			source.connectPromise().onSuccess(v -> {
+				source.publish(responses.get().content(Tck.bytes("1")).buildMessage());
+				source.error(new IllegalStateException("internal detail"));
+			});
+			return psp.createStream(source);
+		};
+		register(ReplyToManySubscriptionHandler.class, handler, handlerProperties(channel));
+		awaitBound(channel);
+		Throwable failure = replyTo.publishWithReplyMany(builder().content(Tck.bytes("n")).buildMessage(), request(channel, "e-2"))
+				.forEach(m -> {
+				}).getFailure();
+		assertThat(failure).isInstanceOf(MessagingException.class).hasMessageContaining("responder failed");
 	}
 
 }

@@ -75,6 +75,8 @@ public class ReconnectTest extends AbstractMessagingTest {
 		tck.await("reconnected", () -> events.stream().anyMatch(ConnectionEvent::reconnect));
 		assertThat(events).extracting(ConnectionEvent::state).containsSubsequence(ConnectionState.DISCONNECTED,
 				ConnectionState.CONNECTED);
+		ConnectionEvent back = events.stream().filter(ConnectionEvent::reconnect).findFirst().orElseThrow();
+		assertThat(back.previousState()).as("the state before the reconnect").isEqualTo(ConnectionState.DISCONNECTED);
 		publisher.publish(text(channel, "after")).getValue();
 		tck.awaitSize(received, 2);
 		assertThat(received).extracting(Tck::text).containsExactly("before", "after");

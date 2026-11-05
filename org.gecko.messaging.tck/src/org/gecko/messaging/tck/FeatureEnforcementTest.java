@@ -109,4 +109,13 @@ public class FeatureEnforcementTest extends AbstractMessagingTest {
 		assertThat(failure).isInstanceOf(FeatureNotSupportedException.class);
 	}
 
+	@Test
+	void wildcard() throws Exception {
+		assumeFalse(tck.has(FEATURE_WILDCARD));
+		// taken literally the symbol would subscribe to nothing; it must fail instead (MSG100a)
+		assertThatThrownBy(() -> subscription.subscribe(tck.channel("w", tck.singleWildcard())))
+				.isInstanceOf(FeatureNotSupportedException.class)
+				.satisfies(e -> assertThat(((FeatureNotSupportedException) e).getFeature()).isEqualTo(FEATURE_WILDCARD));
+	}
+
 }
