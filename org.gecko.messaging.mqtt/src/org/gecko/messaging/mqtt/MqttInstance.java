@@ -40,7 +40,6 @@ import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.eclipse.paho.mqttv5.common.MqttSubscription;
 import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import org.eclipse.paho.mqttv5.common.packet.UserProperty;
-import org.eclipse.paho.mqttv5.common.util.MqttTopicValidator;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagingException;
@@ -96,8 +95,6 @@ public final class MqttInstance extends AbstractMessagingInstance {
 	private volatile MqttAsyncClient client;
 	/** Broker subscriptions by topic filter, with the local subscriptions they feed. */
 	private final Map<String, Set<SubscriptionHandle>> filters = new ConcurrentHashMap<>();
-	/** Subscription identifiers sent with each broker subscription, see {@link #doSubscribe}. */
-	private final AtomicInteger subscriptionIds = new AtomicInteger();
 	/** Turns of the local queue subscriptions, see {@link #dispatch}. */
 	private final AtomicInteger queueTurn = new AtomicInteger();
 
@@ -259,21 +256,11 @@ public final class MqttInstance extends AbstractMessagingInstance {
 			return;
 		}
 		MqttAsyncClient c = client();
-		boolean queue = sharedTopicFilter(filter) != null;
+		boolean queue = filter.startsWith("$share/");
 		IMqttMessageListener listener = (topic, message) -> dispatch(c, handles, queue, topic, message);
-		// Paho matches a received topic against the subscription's filter, and '$share/<group>/a'
-		// never matches 'a' (geckoprojects-org/paho#52); with a subscription identifier the broker names the subscription in
-		// every PUBLISH and Paho routes by it. Paho assigns identifiers itself but does not send
-		// them, so the instance sets one — in both fields: Paho sends the single one but links the
-		// listener to the first of the list (geckoprojects-org/paho#53). Brokers without
-		// identifiers: see Callback.messageArrived.
-		int id = subscriptionIds.incrementAndGet();
-		MqttProperties properties = new MqttProperties();
-		properties.setSubscriptionIdentifier(id);
-		properties.setSubscriptionIdentifiers(List.of(id));
 		try {
 			IMqttToken token = c.subscribe(new MqttSubscription[] { new MqttSubscription(filter, qos) }, null, null, listener,
-					properties);
+					new MqttProperties());
 			token.waitForCompletion(config.connectTimeout());
 			int[] codes = token.getReasonCodes();
 			if (codes != null && codes.length > 0 && codes[0] >= 0x80) {
@@ -409,15 +396,6 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		return (SimpleMessageContext) b.buildContext();
 	}
 
-	/** @return the topic filter of a shared subscription filter, or {@code null} for others */
-	static String sharedTopicFilter(String filter) {
-		if (!filter.startsWith("$share/")) {
-			return null;
-		}
-		int slash = filter.indexOf('/', "$share/".length());
-		return slash < 0 ? null : filter.substring(slash + 1);
-	}
-
 	private final class Callback implements MqttCallback {
 
 		private final MqttAsyncClient owner;
@@ -440,16 +418,8 @@ public final class MqttInstance extends AbstractMessagingInstance {
 
 		@Override
 		public void messageArrived(String topic, MqttMessage message) {
-			// Only messages no subscription listener took: from a shared subscription on a broker
-			// without subscription identifiers (Paho does not match '$share/<group>/' filters), or
-			// left over from an ended subscription, which are acknowledged and dropped.
-			for (Map.Entry<String, Set<SubscriptionHandle>> e : filters.entrySet()) {
-				String shared = sharedTopicFilter(e.getKey());
-				if (shared != null && MqttTopicValidator.isMatched(shared, topic)) {
-					dispatch(owner, e.getValue(), true, topic, message);
-					return;
-				}
-			}
+			// only messages no subscription listener took, left over from an ended subscription;
+			// acknowledge and drop
 			complete(owner, message);
 		}
 
