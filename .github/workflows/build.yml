@@ -1,6 +1,7 @@
-# GitHub Actions is the pre-gate only: licence header check, build, test — on every branch.
-# Publishing is Jenkins' job (see Jenkinsfile), which is why there is no snapshot or release
-# workflow here.
+# Licence header check, build, unit and OSGi/TCK tests against real brokers — on every branch.
+# GitHub Actions is meant to become the only place tests run; for now Jenkins runs the same
+# tests with the same broker setup (docker/brokers.sh via brokerUp/brokerDown). Publishing is
+# still Jenkins' job (see Jenkinsfile), which is why there is no snapshot or release workflow.
 #
 # Self-contained on purpose. This used to call eclipse-fennec/.github reusable workflows, which
 # expect that org's setup and do not fit a repository in geckoprojects-org.
@@ -41,10 +42,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f131e8634966bd73d06cc69884922b02e6faf92 # v6.2.0
 
-      # `build` covers compile, bnd bundle assembly and plain JUnit tests. OSGi tests run via
-      # testOSGi, which Jenkins does — it needs a resolved runtime and is slower.
-      - name: Build
-        run: ./gradlew build --no-daemon --stacktrace
+      # `build` covers compile, bnd bundle assembly and plain JUnit tests; testOSGi runs the
+      # OSGi integration tests and the TCK runners against Mosquitto and RabbitMQ, started by
+      # brokerUp (docker/brokers.sh, the same script Jenkins uses).
+      - name: Build, start brokers and run OSGi/TCK tests
+        run: ./gradlew build brokerUp testOSGi --no-daemon --stacktrace
+
+      - name: Stop brokers
+        if: always()
+        run: ./gradlew brokerDown --no-daemon || true
 
       - name: Upload test results
         if: always()

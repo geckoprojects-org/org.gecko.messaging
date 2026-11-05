@@ -12,8 +12,10 @@ pipeline  {
     }
 
     stages {
-        // The TCK runs against RabbitMQ and Mosquitto (docker/compose.yaml); the WebSocket TCK
+        // The TCK runs against RabbitMQ and Mosquitto (docker/brokers.sh); the WebSocket TCK
         // brings its own Jetty hub. brokerUp/brokerDown start and stop the containers.
+        // GitHub Actions runs the same tests with the same setup and is meant to take over
+        // testing completely; this stage goes away then.
         stage('Unit, Integration & TCK Tests') {
             steps {
                 script {

@@ -114,3 +114,16 @@ def codeCoverageReport = tasks.register('codeCoverageReport', JacocoReport) {
 tasks.named("sonar") {
     dependsOn(codeCoverageReport)
 }
+
+// Brokers of the TCK runs (docker/brokers.sh, docker or podman). GitHub Actions and Jenkins
+// call brokerUp before testOSGi and brokerDown afterwards.
+tasks.register('brokerUp', Exec) {
+    group = 'verification'
+    description = 'Starts Mosquitto and RabbitMQ for the TCK runs'
+    commandLine "${rootDir}/docker/brokers.sh", 'up'
+}
+tasks.register('brokerDown', Exec) {
+    group = 'verification'
+    description = 'Stops the brokers of the TCK runs'
+    commandLine "${rootDir}/docker/brokers.sh", 'down'
+}
