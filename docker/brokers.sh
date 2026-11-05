@@ -35,11 +35,12 @@ case "${1:-}" in
 up)
 	$RUNTIME rm -f gecko-msg-mosquitto gecko-msg-rabbitmq >/dev/null 2>&1 || true
 	# No --rm, so the logs of a container that died stay readable; down removes the containers.
-	# The config is copied in rather than bind-mounted: a mount depends on the permissions (and
-	# SELinux labels) of the checkout, which differ between developer machines and CI agents.
-	$RUNTIME create --name gecko-msg-mosquitto -p "$MQTT_PORT:1883" "$MOSQUITTO_IMAGE" >/dev/null
-	$RUNTIME cp "$DIR/mosquitto.conf" gecko-msg-mosquitto:/mosquitto/config/mosquitto.conf
-	$RUNTIME start gecko-msg-mosquitto >/dev/null
+	# The config goes in as an environment variable and is written inside the container: a bind
+	# mount or `cp` keeps the owner and mode of the checkout, which differ between developer
+	# machines and CI agents (the Jenkins agent's file was unreadable for the mosquitto user).
+	$RUNTIME run -d --name gecko-msg-mosquitto -p "$MQTT_PORT:1883" \
+		-e MOSQUITTO_CONF="$(cat "$DIR/mosquitto.conf")" "$MOSQUITTO_IMAGE" \
+		sh -c 'printf "%s\n" "$MOSQUITTO_CONF" > /mosquitto/config/tck.conf && exec mosquitto -c /mosquitto/config/tck.conf' >/dev/null
 	$RUNTIME run -d --name gecko-msg-rabbitmq -p "$AMQP_PORT:5672" "$RABBITMQ_IMAGE" >/dev/null
 	wait_port "$MQTT_PORT"
 	# RabbitMQ opens the port before it accepts connections; wait for the node to be up. Not via
