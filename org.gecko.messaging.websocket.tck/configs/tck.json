@@ -1,0 +1,21 @@
+{
+	":configurator:resource-version": 1,
+	"org.gecko.messaging.websocket.hub~tck": {
+		"port:Integer": 18090
+	},
+	"org.gecko.messaging.websocket~tck": {
+		"osgi.messaging.name": "tck",
+		"uri": "ws://localhost:18091/messaging",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"connectTimeout:Long": 3000
+	},
+	"org.gecko.messaging.websocket~tckce": {
+		"osgi.messaging.name": "tck-cloudevents",
+		"uri": "ws://localhost:18091/messaging",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"connectTimeout:Long": 3000,
+		"cloudEvents": "structured"
+	}
+}

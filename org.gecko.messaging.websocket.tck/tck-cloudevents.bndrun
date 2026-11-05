@@ -1,0 +1,14 @@
+# The TCK against the WebSocket implementation with structured CloudEvents; the hub runs in the
+# framework, no broker needed.
+-library: enableOSGi-Test
+-include: ${workspace}/cnf/ext/tck-run.bnd
+
+-runrequires: \
+	bnd.identity;id='org.gecko.messaging.tck',\
+	bnd.identity;id='org.gecko.messaging.websocket',\
+	bnd.identity;id='org.gecko.messaging.websocket.hub',\
+	bnd.identity;id='org.gecko.messaging.websocket.tck',\
+	${tck.runrequires}
+
+-runproperties.instance: \
+	org.gecko.messaging.tck.filter='(osgi.messaging.name=tck-cloudevents)'
