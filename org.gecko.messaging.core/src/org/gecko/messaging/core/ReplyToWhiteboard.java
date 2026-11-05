@@ -61,6 +61,7 @@ final class ReplyToWhiteboard {
 		final String replyChannel;
 		final boolean many;
 		final AtomicLong handled = new AtomicLong();
+		final AtomicLong refused = new AtomicLong();
 		volatile SubscriptionHandle handle;
 
 		Binding(ServiceReference<Object> reference, Object handler, String channel, String channelExtension, String replyChannel) {
@@ -173,7 +174,14 @@ final class ReplyToWhiteboard {
 	}
 
 	private void handle(Binding b, Message request) {
-		String reply = request.getContext().getReplyToChannel() != null ? request.getContext().getReplyToChannel() : b.replyChannel;
+		String requested = request.getContext().getReplyToChannel();
+		if (requested != null && !instance.getConfiguration().replyToAllowed(requested)) {
+			// not handled at all: the handler's side effects belong to an answered request
+			b.refused.incrementAndGet();
+			LOG.fine(() -> "Refusing a request on " + b.reference + ": its reply-to channel is not allowed");
+			return;
+		}
+		String reply = requested != null ? requested : b.replyChannel;
 		b.handled.incrementAndGet();
 		try {
 			if (b.many) {
@@ -223,6 +231,7 @@ final class ReplyToWhiteboard {
 			dto.replyChannel = b.replyChannel == null ? null : SubscriptionHandle.channelDTO(b.replyChannel, null, false);
 			dto.many = b.many;
 			dto.handledRequests = b.handled.get();
+			dto.refusedRequests = b.refused.get();
 			return dto;
 		}).toArray(ReplyToSubscriptionDTO[]::new);
 	}

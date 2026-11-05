@@ -21,6 +21,8 @@ import java.net.URISyntaxException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -64,7 +66,13 @@ import org.osgi.util.promise.Promise;
  * <p>
  * Configuration, besides the common keys: {@code uri} ({@code ws://} or {@code wss://}, the base
  * of the channel paths), {@code keepAliveInterval} (s, default 30; idle timeout three times that),
- * {@code maxThreads} (of the client, default 8), {@code maxMessageSize} (bytes, default 1 MiB).
+ * {@code maxThreads} (of the client, default 8), {@code maxMessageSize} (bytes, default 1 MiB),
+ * {@code maxPublishSessions} (sessions kept open for channels only published to, default 16; the
+ * least recently used one is closed beyond that — a request names its reply channel, so without
+ * a bound a sender could make the instance open a session per request).
+ * <p>
+ * A channel is a relative path: an empty, {@code .} or {@code ..} segment is refused, so no
+ * channel leaves the base path.
  */
 public final class WebSocketInstance extends AbstractMessagingInstance {
 
@@ -75,7 +83,6 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 
 	static final List<String> FEATURES = List.of(FEATURE_PUBLISH_SUBSCRIBE, FEATURE_AUTO_CREATE);
 
-
 	private final URI base;
 	private final long keepAliveMillis;
 	private WebSocketClient client;
@@ -85,6 +92,9 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	private final Map<String, ChannelSession> sessions = new ConcurrentHashMap<>();
 	/** Local subscriptions by channel. */
 	private final Map<String, Set<SubscriptionHandle>> subscriptions = new ConcurrentHashMap<>();
+	/** Channels with a session but no subscription, least recently published to first; under sessions. */
+	private final Map<String, Boolean> publishOnly = new LinkedHashMap<>(16, 0.75f, true);
+	private final int maxPublishSessions;
 	private ScheduledFuture<?> pings;
 
 	/**
@@ -100,6 +110,7 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 		String u = config.uri();
 		this.base = URI.create(u.endsWith("/") ? u.substring(0, u.length() - 1) : u);
 		this.keepAliveMillis = TimeUnit.SECONDS.toMillis(config.number("keepAliveInterval", 30));
+		this.maxPublishSessions = (int) Math.max(1, config.number("maxPublishSessions", 16));
 	}
 
 	// ------------------------------------------------------------------ connection
@@ -141,8 +152,12 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 		if (c != null) {
 			c.close();
 		}
-		List<ChannelSession> all = new ArrayList<>(sessions.values());
-		sessions.clear();
+		List<ChannelSession> all;
+		synchronized (sessions) {
+			all = new ArrayList<>(sessions.values());
+			sessions.clear();
+			publishOnly.clear();
+		}
 		all.forEach(ChannelSession::close);
 	}
 
@@ -201,6 +216,11 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	}
 
 	private URI channelUri(String channel) throws URISyntaxException {
+		for (String segment : channel.split("/", -1)) {
+			if (segment.isEmpty() || segment.equals(".") || segment.equals("..")) {
+				throw new MessagingException("A WebSocket channel is a relative path without empty, . or .. segments");
+			}
+		}
 		String path = (base.getPath() == null ? "" : base.getPath()) + "/" + channel;
 		// the multi-argument constructor quotes what a path must not contain
 		return new URI(base.getScheme(), base.getUserInfo(), base.getHost(), base.getPort(), path, null, null);
@@ -210,10 +230,40 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 
 	@Override
 	protected Promise<Void> doPublish(SimpleMessageContext context, ByteBuffer payload) throws Exception {
-		ChannelSession s = session(context.getChannel());
+		String channel = context.getChannel();
+		ChannelSession s = session(channel);
+		if (!subscriptions.containsKey(channel)) {
+			publishedOnly(channel);
+		}
 		Deferred<Void> deferred = promises.deferred();
 		s.send(payload, Callback.from(() -> deferred.resolve(null), deferred::fail));
 		return deferred.getPromise();
+	}
+
+	/** Keeps at most maxPublishSessions sessions of channels without subscription open. */
+	private void publishedOnly(String channel) {
+		List<ChannelSession> evicted = new ArrayList<>();
+		synchronized (sessions) {
+			publishOnly.put(channel, Boolean.TRUE);
+			Iterator<String> eldest = publishOnly.keySet().iterator();
+			while (publishOnly.size() > maxPublishSessions) {
+				String c = eldest.next();
+				eldest.remove();
+				if (!subscriptions.containsKey(c)) {
+					ChannelSession old = sessions.remove(c);
+					if (old != null) {
+						evicted.add(old);
+					}
+				}
+			}
+		}
+		// a normal close: frames already queued on the session still go out
+		evicted.forEach(ChannelSession::close);
+	}
+
+	/** @return the number of channel sessions, for tests */
+	int channelSessions() {
+		return sessions.size();
 	}
 
 	// ------------------------------------------------------------------ subscribe
@@ -222,6 +272,9 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	protected void doSubscribe(SubscriptionHandle handle) throws Exception {
 		String channel = handle.channel();
 		subscriptions.computeIfAbsent(channel, c -> new CopyOnWriteArraySet<>()).add(handle);
+		synchronized (sessions) {
+			publishOnly.remove(channel);
+		}
 		try {
 			session(channel);
 		} catch (Exception e) {

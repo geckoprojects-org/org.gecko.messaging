@@ -38,4 +38,7 @@ public class ReplyToSubscriptionDTO extends DTO {
 	/** The number of requests handled. */
 	public long handledRequests;
 
+	/** The number of requests not handled, as their reply-to channel is not allowed. */
+	public long refusedRequests;
+
 }

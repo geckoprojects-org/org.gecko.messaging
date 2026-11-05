@@ -13,8 +13,10 @@
  */
 package org.gecko.messaging.core;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.gecko.messaging.api.MessageContext;
@@ -36,6 +38,9 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * <li>{@code reconnectDelay}, {@code reconnectMaxDelay} — ms, backoff 1000 doubling to 30000</li>
  * <li>{@code replyTimeout} — ms a reply-to publisher waits, default 30000</li>
  * <li>{@code replyChannelPrefix} — prefix of generated reply channels</li>
+ * <li>{@code replyToAllowed} — prefixes a reply-to channel of a received request must start with
+ * to be answered; default any. A request names its reply channel itself, so without this a
+ * sender can make the instance publish a response to any channel it may write to.</li>
  * <li>{@code cloudEvents} — {@code none} (default), {@code binary} or {@code structured}</li>
  * <li>{@code workerThreads} — threads delivering messages, default 4</li>
  * <li>{@code bufferSize} — buffer per subscription, default 1024</li>
@@ -53,6 +58,7 @@ public final class MessagingConfiguration {
 
 	private final Map<String, Object> raw;
 	private final String name;
+	private final List<String> replyToAllowed;
 
 	/**
 	 * Reads the configuration.
@@ -72,6 +78,7 @@ public final class MessagingConfiguration {
 				&& !CloudEventConstants.MODE_STRUCTURED.equals(mode)) {
 			throw new MessagingException("Unknown cloudEvents mode '" + mode + "'");
 		}
+		this.replyToAllowed = readReplyToAllowed();
 	}
 
 	/**
@@ -183,6 +190,44 @@ public final class MessagingConfiguration {
 	 */
 	public String replyChannelPrefix(String defaultPrefix) {
 		return string("replyChannelPrefix", defaultPrefix);
+	}
+
+	/**
+	 * Returns the prefixes a reply-to channel of a received request must start with.
+	 *
+	 * @return the prefixes, empty for any channel
+	 */
+	public List<String> replyToAllowed() {
+		return replyToAllowed;
+	}
+
+	private List<String> readReplyToAllowed() {
+		Object v = raw.get("replyToAllowed");
+		if (v instanceof String s) {
+			return List.of(s);
+		}
+		if (v instanceof String[] a) {
+			return List.of(a);
+		}
+		if (v instanceof Collection<?> c) {
+			return c.stream().map(String::valueOf).toList();
+		}
+		return List.of();
+	}
+
+	/**
+	 * Returns whether a reply-to channel of a received request may be answered.
+	 *
+	 * @param channel the reply-to channel the request names
+	 * @return {@code true} if no prefixes are configured or the channel starts with one
+	 */
+	public boolean replyToAllowed(String channel) {
+		for (String prefix : replyToAllowed) {
+			if (channel.startsWith(prefix)) {
+				return true;
+			}
+		}
+		return replyToAllowed.isEmpty();
 	}
 
 	/** @return {@code none}, {@code binary} or {@code structured} */

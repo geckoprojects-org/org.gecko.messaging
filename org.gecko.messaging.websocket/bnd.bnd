@@ -27,3 +27,21 @@ Import-Package: \
 	org.osgi.namespace.service;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	org.osgi.util.pushstream;version=latest
+
+-testpath: \
+	assertj-core;version=latest,\
+	org.gecko.messaging.websocket.hub;version=snapshot,\
+	org.eclipse.jetty.alpn.client;version=latest,\
+	org.eclipse.jetty.io;version=latest,\
+	org.eclipse.jetty.http;version=latest,\
+	org.eclipse.jetty.server;version=latest,\
+	org.eclipse.jetty.websocket.common;version=latest,\
+	org.eclipse.jetty.websocket.core.common;version=latest,\
+	org.eclipse.jetty.websocket.core.client;version=latest,\
+	org.eclipse.jetty.websocket.core.server;version=latest,\
+	org.eclipse.jetty.websocket.server;version=latest,\
+	org.osgi.service.metatype.annotations;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.tracker;version=latest,\
+	org.osgi.dto;version=latest,\
+	slf4j.api;version=latest
