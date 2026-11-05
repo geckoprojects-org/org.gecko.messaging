@@ -13,9 +13,9 @@ pipeline  {
 
     stages {
         // Jenkins only builds and publishes. All tests that need brokers (OSGi integration tests
-        // and the TCK runs) run in GitHub Actions (.github/workflows/build.yml), which is meant to
-        // gate main and snapshot. This stage only compiles and assembles the bundles and runs the
-        // plain JUnit tests.
+        // and the TCK runs) run in GitHub Actions (.github/workflows/build.yml); 'Wait for GitHub CI'
+        // holds back publishing until that run is green. This stage only compiles and assembles
+        // the bundles and runs the plain JUnit tests.
         stage('Build') {
             steps {
                 sh './gradlew clean build --info --stacktrace -Dmaven.repo.local=${WORKSPACE}/.m2 --no-daemon'
@@ -24,6 +24,15 @@ pipeline  {
                 always {
                     junit testResults: '**/generated/test-reports/**/TEST-*.xml', allowEmptyResults: true, skipPublishingChecks: true
                 }
+            }
+        }
+        // Snapshots and releases are published only for commits GitHub Actions has tested.
+        stage('Wait for GitHub CI') {
+            when {
+                anyOf { branch 'main'; branch 'snapshot' }
+            }
+            steps {
+                sh 'ci/wait-for-github.sh'
             }
         }
         stage('Main branch release') {
