@@ -319,6 +319,38 @@ class InMemoryInstanceTest {
 	}
 
 	@Test
+	void stopRightAfterAReplyDoesNotFail() throws Exception {
+		// stop() fails the exchanges still pending; one whose response just arrived must not be
+		// failed a second time (the dispatcher resolves before it removes the exchange)
+		for (int n = 0; n < 200; n++) {
+			InMemoryInstance i = start();
+			i.subscribe("service").forEach(request -> {
+				MessageContext rc = request.getContext();
+				i.publish(i.newBuilder().channel(rc.getReplyToChannel()).correlationId(rc.getCorrelationId())
+						.content(ByteBuffer.wrap("pong".getBytes(UTF_8))).buildMessage(), null);
+			});
+			await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+			assertThat(text(i.replyToPublisher().publishWithReply(text(i, "service", "ping")).getValue())).isEqualTo("pong");
+			i.stop();
+			instances.remove(i);
+		}
+	}
+
+	@Test
+	void duplicateResponseIsIgnored() throws Exception {
+		InMemoryInstance i = start();
+		i.subscribe("service").forEach(request -> {
+			MessageContext rc = request.getContext();
+			for (String answer : List.of("first", "second")) {
+				i.publish(i.newBuilder().channel(rc.getReplyToChannel()).correlationId(rc.getCorrelationId())
+						.content(ByteBuffer.wrap(answer.getBytes(UTF_8))).buildMessage(), null);
+			}
+		});
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		assertThat(text(i.replyToPublisher().publishWithReply(text(i, "service", "ping")).getValue())).isEqualTo("first");
+	}
+
+	@Test
 	void replyToTimesOut() throws Exception {
 		InMemoryInstance i = start();
 		MessageContext ctx = i.newBuilder().channel("nobody").extensionEntry(EXTENSION_REPLY_TIMEOUT, 100L).buildContext();

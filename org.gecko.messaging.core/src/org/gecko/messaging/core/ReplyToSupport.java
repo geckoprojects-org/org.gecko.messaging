@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -79,23 +80,30 @@ final class ReplyToSupport implements ReplyToPublisher {
 			Request r = prepare(requestMessage, context);
 			Deferred<Message> deferred = instance.promises().deferred();
 			ScheduledFuture<?>[] timeout = new ScheduledFuture<?>[1];
+			// The dispatcher resolves before it removes the exchange from pending, so a timeout,
+			// close() or a duplicate response can race it; only the first outcome counts.
+			AtomicBoolean settled = new AtomicBoolean();
 			Pending p = new Pending() {
 				@Override
 				public boolean response(Message message) {
-					deferred.resolve(message);
+					if (settled.compareAndSet(false, true)) {
+						deferred.resolve(message);
+					}
 					return true;
 				}
 
 				@Override
 				public void fail(Throwable t) {
-					deferred.fail(t);
+					if (settled.compareAndSet(false, true)) {
+						deferred.fail(t);
+					}
 				}
 			};
 			SubscriptionHandle own = register(r, p);
 			timeout[0] = instance.scheduler().schedule(() -> {
 				if (pending.remove(r.correlationId, p)) {
 					release(own);
-					deferred.fail(new TimeoutException("No response to " + r.correlationId + " within " + r.timeout + " ms"));
+					p.fail(new TimeoutException("No response to " + r.correlationId + " within " + r.timeout + " ms"));
 				}
 			}, r.timeout, TimeUnit.MILLISECONDS);
 			send(r, own, p);
