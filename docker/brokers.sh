@@ -41,7 +41,10 @@ up)
 	$RUNTIME run -d --name gecko-msg-mosquitto --user mosquitto -p "$MQTT_PORT:1883" \
 		-e MOSQUITTO_CONF="$(cat "$DIR/mosquitto.conf")" "$MOSQUITTO_IMAGE" \
 		sh -c 'printf "%s\n" "$MOSQUITTO_CONF" > /mosquitto/config/tck.conf && exec mosquitto -c /mosquitto/config/tck.conf' >/dev/null
-	$RUNTIME run -d --name gecko-msg-rabbitmq -p "$AMQP_PORT:5672" "$RABBITMQ_IMAGE" >/dev/null
+	# user tck/tck: RabbitMQ admits its default user guest only from localhost, and a connection
+	# through the port mapping does not come from localhost
+	$RUNTIME run -d --name gecko-msg-rabbitmq -p "$AMQP_PORT:5672" \
+		-e RABBITMQ_DEFAULT_USER=tck -e RABBITMQ_DEFAULT_PASS=tck "$RABBITMQ_IMAGE" >/dev/null
 	wait_port "$MQTT_PORT"
 	# RabbitMQ opens the port before it accepts connections; wait for the node to be up. Not via
 	# `exec rabbitmq-diagnostics`: that runs as root and, early enough, creates .erlang.cookie
@@ -52,7 +55,7 @@ up)
 		[ "$i" -gt 90 ] && fail "RabbitMQ did not come up"
 		sleep 1
 	done
-	echo "brokers up: mqtt tcp://localhost:$MQTT_PORT, amqp amqp://localhost:$AMQP_PORT"
+	echo "brokers up: mqtt tcp://localhost:$MQTT_PORT, amqp amqp://tck:tck@localhost:$AMQP_PORT"
 	;;
 down)
 	$RUNTIME rm -f gecko-msg-mosquitto gecko-msg-rabbitmq >/dev/null 2>&1 || true

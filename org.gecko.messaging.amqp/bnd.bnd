@@ -1,0 +1,23 @@
+Bundle-Name: Gecko Messaging AMQP
+Bundle-Description: Messaging over AMQP 0-9-1 with the RabbitMQ Java client. One connection per \
+	instance, reconnects owned by the instance, topics as routing keys on a topic exchange, \
+	queues, channel extensions as exchange and routing key, publisher confirms, manual \
+	acknowledgement with re-queue. Factory configuration org.gecko.messaging.amqp.
+
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
+	org.gecko.messaging.core;version=snapshot,\
+	com.rabbitmq.client;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.namespace.service;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest
+
+-testpath: \
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.tracker;version=latest,\
+	org.osgi.dto;version=latest
