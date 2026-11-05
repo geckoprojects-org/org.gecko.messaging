@@ -247,7 +247,7 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		MqttAsyncClient c = client();
 		boolean queue = sharedTopicFilter(filter) != null;
 		// Paho stores a '$share/<group>/a' listener under that filter and never matches it with
-		// 'a' (geckoprojects-org/paho#52); such messages arrive in Callback.messageArrived.
+		// 'a' (geckoprojects-org/paho#54); such messages arrive in Callback.messageArrived.
 		IMqttMessageListener listener = (topic, message) -> dispatch(c, handles, queue, topic, message);
 		try {
 			IMqttToken token = c.subscribe(filter, qos, null, null, listener);
@@ -384,8 +384,8 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		@Override
 		public void messageArrived(String topic, MqttMessage message) {
 			// Only messages no subscription listener took: from a shared subscription (Paho does
-			// not match '$share/<group>/' filters), or left over from an ended subscription, which
-			// are acknowledged and dropped.
+			// not match '$share/<group>/' filters, geckoprojects-org/paho#54), or left over from an
+			// ended subscription, which are acknowledged and dropped.
 			for (Map.Entry<String, Set<SubscriptionHandle>> e : filters.entrySet()) {
 				String shared = sharedTopicFilter(e.getKey());
 				if (shared != null && MqttTopic.isMatched(shared, topic)) {
