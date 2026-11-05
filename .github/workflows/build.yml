@@ -23,6 +23,10 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # the test reports are published as check runs
+      checks: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -50,6 +54,30 @@ jobs:
       - name: Stop brokers
         if: always()
         run: ./gradlew brokerDown --no-daemon || true
+
+      # renders the JUnit XML as check runs with annotations and a job summary (as in the OSGi
+      # spec builds); the TCK report lists every test, grouped by runner, since it is a
+      # conformance report
+      - name: Unit test report
+        if: always()
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
+        with:
+          report_paths: '**/generated/test-reports/test/TEST-*.xml'
+          check_name: Unit test results
+          require_tests: false
+
+      - name: TCK test report
+        if: always()
+        uses: mikepenz/action-junit-report@6ef3fdcfcd5f0b5d14df3e659ef19b8c6820f93d # v6.6.1
+        with:
+          report_paths: '**/generated/test-reports/testrun.*/TEST-*.xml'
+          check_name: TCK results
+          require_tests: false
+          detailed_summary: true
+          include_passed: true
+          group_suite: true
+          include_time_in_summary: true
+          truncate_stack_traces: false
 
       - name: Upload test results
         if: always()
