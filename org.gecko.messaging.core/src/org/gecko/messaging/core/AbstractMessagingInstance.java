@@ -323,7 +323,7 @@ public abstract class AbstractMessagingInstance {
 	 * @return the channel name
 	 */
 	protected String createReplyChannel() {
-		return config.replyChannelPrefix("osgi/messaging/reply/" + config.clientId()) + "/" + UUID.randomUUID();
+		return config.replyChannelPrefix(DEFAULT_REPLY_CHANNEL_PREFIX + config.clientId()) + "/" + UUID.randomUUID();
 	}
 
 	/**

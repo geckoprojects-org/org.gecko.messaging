@@ -27,8 +27,18 @@ class MessagingConfigurationTest {
 	}
 
 	@Test
-	void anyReplyToChannelWithoutPrefixes() {
-		assertThat(config(Map.of("osgi.messaging.name", "x")).replyToAllowed("devices/x/cmd")).isTrue();
+	void byDefaultOnlyGeneratedReplyChannels() {
+		MessagingConfiguration c = config(Map.of("osgi.messaging.name", "x"));
+		assertThat(c.replyToAllowed("osgi/messaging/reply/other-client/123")).isTrue();
+		assertThat(c.replyToAllowed("devices/x/cmd")).as("a channel the sender chose").isFalse();
+		MessagingConfiguration own = config(Map.of("osgi.messaging.name", "x", "replyChannelPrefix", "app/replies"));
+		assertThat(own.replyToAllowed("app/replies/1")).isTrue();
+		assertThat(own.replyToAllowed("osgi/messaging/reply/c/1")).isTrue();
+	}
+
+	@Test
+	void anyReplyChannelOnlyWhenConfigured() {
+		assertThat(config(Map.of("osgi.messaging.name", "x", "replyToAllowed", "*")).replyToAllowed("devices/x/cmd")).isTrue();
 	}
 
 	@Test

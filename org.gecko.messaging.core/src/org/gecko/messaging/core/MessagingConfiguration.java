@@ -39,8 +39,10 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * <li>{@code replyTimeout} — ms a reply-to publisher waits, default 30000</li>
  * <li>{@code replyChannelPrefix} — prefix of generated reply channels</li>
  * <li>{@code replyToAllowed} — prefixes a reply-to channel of a received request must start with
- * to be answered; default any. A request names its reply channel itself, so without this a
- * sender can make the instance publish a response to any channel it may write to.</li>
+ * to be answered, {@code *} for any channel; default the start of generated reply channels
+ * ({@code osgi/messaging/reply/}) and the configured {@code replyChannelPrefix}. A request names
+ * its reply channel itself: without the check a sender could direct responses to any channel
+ * the instance may write to.</li>
  * <li>{@code cloudEvents} — {@code none} (default), {@code binary} or {@code structured}</li>
  * <li>{@code workerThreads} — threads delivering messages, default 4</li>
  * <li>{@code bufferSize} — buffer per subscription, default 1024</li>
@@ -195,7 +197,7 @@ public final class MessagingConfiguration {
 	/**
 	 * Returns the prefixes a reply-to channel of a received request must start with.
 	 *
-	 * @return the prefixes, empty for any channel
+	 * @return the prefixes, {@code *} for any channel
 	 */
 	public List<String> replyToAllowed() {
 		return replyToAllowed;
@@ -212,23 +214,29 @@ public final class MessagingConfiguration {
 		if (v instanceof Collection<?> c) {
 			return c.stream().map(String::valueOf).toList();
 		}
-		return List.of();
+		// secure by default: generated reply channels only
+		String own = string("replyChannelPrefix", null);
+		return own == null ? List.of(MessagingConstants.DEFAULT_REPLY_CHANNEL_PREFIX)
+				: List.of(MessagingConstants.DEFAULT_REPLY_CHANNEL_PREFIX, own);
 	}
 
 	/**
 	 * Returns whether a reply-to channel of a received request may be answered.
 	 *
 	 * @param channel the reply-to channel the request names
-	 * @return {@code true} if no prefixes are configured or the channel starts with one
+	 * @return {@code true} if the channel starts with an allowed prefix, or any is allowed
 	 */
 	public boolean replyToAllowed(String channel) {
 		for (String prefix : replyToAllowed) {
-			if (channel.startsWith(prefix)) {
+			if (ANY.equals(prefix) || channel.startsWith(prefix)) {
 				return true;
 			}
 		}
-		return replyToAllowed.isEmpty();
+		return false;
 	}
+
+	/** {@code replyToAllowed} value for any channel. */
+	static final String ANY = "*";
 
 	/** @return {@code none}, {@code binary} or {@code structured} */
 	public String cloudEventsMode() {

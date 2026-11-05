@@ -186,4 +186,12 @@ public final class MessagingConstants {
 	 */
 	public static final String HEADER_REPLY_COMPLETE = "replycomplete";
 
+	/**
+	 * The start of generated reply channels, followed by the client id and a random part. A
+	 * request naming another reply channel is not answered unless the answering instance allows
+	 * it in its configuration: otherwise a sender could direct responses to any channel the
+	 * instance may write to.
+	 */
+	public static final String DEFAULT_REPLY_CHANNEL_PREFIX = "osgi/messaging/reply/";
+
 }

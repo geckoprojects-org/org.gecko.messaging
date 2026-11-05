@@ -68,7 +68,28 @@ public class ReplyToWhiteboardTest extends AbstractMessagingTest {
 	}
 
 	private MessageContext request(String channel, String id) {
-		return builder().channel(channel).correlationId(id).replyTo(tck.channel("wb", id, "reply")).buildContext();
+		// a reply channel an instance answers by default (MSG: replyToAllowed)
+		return builder().channel(channel).correlationId(id)
+				.replyTo(DEFAULT_REPLY_CHANNEL_PREFIX + tck.channel("wb", id, "reply")).buildContext();
+	}
+
+	@Test
+	void requestNamingAForeignReplyChannelIsNotAnswered() throws Exception {
+		String channel = tck.channel("wb", "foreign");
+		String foreign = tck.channel("wb", "foreign", "victim");
+		List<String> handled = Collections.synchronizedList(new ArrayList<>());
+		register(ReplyToSingleSubscriptionHandler.class, (request, response) -> {
+			handled.add(Tck.text(request));
+			return response.content(Tck.bytes("answer")).buildMessage();
+		}, handlerProperties(channel));
+		awaitBound(channel);
+		List<Message> atVictim = collect(foreign);
+		publisher.publish(builder().content(Tck.bytes("redirect")).buildMessage(),
+				builder().channel(channel).correlationId("f-1").replyTo(foreign).buildContext()).getValue();
+		tck.await("request refused", () -> awaitBound(channel).refusedRequests == 1);
+		tck.settle();
+		assertThat(handled).as("not handled at all").isEmpty();
+		assertThat(atVictim).as("no response to a channel the sender chose").isEmpty();
 	}
 
 	@Test
