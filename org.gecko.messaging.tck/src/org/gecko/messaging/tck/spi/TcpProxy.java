@@ -11,7 +11,7 @@
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
-package org.gecko.messaging.mqtt.tck;
+package org.gecko.messaging.tck.spi;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -24,27 +24,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.gecko.messaging.tck.spi.BrokerControl;
 import org.osgi.framework.BundleContext;
-import org.osgi.service.component.annotations.Activate;
-import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.Deactivate;
 
 /**
- * Broker control of the MQTT TCK run: a TCP proxy between the instances under test and the
- * broker. The instances connect to the proxy, so the TCK can drop their connections or make the
- * broker unreachable without touching the broker itself.
+ * A {@link BrokerControl} for TCK runs against a real broker: a TCP proxy between the instances
+ * under test and the broker. The instances connect to the proxy, so the TCK can drop their
+ * connections or make the broker unreachable without touching the broker itself.
  * <p>
- * Framework properties: {@code org.gecko.messaging.mqtt.tck.listen} — port of the proxy, default
- * 11884; {@code org.gecko.messaging.mqtt.tck.broker} — {@code host:port} of the broker, default
- * {@code localhost:11883} (docker/brokers.sh).
- * <p>
- * Immediate, so the proxy listens before the first test asks for the broker control.
+ * A run project registers a subclass as immediate component (so the proxy listens before the
+ * first test asks for the broker control), calls {@link #start} on activation and {@link #stop}
+ * on deactivation. The framework properties {@code org.gecko.messaging.tck.proxy.listen} (port)
+ * and {@code org.gecko.messaging.tck.proxy.broker} ({@code host:port}) override the defaults the
+ * run project passes.
  */
-@Component(immediate = true)
-public class ProxyBrokerControl implements BrokerControl {
+public abstract class TcpProxy implements BrokerControl {
 
-	private static final Logger LOG = Logger.getLogger(ProxyBrokerControl.class.getName());
+	private static final Logger LOG = Logger.getLogger(TcpProxy.class.getName());
+	private static final String PREFIX = "org.gecko.messaging.tck.proxy.";
 
 	private final Set<Socket> sockets = ConcurrentHashMap.newKeySet();
 	private int listenPort;
@@ -52,25 +48,29 @@ public class ProxyBrokerControl implements BrokerControl {
 	private int brokerPort;
 	private ServerSocket server;
 
-	@Activate
-	void activate(BundleContext context) throws IOException {
-		listenPort = Integer.parseInt(property(context, "listen", "11884"));
-		String broker = property(context, "broker", "localhost:11883");
+	/**
+	 * Starts listening.
+	 *
+	 * @param context the bundle context, for the framework properties
+	 * @param defaultListenPort the port of the proxy
+	 * @param defaultBroker {@code host:port} of the broker
+	 * @throws IOException if the port cannot be bound
+	 */
+	protected void start(BundleContext context, int defaultListenPort, String defaultBroker) throws IOException {
+		String listen = context.getProperty(PREFIX + "listen");
+		listenPort = listen == null ? defaultListenPort : Integer.parseInt(listen);
+		String broker = context.getProperty(PREFIX + "broker");
+		broker = broker == null ? defaultBroker : broker;
 		int colon = broker.lastIndexOf(':');
 		brokerHost = broker.substring(0, colon);
 		brokerPort = Integer.parseInt(broker.substring(colon + 1));
 		open();
 	}
 
-	@Deactivate
-	synchronized void deactivate() {
+	/** Stops listening and drops every connection. */
+	protected synchronized void stop() {
 		closeServer();
 		dropConnections();
-	}
-
-	private static String property(BundleContext context, String key, String fallback) {
-		String value = context.getProperty("org.gecko.messaging.mqtt.tck." + key);
-		return value == null ? fallback : value;
 	}
 
 	@Override
@@ -102,7 +102,7 @@ public class ProxyBrokerControl implements BrokerControl {
 		s.setReuseAddress(true);
 		s.bind(new InetSocketAddress("localhost", listenPort));
 		server = s;
-		Thread.ofVirtual().name("mqtt-tck-proxy-accept").start(() -> accept(s));
+		Thread.ofVirtual().name("tck-proxy-accept").start(() -> accept(s));
 	}
 
 	private synchronized void closeServer() {
@@ -130,8 +130,8 @@ public class ProxyBrokerControl implements BrokerControl {
 			}
 			sockets.add(client);
 			sockets.add(broker);
-			Thread.ofVirtual().name("mqtt-tck-proxy-up").start(() -> pump(client, broker));
-			Thread.ofVirtual().name("mqtt-tck-proxy-down").start(() -> pump(broker, client));
+			Thread.ofVirtual().name("tck-proxy-up").start(() -> pump(client, broker));
+			Thread.ofVirtual().name("tck-proxy-down").start(() -> pump(broker, client));
 		}
 	}
 
