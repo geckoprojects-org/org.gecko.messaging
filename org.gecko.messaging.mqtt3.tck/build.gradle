@@ -3,6 +3,8 @@
 ['tck', 'tck-cloudevents'].each { name ->
     def resolve = tasks.named("resolve.${name}") {
         outputBndrun = layout.buildDirectory.file("${name}.bndrun")
+        // resolves against the manifests of snapshot bundles, which Gradle does not see as inputs
+        outputs.upToDateWhen { false }
     }
     tasks.named("testrun.${name}") {
         bndrun = resolve.flatMap { it.outputBndrun }
