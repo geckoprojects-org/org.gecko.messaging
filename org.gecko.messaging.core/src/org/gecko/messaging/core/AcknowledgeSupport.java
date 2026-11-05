@@ -69,12 +69,26 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 
 	@Override
 	public boolean reject() {
+		return reject(requeue);
+	}
+
+	/**
+	 * Rejects without re-queue, whatever the subscription asks: a message the decision failed on
+	 * would come back and fail again at once.
+	 *
+	 * @return {@code true} if this call decided
+	 */
+	boolean rejectFailed() {
+		return reject(false);
+	}
+
+	private boolean reject(boolean requeueIt) {
 		if (!state.compareAndSet(AcknowledgeType.RECEIVED, AcknowledgeType.REJECTED)) {
 			return false;
 		}
 		try {
 			if (acknowledger != null) {
-				acknowledger.reject(requeue);
+				acknowledger.reject(requeueIt);
 			}
 		} finally {
 			decided(postReject);

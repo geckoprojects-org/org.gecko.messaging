@@ -24,6 +24,7 @@ import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -34,6 +35,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -108,6 +110,9 @@ public abstract class AbstractMessagingInstance {
 	 * What the structured CloudEvents envelope carries for any protocol: content type, headers as
 	 * extensions, correlation and reply-to, and with them reply-to as a whole.
 	 */
+	/** Shortest wait between connect attempts, ms: a zero delay must not make a busy loop. */
+	static final long MIN_RECONNECT_DELAY = 10;
+
 	static final List<String> STRUCTURED_ENVELOPE_FEATURES = List.of(FEATURE_CONTENT_TYPE, FEATURE_HEADERS,
 			FEATURE_REPLY_TO, FEATURE_REPLY_TO_MANY, FEATURE_REPLY_TO_SUBSCRIPTION, FEATURE_GENERATE_CORRELATION_ID,
 			FEATURE_GENERATE_REPLY_CHANNEL);
@@ -130,6 +135,8 @@ public abstract class AbstractMessagingInstance {
 	private boolean everConnected;
 	private boolean stopped;
 	private int attempt;
+	/** When the current connection was made, {@link System#nanoTime()}; under stateLock. */
+	private long connectedAt;
 	private long reconnects;
 	private ScheduledFuture<?> pendingConnect;
 
@@ -249,6 +256,21 @@ public abstract class AbstractMessagingInstance {
 		throw new FeatureNotSupportedException(FEATURE_CLOUD_EVENTS, protocol + " has no CloudEvents binary mode");
 	}
 
+	/** Schemes that carry credentials in clear text. */
+	private static final Set<String> PLAINTEXT_SCHEMES = Set.of("tcp", "mqtt", "ws", "amqp");
+
+	/** Credentials over a plaintext scheme are allowed, but said once. */
+	private void warnPlaintextCredentials() {
+		String uri = config.uri();
+		int colon = uri == null ? -1 : uri.indexOf("://");
+		boolean credentials = config.username() != null || config.password() != null
+				|| (colon > 0 && config.displayUri().length() < uri.length());
+		if (credentials && colon > 0 && PLAINTEXT_SCHEMES.contains(uri.substring(0, colon).toLowerCase(Locale.ROOT))) {
+			LOG.warning(() -> "Messaging instance " + config.name() + " sends credentials unencrypted to "
+					+ config.displayUri() + "; use a TLS scheme");
+		}
+	}
+
 	/**
 	 * Refuses a configuration with the CloudEvents binary mode on a protocol without headers,
 	 * before the instance announces {@code cloudEvents}: otherwise every message would fail.
@@ -338,6 +360,7 @@ public abstract class AbstractMessagingInstance {
 	 */
 	public void start(BundleContext context) {
 		checkCloudEventsBinding();
+		warnPlaintextCredentials();
 		this.bundleContext = context;
 		Dictionary<String, Object> props = serviceProperties();
 		MessagePublisher publisher = new Publisher();
@@ -397,6 +420,7 @@ public abstract class AbstractMessagingInstance {
 	 */
 	public void startStandalone() {
 		checkCloudEventsBinding();
+		warnPlaintextCredentials();
 		synchronized (stateLock) {
 			pendingConnect = scheduler.schedule(this::connectAttempt, 0, TimeUnit.MILLISECONDS);
 		}
@@ -453,15 +477,26 @@ public abstract class AbstractMessagingInstance {
 		}
 	}
 
+	/** Configuration keys that name credentials and stay out of the service properties. */
+	static boolean isSecret(String key) {
+		String k = key.toLowerCase(Locale.ROOT).replace("-", "").replace("_", "").replace(".", "");
+		return k.contains("password") || k.contains("secret") || k.contains("token") || k.contains("credential")
+				|| k.contains("apikey") || k.contains("privatekey");
+	}
+
 	private Dictionary<String, Object> serviceProperties() {
 		Hashtable<String, Object> props = new Hashtable<>();
 		for (Map.Entry<String, Object> e : config.raw().entrySet()) {
 			String k = e.getKey();
 			if (k.startsWith(".") || k.startsWith("component.") || k.startsWith("service.") || k.equals("objectClass")
-					|| k.toLowerCase().contains("password") || e.getValue() == null) {
+					|| isSecret(k) || e.getValue() == null) {
 				continue;
 			}
 			props.put(k, e.getValue());
+		}
+		// every bundle sees the service properties, and the runtime DTO shows them
+		if (config.uri() != null) {
+			props.put("uri", config.displayUri());
 		}
 		props.put(MESSAGING_NAME_PROPERTY, config.name());
 		props.put(MESSAGING_PROVIDER_PROPERTY, PROVIDER);
@@ -525,7 +560,7 @@ public abstract class AbstractMessagingInstance {
 				safeDisconnect();
 				return;
 			}
-			attempt = 0;
+			connectedAt = System.nanoTime();
 			reconnect = everConnected;
 			everConnected = true;
 			if (reconnect) {
@@ -566,7 +601,10 @@ public abstract class AbstractMessagingInstance {
 			if (stopped || pendingConnect != null) {
 				return;
 			}
-			long delay = Math.min(config.reconnectMaxDelay(), config.reconnectDelay() * (1L << Math.min(attempt, 20)));
+			long max = Math.max(MIN_RECONNECT_DELAY, config.reconnectMaxDelay());
+			long backoff = Math.min(max, Math.max(MIN_RECONNECT_DELAY, config.reconnectDelay()) * (1L << Math.min(attempt, 20)));
+			// between half and all of the backoff: a fleet does not reconnect in lockstep after a broker restart
+			long delay = backoff / 2 + ThreadLocalRandom.current().nextLong(backoff / 2 + 1);
 			attempt++;
 			pendingConnect = scheduler.schedule(this::connectAttempt, delay, TimeUnit.MILLISECONDS);
 		}
@@ -589,7 +627,11 @@ public abstract class AbstractMessagingInstance {
 		}
 		fire(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED, false, false, cause);
 		synchronized (stateLock) {
-			attempt = 0;
+			// the backoff starts over only after a connection that held; one that drops at once
+			// (a client id taken over, a broker refusing after the handshake) keeps backing off
+			if (System.nanoTime() - connectedAt >= TimeUnit.MILLISECONDS.toNanos(config.reconnectMaxDelay())) {
+				attempt = 0;
+			}
 		}
 		scheduleReconnect(cause);
 	}
@@ -890,8 +932,8 @@ public abstract class AbstractMessagingInstance {
 					ack.acknowledge();
 				}
 			} catch (RuntimeException e) {
-				LOG.log(Level.WARNING, "Acknowledgement decision failed on " + h + ", rejecting", e);
-				ack.reject();
+				LOG.log(Level.WARNING, "Acknowledgement decision failed on " + h + ", rejecting without re-queue", e);
+				ack.rejectFailed();
 				return;
 			}
 		}

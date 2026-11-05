@@ -29,6 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 
 import org.gecko.messaging.api.FeatureNotSupportedException;
@@ -257,6 +258,25 @@ class InMemoryInstanceTest {
 		assertThat(acked).hasSize(2);
 		assertThat(((AcknowledgeMessageContext) received.get(0).getContext()).getAcknowledgeState())
 				.isEqualTo(AcknowledgeType.ACKNOWLEDGED);
+	}
+
+	@Test
+	void aFailingDecisionRejectsWithoutRequeue() throws Exception {
+		InMemoryInstance i = start();
+		AtomicInteger calls = new AtomicInteger();
+		MessageContext ctx = i.newBuilder().channel("poison").extensionEntry(EXTENSION_CHANNEL_TYPE, CHANNEL_TYPE_QUEUE)
+				.adapt(AcknowledgeMessageContextBuilder.class).requeueOnReject(true).acknowledgeFilter(m -> {
+					calls.incrementAndGet();
+					throw new IllegalStateException("cannot decide");
+				}).messageContextBuilder().buildContext();
+		i.subscribe(ctx).forEach(m -> {
+		});
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		i.publish(i.newBuilder().channel("poison").extensionEntry(EXTENSION_CHANNEL_TYPE, CHANNEL_TYPE_QUEUE)
+				.content(ByteBuffer.wrap("x".getBytes(UTF_8))).buildMessage(), null).getValue();
+		await(() -> calls.get() >= 1);
+		Thread.sleep(300);
+		assertThat(calls.get()).as("not re-queued into a loop").isEqualTo(1);
 	}
 
 	@Test

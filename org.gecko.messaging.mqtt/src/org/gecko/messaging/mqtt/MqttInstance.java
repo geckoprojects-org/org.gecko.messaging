@@ -70,6 +70,7 @@ import org.osgi.util.promise.Promise;
  * {@code ws://}, {@code wss://}), {@code cleanStart} (default {@code true}),
  * {@code sessionExpiryInterval} (s, default 0), {@code keepAliveInterval} (s, default 30),
  * {@code receiveMaximum} (default 100), {@code qos} (default publish and subscribe QoS, default 1),
+ * {@code maxMessageSize} (bytes, default 1 MiB, packets received and messages sent),
  * {@code sharedGroup} (group of point-to-point subscriptions, default the instance name).
  */
 public final class MqttInstance extends AbstractMessagingInstance {
@@ -92,6 +93,8 @@ public final class MqttInstance extends AbstractMessagingInstance {
 
 	private final int defaultQos;
 	private final String sharedGroup;
+	/** Largest packet received and message sent, in bytes. */
+	private final long maxMessageSize;
 	private volatile MqttAsyncClient client;
 	/** Broker subscriptions by topic filter, with the local subscriptions they feed. */
 	private final Map<String, Set<SubscriptionHandle>> filters = new ConcurrentHashMap<>();
@@ -110,6 +113,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		}
 		this.defaultQos = (int) config.number("qos", QOS_AT_LEAST_ONCE);
 		this.sharedGroup = config.string("sharedGroup", config.name());
+		this.maxMessageSize = Math.min(Integer.MAX_VALUE, config.number("maxMessageSize", 1 << 20));
 	}
 
 	@Override
@@ -124,6 +128,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		options.setKeepAliveInterval((int) config.number("keepAliveInterval", 30));
 		options.setConnectionTimeout((int) Math.max(1, (timeoutMillis + 999) / 1000));
 		options.setReceiveMaximum((int) config.number("receiveMaximum", 100));
+		options.setMaximumPacketSize(maxMessageSize);
 		if (config.username() != null) {
 			options.setUserName(config.username());
 		}
@@ -160,6 +165,11 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		} catch (MqttException | RuntimeException e) {
 			LOG.log(Level.FINE, "MQTT close failed", e);
 		}
+	}
+
+	@Override
+	protected long maxMessageSize() {
+		return maxMessageSize;
 	}
 
 	@Override

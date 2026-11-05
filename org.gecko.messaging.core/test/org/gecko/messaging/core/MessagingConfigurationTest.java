@@ -42,4 +42,22 @@ class MessagingConfigurationTest {
 		assertThat(config(Map.of("osgi.messaging.name", "x", "replyToAllowed", "reply/")).replyToAllowed("other")).isFalse();
 	}
 
+	@Test
+	void displayUriHidesTheWholeUserInfo() {
+		assertThat(config(Map.of("osgi.messaging.name", "x", "uri", "mqtt://u:p@ss@host:1883")).displayUri())
+				.as("an @ in the password").isEqualTo("mqtt://host:1883");
+		assertThat(config(Map.of("osgi.messaging.name", "x", "uri", "ws://host/a@b")).displayUri())
+				.as("an @ in the path").isEqualTo("ws://host/a@b");
+		assertThat(config(Map.of("osgi.messaging.name", "x", "uri", "amqp://u:p@host/vh")).displayUri()).isEqualTo("amqp://host/vh");
+	}
+
+	@Test
+	void credentialKeysAreSecret() {
+		for (String k : new String[] { "password", ".password", "apiKey", "api-key", "accessToken", "client_secret", "credentials" }) {
+			assertThat(AbstractMessagingInstance.isSecret(k)).as(k).isTrue();
+		}
+		assertThat(AbstractMessagingInstance.isSecret("uri")).isFalse();
+		assertThat(AbstractMessagingInstance.isSecret("keepAliveInterval")).isFalse();
+	}
+
 }

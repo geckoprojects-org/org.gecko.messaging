@@ -304,9 +304,22 @@ public final class MessagingConfiguration {
 			return null;
 		}
 		int scheme = u.indexOf("://");
-		int at = u.indexOf('@');
-		if (scheme > 0 && at > scheme) {
-			return u.substring(0, scheme + 3) + u.substring(at + 1);
+		if (scheme <= 0) {
+			return u;
+		}
+		// the user info ends at the last '@' of the authority: a password may contain '@', a path too
+		int start = scheme + 3;
+		int end = u.length();
+		for (int i = start; i < u.length(); i++) {
+			char c = u.charAt(i);
+			if (c == '/' || c == '?' || c == '#') {
+				end = i;
+				break;
+			}
+		}
+		int at = u.lastIndexOf('@', end - 1);
+		if (at >= start) {
+			return u.substring(0, start) + u.substring(at + 1);
 		}
 		return u;
 	}
