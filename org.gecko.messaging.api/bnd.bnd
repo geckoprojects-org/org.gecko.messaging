@@ -1,0 +1,14 @@
+Bundle-Name: Gecko Messaging API
+Bundle-Description: Protocol-neutral messaging API after the OSGi messaging RFC 0246: publish, \
+	subscribe, reply-to, acknowledgement, runtime introspection, connection events and optional \
+	CloudEvents. API only; the specification draft is in spec/, its TCK in org.gecko.messaging.tck.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.dto;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest

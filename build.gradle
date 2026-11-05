@@ -1,5 +1,5 @@
 plugins {
-  id "org.sonarqube" version "4.0.0.2929"
+  id "org.sonarqube" version "6.2.0.5505"
   id 'jacoco'
   id 'java'
 }
@@ -13,32 +13,87 @@ subprojects {
 
     //  Apply plugin: 'jacoco' to all submodules JUnit tests are generated as generated/jacoco/test.exec
     apply plugin: 'jacoco'
+    apply plugin: 'java'
     // We need to define a repository, otherwise Jacoco dependencies cannot be resolved
     repositories {
         mavenCentral()
     }
-    // Allow gradle to enable JUnit support in submodules
-    test {
-        useJUnitPlatform()
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs << '-parameters'
     }
-    
+
+    // Allow gradle to enable JUnit support in submodules
+    // Exclude @Tag("perf") (slow) and @Tag("broker") (needs an external broker) tests from
+    // normal builds — run via the perfTest / brokerTest tasks.
+    test {
+        useJUnitPlatform {
+            excludeTags 'perf', 'broker'
+        }
+    }
+
+    // Dedicated task for slow tests (@Tag("perf"), kept out of the fast build).
+    // Run explicitly: ./gradlew perfTest
+    tasks.register('perfTest', Test) {
+        useJUnitPlatform {
+            includeTags 'perf'
+        }
+    }
+
+    // Plain-JUnit tests against a real broker (@Tag("broker")) — RabbitMQ or Mosquitto from
+    // docker/compose.yaml. Run explicitly: ./gradlew brokerTest
+    tasks.register('brokerTest', Test) {
+        useJUnitPlatform {
+            includeTags 'broker'
+        }
+    }
+
+    // Add JUnit dependencies for modules that have Gradle tests
+    dependencies {
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.14.2'
+        testImplementation 'org.junit.platform:junit-platform-launcher:1.14.2'
+        testImplementation 'org.mockito:mockito-junit-jupiter:5.21.0'
+        testImplementation 'org.assertj:assertj-core:3.27.7'
+    }
+
+    // Coverage floor: a catastrophic-regression tripwire (e.g. a bundle's tests deleted) wired
+    // into `check`. Conservative baseline of 30% instructions on the bundles that carry
+    // plain-JUnit tests. Ratchet upward as coverage is deliberately raised.
+    def coverageFloorBundles = [
+        'org.gecko.messaging.core',
+        'org.gecko.messaging.cloudevents',
+    ]
+    afterEvaluate {
+        if (project.name in coverageFloorBundles) {
+            tasks.named('jacocoTestCoverageVerification') {
+                violationRules {
+                    rule {
+                        limit {
+                            counter = 'INSTRUCTION'
+                            value = 'COVEREDRATIO'
+                            minimum = 0.30
+                        }
+                    }
+                }
+            }
+            tasks.named('check').configure { dependsOn 'jacocoTestCoverageVerification' }
+        }
+    }
+
 }
 
-// Sonar setup
+// Sonar setup — values come from gradle.properties (github_org, github_repository)
 sonarqube {
   properties {
-    property "sonar.projectName", "org.gecko.messaging"
-    property "sonar.projectKey", "geckoprojects-org_org.gecko.messaging"
-    property "sonar.organization", "geckoprojects-org"
+    property "sonar.projectName", github_repository
+    property "sonar.projectKey", github_org + "-" + github_repository
+    property "sonar.organization", github_org
     property "sonar.host.url", "https://sonarcloud.io"
-    property "sonar.coverage.jacoco.xmlReportPaths", "${rootDir}/build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml"
-    property "sonar.exclusions", "org.eclipse.paho.mqttv5.client/**/*.java, org.gecko.*.tests/**/*.java"
-    //property "sonar.exclusions", "org.gecko.project/**/*.java, org.gecko.other.project/**/*.java"
+    property "sonar.coverage.jacoco.xmlReportPaths", rootDir.toString() + "/build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml"
   }
 }
 
-task codeCoverageReport(type: JacocoReport) {
-    dependsOn(test)
+def codeCoverageReport = tasks.register('codeCoverageReport', JacocoReport) {
+    dependsOn(subprojects.collect { it.tasks.named('test') })
     // Gather execution data from all subprojects for JUnit generated/jacoco/test.exec for OSGi Tests generated/tmp/testOSGi/generated/jacoco.exec
     // Latter are generated via agent in the test.bndrun
     executionData fileTree(project.rootDir.absolutePath).include("**/**/*.exec")
@@ -48,15 +103,14 @@ task codeCoverageReport(type: JacocoReport) {
         sourceSets it.sourceSets.main
     }
 
-    // Generate xml reposrt for tools like sonar and html for humans
+    // Generate xml reports for tools like sonar and html for humans
     reports {
-        xml.enabled true
-        html.enabled true
-        csv.enabled false
+        xml.required = true
+        html.required = true
+        csv.required = false
     }
 }
 
 tasks.named("sonar") {
     dependsOn(codeCoverageReport)
 }
-

@@ -1,77 +1,20 @@
-# Initial Setup
+# Workspace setup
 
-## Basics
+This workspace follows the **fennec-gradle** template fragment (as org.gecko.weather), on
+Gradle 9 and bnd 7.4.0.
 
-The Maven group-id is defaulted to **org.gecko.messaging** in *cnf/build.bnd* using the bnd **-groupid** instruction.
+## Project coordinates (one place)
 
-## Github - Create Project
-- Create a empty [GitHub repository](https://github.com/organizations/geckoprojects-org/repositories/new)
-  - Name: `org.gecko.messaging`
-  - DO NOT!!! use any DEFAULTS like README or license
-  
-## Sonarcloud
-  - Add Project
-  - do the [Sonar Configuration](https://sonarcloud.io/organizations/geckoprojects-org/projects)
-  - press `+`_(upper right)_
-  - Analyze new project
-  - check `org.gecko.messaging` and `SetUp`
-  - Select `with a GitHub Action`
-  - Copy the `SONAR_TOKEN` to notepad
-  - NOT!!!! follow the description .about `github/workflows/build.yml`. _this still [exists](../blob/main/.github/workflows/sonar.yml) in this template._
-  - GitHub -> Project-Settings -> Secrets -> [New Repository Secrets](Link: https://github.com/geckoprojects-org/org.gecko.messaging/settings/secrets/actions/new)
-    - add `SONAR_TOKEN`
+All project-specific values live in **`gradle.properties`** at the workspace root: `github_org`,
+`github_repository`, `maven_group_id`. Gradle reads them natively; bnd imports the same file via
+`-include: ${workspace}/gradle.properties` in `cnf/ext/fennec.bnd`.
 
-## Gradle init
+`base-version` (2.0.0) is set in `cnf/ext/fennec.bnd`. The Java packages of the API carry their own
+semantic versions in `package-info.java`.
 
-On Linux - make *gradlew* executable:
-```
-chmod +x gradlew
-./gradlew --version
-```
+## Libraries
 
-## Git init and push
-- execute this in your local folder
-
-```
-git init
-git add .
-git commit -m "initial commit"
-git branch -M main
-git remote add origin git@github.com:geckoprojects-org/org.gecko.messaging.git
-git push -u origin main
-git checkout -b snapshot
-git push --set-upstream origin snapshot
-git checkout -b "initial"
-```
-
-## GitHub Branch-Protection
-- Project -> Settings  -> Branches [add rule](https://github.com/geckoprojects-org/org.gecko.messaging/settings/branch_protection_rules/new)
-  - Branch name pattern: `[ms][an][ia][np]*` *(ugly but works, protects 'main*' and 'snap*' by charachter )*
-  - Require pull request reviews before merging
-    - 1 reviewer
-    - Dismiss stale pull request approvals when new commits are pushed
-    - Require status checks to pass before merging
-      - Require branches to be up to date before merging
-    - Require linear history
-    - Include administrators
-    - NOT!!! Allow force pushes
-    - NOT!!! Allow deletion
-
-## Jenkins
-- wait up to 15 minutes for the auto-import
-- [Jenkins Mainpage](https://devel.data-in-motion.biz/jenkins/)
-- [Jenkins GitHub-Group](https://devel.data-in-motion.biz/jenkins/job/GH/) should show `org.gecko.messaging`
-- [Jenkins org.gecko.messaging branches](https://devel.data-in-motion.biz/jenkins/job/GH/job/org.gecko.messaging/)
-
-## License check
-
-To execute the license check in you local build folder just run:
-
-`docker run -it --rm -v $(pwd):/github/workspace ghcr.io/apache/skywalking-eyes/license-eye header check`
-
-It will give you the check result
-
-The license check also runs as GitHub action for branches **main** and **snapshot**. 
-
-To exclude or include files, use the `.licenserc.yaml` file in the build folder. To customize the build action use the *.github/workflows/license.yml*
-
+`cnf/ext/fennec.bnd` enables `-library: fennec, fennecTest, fennecJacoco`, resolved from Maven
+Central via `cnf/ext/central.mvn`. The Paho MQTT 5 client is the build of geckoprojects-org/paho,
+`org.geckoprojects.paho:org.eclipse.paho.mqttv5.client:1.3.0-SNAPSHOT` from the Sonatype snapshot
+repository.

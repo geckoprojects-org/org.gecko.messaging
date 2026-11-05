@@ -1,0 +1,70 @@
+biz.aQute.bnd:biz.aQute.bnd.annotation:${bndversion}
+biz.aQute:biz.aQute.gogo.commands.provider:1.9.0
+
+# --- OSGi API ---
+org.osgi:osgi.annotation:8.1.0
+org.osgi:org.osgi.annotation.versioning:1.1.2
+org.osgi:org.osgi.annotation.bundle:2.0.0
+org.osgi:org.osgi.dto:1.1.1
+org.osgi:org.osgi.framework:1.10.0
+org.osgi:org.osgi.resource:1.0.1
+org.osgi:org.osgi.namespace.implementation:1.0.0
+org.osgi:org.osgi.namespace.service:1.0.0
+org.osgi:org.osgi.service.cm:1.6.1
+org.osgi:org.osgi.service.component:1.5.1
+org.osgi:org.osgi.service.component.annotations:1.5.1
+org.osgi:org.osgi.service.metatype.annotations:1.4.1
+org.osgi:org.osgi.service.condition:1.0.0
+org.osgi:org.osgi.util.function:1.2.0
+org.osgi:org.osgi.util.promise:1.3.0
+org.osgi:org.osgi.util.pushstream:1.1.0
+org.osgi:org.osgi.util.converter:1.0.9
+org.osgi:org.osgi.util.tracker:1.5.4
+
+# --- OSGi runtime ---
+org.apache.felix:org.apache.felix.framework:7.0.5
+org.apache.felix:org.apache.felix.scr:2.2.12
+org.apache.felix:org.apache.felix.configadmin:1.9.26
+org.apache.felix:org.apache.felix.configurator:1.0.18
+org.apache.felix:org.apache.felix.cm.json:2.0.6
+org.apache.felix:org.apache.felix.gogo.runtime:1.1.6
+org.apache.felix:org.apache.felix.gogo.jline:1.1.8
+org.apache.felix:org.apache.felix.gogo.shell:1.1.4
+org.apache.felix:org.apache.felix.gogo.command:1.1.2
+org.apache.aries.spifly:org.apache.aries.spifly.dynamic.framework.extension:1.3.7
+org.slf4j:slf4j-api:2.0.17
+org.slf4j:slf4j-simple:2.0.17
+
+# --- JSON (structured CloudEvents) ---
+jakarta.json:jakarta.json-api:2.1.3
+org.eclipse.parsson:parsson:1.1.7
+
+# --- AMQP 0-9-1: RabbitMQ Java client ---
+com.rabbitmq:amqp-client:5.37.0
+
+# --- MQTT 5: Paho, the build of geckoprojects-org/paho (Sonatype snapshots) ---
+org.geckoprojects.paho:org.eclipse.paho.mqttv5.client:1.3.0-SNAPSHOT
+
+# --- WebSocket: Jetty 12 (client, and the server of the embedded hub) ---
+org.eclipse.jetty:jetty-util:12.1.14
+org.eclipse.jetty:jetty-io:12.1.14
+org.eclipse.jetty:jetty-http:12.1.14
+org.eclipse.jetty:jetty-client:12.1.14
+org.eclipse.jetty:jetty-alpn-client:12.1.14
+org.eclipse.jetty:jetty-server:12.1.14
+org.eclipse.jetty.compression:jetty-compression-common:12.1.14
+org.eclipse.jetty.compression:jetty-compression-gzip:12.1.14
+org.eclipse.jetty.websocket:jetty-websocket-core-common:12.1.14
+org.eclipse.jetty.websocket:jetty-websocket-core-client:12.1.14
+org.eclipse.jetty.websocket:jetty-websocket-core-server:12.1.14
+org.eclipse.jetty.websocket:jetty-websocket-jetty-api:12.1.14
+org.eclipse.jetty.websocket:jetty-websocket-jetty-common:12.1.14
+org.eclipse.jetty.websocket:jetty-websocket-jetty-client:12.1.14
+org.eclipse.jetty.websocket:jetty-websocket-jetty-server:12.1.14
+
+# --- Fennec bnd libraries ---
+org.eclipse.fennec.bnd:org.eclipse.fennec.bnd.library:0.0.9
+org.eclipse.fennec.bnd:org.eclipse.fennec.jacoco.bnd.library:0.0.9
+org.eclipse.fennec.bnd:org.eclipse.fennec.osgitest.bnd.library:0.0.9
+
+org.bndtools:org.bndtools.templates.osgi:${bndversion}

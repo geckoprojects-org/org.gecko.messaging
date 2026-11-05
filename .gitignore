@@ -1,11 +1,8 @@
-Archive
 .DS_Store
 /.gradle/
-/build/
-/cnf/cache/
-/generated/
 generated/
+/.metadata/
+build/
 bin/
 bin_test/
-/org.gecko.amqp.client
-/org.gecko.amqp.client.config
+/cnf/cache

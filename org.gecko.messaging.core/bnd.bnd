@@ -1,0 +1,18 @@
+Bundle-Name: Gecko Messaging Core
+Bundle-Description: The protocol-neutral part of the Gecko messaging implementations: message, \
+	context and builder, feature checks, the messaging instance with its reconnect cycle and \
+	subscription state, acknowledgement, reply-to, the reply-to whiteboard, connection events, the \
+	runtime DTOs and the CloudEvents content modes. The protocol bundles build on it.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
+	org.osgi.framework;version=latest,\
+	org.osgi.dto;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	org.osgi.util.tracker;version=latest
+
+-testpath: \
+	assertj-core;version=latest
