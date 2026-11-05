@@ -106,13 +106,13 @@ public abstract class AbstractMessagingInstance {
 
 	private static final Logger LOG = Logger.getLogger(AbstractMessagingInstance.class.getName());
 
+	/** Shortest wait between connect attempts, ms: a zero delay must not make a busy loop. */
+	static final long MIN_RECONNECT_DELAY = 10;
+
 	/**
 	 * What the structured CloudEvents envelope carries for any protocol: content type, headers as
 	 * extensions, correlation and reply-to, and with them reply-to as a whole.
 	 */
-	/** Shortest wait between connect attempts, ms: a zero delay must not make a busy loop. */
-	static final long MIN_RECONNECT_DELAY = 10;
-
 	static final List<String> STRUCTURED_ENVELOPE_FEATURES = List.of(FEATURE_CONTENT_TYPE, FEATURE_HEADERS,
 			FEATURE_REPLY_TO, FEATURE_REPLY_TO_MANY, FEATURE_REPLY_TO_SUBSCRIPTION, FEATURE_GENERATE_CORRELATION_ID,
 			FEATURE_GENERATE_REPLY_CHANNEL);
@@ -337,8 +337,8 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	/**
-	 * Prepares the builder of a response: channel and correlation id of the request. Protocols
-	 * add their addressing, for example AMQP sends responses to a queue.
+	 * Prepares the builder of a response: channel and correlation id of the request. A protocol
+	 * may add its own addressing; all bindings here answer on the reply channel as it is.
 	 *
 	 * @param builder the response builder
 	 * @param request the request context
@@ -555,12 +555,14 @@ public abstract class AbstractMessagingInstance {
 			return;
 		}
 		boolean reconnect;
+		ConnectionState previous;
 		synchronized (stateLock) {
 			if (stopped) {
 				safeDisconnect();
 				return;
 			}
 			connectedAt = System.nanoTime();
+			previous = state;
 			reconnect = everConnected;
 			everConnected = true;
 			if (reconnect) {
@@ -585,7 +587,8 @@ public abstract class AbstractMessagingInstance {
 				closeSubscription(h, e);
 			}
 		}
-		fire(ConnectionState.CONNECTING, ConnectionState.CONNECTED, reconnect, sessionPresent, null);
+		// CONNECTING on the first connect, DISCONNECTED on a reconnect
+		fire(previous, ConnectionState.CONNECTED, reconnect, sessionPresent, null);
 	}
 
 	private void safeDisconnect() {
@@ -905,7 +908,8 @@ public abstract class AbstractMessagingInstance {
 		AcknowledgeSupport ack = null;
 		if (acknowledger != null || sub.getPostAcknowledge() != null || sub.getPostReject() != null || h.needsAcknowledger()) {
 			AcknowledgeSupport[] self = new AcknowledgeSupport[1];
-			ack = new AcknowledgeSupport(acknowledger, sub.isRequeueOnReject(), sub.getPostAcknowledge(), sub.getPostReject(),
+			// on a topic a message published again would reach every subscriber, not just this one
+			ack = new AcknowledgeSupport(acknowledger, sub.isRequeueOnReject() && h.isQueue(), sub.getPostAcknowledge(), sub.getPostReject(),
 					() -> h.openAcknowledgements.remove(self[0]));
 			self[0] = ack;
 			message = message.withContext(((SimpleMessageContext) message.getContext()).withAcknowledgeHandler(ack));

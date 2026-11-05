@@ -13,6 +13,7 @@
  */
 package org.gecko.messaging.core;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -39,7 +40,9 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * <li>{@code replyTimeout} — ms a reply-to publisher waits, default 30000</li>
  * <li>{@code replyChannelPrefix} — prefix of generated reply channels</li>
  * <li>{@code replyToAllowed} — prefixes a reply-to channel of a received request must start with
- * to be answered, {@code *} for any channel; default the start of generated reply channels
+ * to be answered (a String array, or one String with comma-separated prefixes; a prefix is
+ * matched as given, end it with the separator to match a channel subtree), {@code *} for any
+ * channel; default the start of generated reply channels
  * ({@code osgi/messaging/reply/}) and the configured {@code replyChannelPrefix}. A request names
  * its reply channel itself: without the check a sender could direct responses to any channel
  * the instance may write to.</li>
@@ -47,7 +50,7 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * <li>{@code workerThreads} — threads delivering messages, default 4</li>
  * <li>{@code bufferSize} — buffer per subscription, default 1024</li>
  * <li>{@code queuePolicy} — when a buffer is full: {@code BLOCK}, {@code DISCARD_OLDEST},
- * {@code FAIL}; default per protocol</li>
+ * {@code FAIL}; default {@code BLOCK}, which holds back the protocol thread (back-pressure)</li>
  * <li>{@code context.channel}, {@code context.channelExtension}, {@code context.contentType},
  * {@code context.contentEncoding}, {@code context.extension.<key>} — the context used for
  * {@code subscribe(null)} and {@code publish(message, (MessageContext) null)}</li>
@@ -206,7 +209,8 @@ public final class MessagingConfiguration {
 	private List<String> readReplyToAllowed() {
 		Object v = raw.get("replyToAllowed");
 		if (v instanceof String s) {
-			return List.of(s);
+			// one String from a configuration file may list several prefixes
+			return Arrays.stream(s.split(",")).map(String::trim).filter(p -> !p.isEmpty()).toList();
 		}
 		if (v instanceof String[] a) {
 			return List.of(a);
@@ -215,9 +219,11 @@ public final class MessagingConfiguration {
 			return c.stream().map(String::valueOf).toList();
 		}
 		// secure by default: generated reply channels only
+		// a generated channel is the prefix, '/', the rest: allowing the prefix plus '/' keeps
+		// 'app/replies' from also allowing 'app/replies-admin'
 		String own = string("replyChannelPrefix", null);
 		return own == null ? List.of(MessagingConstants.DEFAULT_REPLY_CHANNEL_PREFIX)
-				: List.of(MessagingConstants.DEFAULT_REPLY_CHANNEL_PREFIX, own);
+				: List.of(MessagingConstants.DEFAULT_REPLY_CHANNEL_PREFIX, own.endsWith("/") ? own : own + "/");
 	}
 
 	/**

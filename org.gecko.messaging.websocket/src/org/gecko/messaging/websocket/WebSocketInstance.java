@@ -95,6 +95,8 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	/** Channels with a session but no subscription, least recently published to first; under sessions. */
 	private final Map<String, Boolean> publishOnly = new LinkedHashMap<>(16, 0.75f, true);
 	private final int maxPublishSessions;
+	/** Largest message sent or received, in bytes. */
+	private final long maxMessageSize;
 	private ScheduledFuture<?> pings;
 
 	/**
@@ -111,6 +113,7 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 		this.base = URI.create(u.endsWith("/") ? u.substring(0, u.length() - 1) : u);
 		this.keepAliveMillis = TimeUnit.SECONDS.toMillis(config.number("keepAliveInterval", 30));
 		this.maxPublishSessions = (int) Math.max(1, config.number("maxPublishSessions", 16));
+		this.maxMessageSize = config.number("maxMessageSize", 1 << 20);
 	}
 
 	// ------------------------------------------------------------------ connection
@@ -123,12 +126,17 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 			http.setExecutor(threads);
 			WebSocketClient c = new WebSocketClient(http);
 			c.setIdleTimeout(Duration.ofMillis(3 * keepAliveMillis));
-			c.setMaxBinaryMessageSize(config.number("maxMessageSize", 1 << 20));
-			c.setMaxTextMessageSize(config.number("maxMessageSize", 1 << 20));
+			c.setMaxBinaryMessageSize(maxMessageSize);
+			c.setMaxTextMessageSize(maxMessageSize);
 			c.start();
 			client = c;
 		}
 		return client;
+	}
+
+	@Override
+	protected long maxMessageSize() {
+		return maxMessageSize;
 	}
 
 	@Override

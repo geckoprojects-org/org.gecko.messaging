@@ -13,6 +13,9 @@
  */
 package org.gecko.messaging.core;
 
+import static org.gecko.messaging.api.MessagingConstants.CHANNEL_TYPE_QUEUE;
+import static org.gecko.messaging.api.MessagingConstants.EXTENSION_CHANNEL_TYPE;
+
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -72,6 +75,11 @@ public final class SubscriptionHandle {
 	/** @return a unique id */
 	public long id() {
 		return id;
+	}
+
+	/** @return whether the subscription is on a point-to-point channel */
+	public boolean isQueue() {
+		return CHANNEL_TYPE_QUEUE.equals(context.getExtensions().get(EXTENSION_CHANNEL_TYPE));
 	}
 
 	/** @return the channel to subscribe to */
@@ -135,7 +143,8 @@ public final class SubscriptionHandle {
 	public void deliver(SimpleMessageContext messageContext, byte[] payload, Acknowledger acknowledger) {
 		if (closed) {
 			if (acknowledger != null) {
-				acknowledger.reject(true);
+				// a queue message goes to another receiver; a topic message every receiver has anyway
+				acknowledger.reject(isQueue());
 			}
 			return;
 		}

@@ -70,7 +70,8 @@ import org.osgi.util.promise.Promise;
  * {@code keepAliveInterval} (s, default 30), {@code maxInflight} (default 100), {@code qos}
  * (default publish and subscribe QoS, default 1), {@code maxMessageSize} (bytes, default 1 MiB,
  * packets received and messages sent), {@code sharedGroup} (group of point-to-point
- * subscriptions, default the instance name).
+ * subscriptions, default {@value #DEFAULT_SHARED_GROUP}: every instance on a queue competes for
+ * its messages, whatever its name).
  */
 public final class Mqtt3Instance extends AbstractMessagingInstance {
 
@@ -88,6 +89,12 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 			(int) MqttException.REASON_CODE_NOT_AUTHORIZED);
 
 	private final int defaultQos;
+	/**
+	 * Shared subscription group of a queue. One group for all instances: a queue is one set of
+	 * competing receivers, and MQTT keeps the groups of different topic filters apart.
+	 */
+	static final String DEFAULT_SHARED_GROUP = "messaging";
+
 	private final String sharedGroup;
 	/** Largest packet received and message sent, in bytes. */
 	private final long maxMessageSize;
@@ -126,7 +133,7 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 			throw new MessagingException("An MQTT instance needs a 'uri'");
 		}
 		this.defaultQos = (int) config.number("qos", QOS_AT_LEAST_ONCE);
-		this.sharedGroup = config.string("sharedGroup", config.name());
+		this.sharedGroup = config.string("sharedGroup", DEFAULT_SHARED_GROUP);
 		this.maxMessageSize = Math.min(Integer.MAX_VALUE, config.number("maxMessageSize", 1 << 20));
 	}
 

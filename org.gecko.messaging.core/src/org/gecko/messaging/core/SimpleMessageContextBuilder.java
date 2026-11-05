@@ -240,7 +240,8 @@ public class SimpleMessageContextBuilder
 		if (type == CloudEventMessageContextBuilder.class) {
 			return supports(MessagingConstants.FEATURE_CLOUD_EVENTS);
 		}
-		return type.isInstance(this) && type != Object.class && !type.getName().startsWith("org.gecko.messaging.api.");
+		// only the API's adaptations: implementation types are not part of the contract
+		return false;
 	}
 
 	private boolean supports(String feature) {
@@ -250,8 +251,10 @@ public class SimpleMessageContextBuilder
 	@Override
 	public <A> A adapt(Class<A> type) {
 		if (!isAdaptable(type)) {
-			throw new FeatureNotSupportedException(String.valueOf(type == null ? null : type.getName()),
-					"This builder cannot be adapted to " + type);
+			String feature = type == AcknowledgeMessageContextBuilder.class ? MessagingConstants.FEATURE_ACKNOWLEDGE
+					: type == CloudEventMessageContextBuilder.class ? MessagingConstants.FEATURE_CLOUD_EVENTS
+					: String.valueOf(type == null ? null : type.getName());
+			throw new FeatureNotSupportedException(feature, "This builder cannot be adapted to " + type);
 		}
 		return type.cast(this);
 	}

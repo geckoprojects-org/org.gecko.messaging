@@ -30,6 +30,7 @@ import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
 import org.gecko.messaging.api.runtime.ConnectionState;
+import org.gecko.messaging.core.cloudevents.CloudEventCodec;
 import org.osgi.util.promise.Deferred;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.pushstream.PushEvent;
@@ -87,7 +88,12 @@ final class ReplyToSupport implements ReplyToPublisher {
 				@Override
 				public boolean response(Message message) {
 					if (settled.compareAndSet(false, true)) {
-						deferred.resolve(message);
+						MessagingException failure = responderFailure(message);
+						if (failure != null) {
+							deferred.fail(failure);
+						} else {
+							deferred.resolve(message);
+						}
 					}
 					return true;
 				}
@@ -144,6 +150,11 @@ final class ReplyToSupport implements ReplyToPublisher {
 					}
 					reschedule();
 					try {
+						MessagingException failure = responderFailure(message);
+						if (failure != null) {
+							end(PushEvent.error(failure));
+							return true;
+						}
 						if (Boolean.TRUE.equals(Features.bool(message.getContext().getHeaders().get(HEADER_REPLY_COMPLETE)))) {
 							end(PushEvent.close());
 							return true;
@@ -340,6 +351,13 @@ final class ReplyToSupport implements ReplyToPublisher {
 			}
 		}
 
+	}
+
+	/** @return the failure a response with {@code replyerror} reports, {@code null} for others */
+	static MessagingException responderFailure(Message response) {
+		Object reason = response.getContext().getHeaders().get(HEADER_REPLY_ERROR);
+		// the reason is remote input: short and on one line in the message
+		return reason == null ? null : new MessagingException("The responder failed: " + CloudEventCodec.printable(reason));
 	}
 
 	void close() {

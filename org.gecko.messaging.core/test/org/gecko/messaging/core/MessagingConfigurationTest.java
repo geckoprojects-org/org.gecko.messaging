@@ -70,4 +70,24 @@ class MessagingConfigurationTest {
 		assertThat(AbstractMessagingInstance.isSecret("keepAliveInterval")).isFalse();
 	}
 
+	@Test
+	void prefixesFromOneStringAndTheOwnPrefixAsSubtree() {
+		MessagingConfiguration list = config(Map.of("osgi.messaging.name", "x", "replyToAllowed", " a/ , b/ "));
+		assertThat(list.replyToAllowed("a/1")).isTrue();
+		assertThat(list.replyToAllowed("b/1")).isTrue();
+		assertThat(list.replyToAllowed("c/1")).isFalse();
+		MessagingConfiguration own = config(Map.of("osgi.messaging.name", "x", "replyChannelPrefix", "app/replies"));
+		assertThat(own.replyToAllowed("app/replies/1")).isTrue();
+		assertThat(own.replyToAllowed("app/replies-admin/1")).as("not a sibling of the prefix").isFalse();
+	}
+
+	@Test
+	void wildcardSegmentsAreRecognized() {
+		assertThat(Features.hasWildcard("a/+/b")).isTrue();
+		assertThat(Features.hasWildcard("a.*.b")).isTrue();
+		assertThat(Features.hasWildcard("a/#")).isTrue();
+		assertThat(Features.hasWildcard("a/b+c/#d")).as("only whole segments").isFalse();
+		assertThat(Features.hasWildcard("a/b")).isFalse();
+	}
+
 }

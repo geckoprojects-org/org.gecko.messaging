@@ -13,6 +13,7 @@
  */
 package org.gecko.messaging.amqp;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.io.IOException;
@@ -50,7 +51,6 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
-import com.rabbitmq.client.LongString;
 import com.rabbitmq.client.ShutdownSignalException;
 
 /**
@@ -76,7 +76,8 @@ import com.rabbitmq.client.ShutdownSignalException;
  * Configuration, besides the common keys: {@code uri} ({@code amqp://}, {@code amqps://}, with
  * user, password and virtual host), {@code exchange} (exchange of topics, default
  * {@code amq.topic}), {@code heartbeat} (s, default 30), {@code prefetch} (unacknowledged messages
- * per subscription, default 100), {@code qos} (default publish and subscribe QoS, default 1).
+ * per subscription, default 100), {@code maxMessageSize} (bytes, default 1 MiB, bodies sent and
+ * received), {@code qos} (default publish and subscribe QoS, default 1).
  */
 public final class AmqpInstance extends AbstractMessagingInstance {
 
@@ -95,6 +96,8 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 	private final int defaultQos;
 	private final String topicExchange;
 	private final int prefetch;
+	/** Largest message body sent or received, in bytes. */
+	private final int maxMessageSize;
 	private volatile Connection connection;
 	/** The channel of publishing and declaring; reopened when an error closed it. */
 	private Channel publishChannel;
@@ -120,6 +123,7 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		}
 		this.topicExchange = config.string("exchange", "amq.topic");
 		this.prefetch = (int) config.number("prefetch", 100);
+		this.maxMessageSize = (int) Math.min(Integer.MAX_VALUE, config.number("maxMessageSize", 1 << 20));
 	}
 
 	@Override
@@ -137,6 +141,8 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		factory.setConnectionTimeout((int) timeoutMillis);
 		factory.setHandshakeTimeout((int) timeoutMillis);
 		factory.setRequestedHeartbeat((int) config.number("heartbeat", 30));
+		// the client's own default is 64 MiB
+		factory.setMaxInboundMessageBodySize(maxMessageSize);
 		Connection c = factory.newConnection(config.clientId());
 		c.addShutdownListener(cause -> {
 			if (connection == c && !cause.isInitiatedByApplication()) {
@@ -217,6 +223,11 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		} catch (RuntimeException e) {
 			LOG.log(Level.FINE, "AMQP close failed", e);
 		}
+	}
+
+	@Override
+	protected long maxMessageSize() {
+		return maxMessageSize;
 	}
 
 	@Override
@@ -485,6 +496,21 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 
 	}
 
+	/**
+	 * A received header value as the context takes it: String, Number or Boolean. Other AMQP field
+	 * types (timestamps, tables, arrays, byte arrays) travel as text instead of failing the
+	 * delivery.
+	 */
+	static Object headerOf(Object v) {
+		if (v == null || v instanceof String || v instanceof Number || v instanceof Boolean) {
+			return v;
+		}
+		if (v instanceof byte[] bytes) {
+			return new String(bytes, UTF_8);
+		}
+		return String.valueOf(v);
+	}
+
 	private static SimpleMessageContext context(SubscriptionHandle handle, Envelope envelope, AMQP.BasicProperties p) {
 		MessageContextBuilder b = new SimpleMessageContextBuilder();
 		if (handle.channelExtension() != null) {
@@ -501,7 +527,7 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 			b.correlationId(p.getCorrelationId());
 			b.replyTo(p.getReplyTo());
 			if (p.getHeaders() != null) {
-				p.getHeaders().forEach((k, v) -> b.header(k, v instanceof LongString ls ? ls.toString() : v));
+				p.getHeaders().forEach((k, v) -> b.header(k, headerOf(v)));
 			}
 		}
 		b.extensionEntry(EXTENSION_QOS, handle.context().getExtensions().getOrDefault(EXTENSION_QOS, QOS_AT_LEAST_ONCE));

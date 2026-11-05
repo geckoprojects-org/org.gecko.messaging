@@ -30,6 +30,11 @@ import org.osgi.util.pushstream.PushStream;
  * channel a generated, temporary one if it supports
  * {@link MessagingConstants#FEATURE_GENERATE_REPLY_CHANNEL}. Otherwise both are required.
  * <p>
+ * A response with the header {@link MessagingConstants#HEADER_REPLY_ERROR} ends the exchange with
+ * a failure: the promise fails, the stream of responses ends with an error. The single-response
+ * methods report every failure through their promise; the streaming methods throw a
+ * {@link org.gecko.messaging.api.FeatureNotSupportedException} at once, as subscribing does.
+ * <p>
  * Registered by instances that support {@link MessagingConstants#FEATURE_REPLY_TO}.
  */
 @ProviderType

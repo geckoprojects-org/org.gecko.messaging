@@ -317,7 +317,7 @@ public final class CloudEventCodec {
 	 * Makes a received value fit for an exception message, which ends up in logs: at most 64
 	 * characters, control characters replaced, so a sender can neither flood nor forge log lines.
 	 */
-	static String printable(Object value) {
+	public static String printable(Object value) {
 		String v = String.valueOf(value);
 		StringBuilder b = new StringBuilder(Math.min(v.length(), 64) + 3);
 		for (int i = 0; i < v.length() && i < 64; i++) {

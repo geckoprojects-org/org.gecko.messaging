@@ -35,9 +35,11 @@ public class FeatureNotSupportedException extends MessagingException {
 	}
 
 	/**
-	 * Returns the feature that is not supported.
+	 * Returns the feature that is not supported: a {@code FEATURE_} name of
+	 * {@link MessagingConstants}, or — for a value no feature covers, such as an unknown channel
+	 * type — the extension key carrying it.
 	 *
-	 * @return the feature name
+	 * @return the feature name, or the extension key of an unknown value
 	 */
 	public String getFeature() {
 		return feature;

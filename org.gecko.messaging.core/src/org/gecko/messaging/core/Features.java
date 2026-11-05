@@ -112,11 +112,28 @@ public final class Features {
 	 */
 	public void checkSubscribe(MessageContext context) {
 		checkCommon(context);
+		if (!has(FEATURE_WILDCARD) && hasWildcard(context.getChannel())) {
+			// a protocol without wildcards would take the symbol literally and receive nothing
+			throw new FeatureNotSupportedException(FEATURE_WILDCARD, "Wildcards in channel names");
+		}
 		if (context instanceof AcknowledgeMessageContext ack && (ack.getAcknowledgeFilter() != null
 				|| ack.getAcknowledgeFunction() != null || ack.isManualAcknowledge() || ack.getPostAcknowledge() != null
 				|| ack.getPostReject() != null || ack.isRequeueOnReject())) {
 			require(FEATURE_ACKNOWLEDGE, "Acknowledgement");
 		}
+	}
+
+	/** Segment of a channel name that is a wildcard in one of the protocols: {@code + # *}. */
+	static boolean hasWildcard(String channel) {
+		if (channel == null) {
+			return false;
+		}
+		for (String segment : channel.split("[/.]", -1)) {
+			if (segment.equals("+") || segment.equals("#") || segment.equals("*")) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void checkCommon(MessageContext context) {

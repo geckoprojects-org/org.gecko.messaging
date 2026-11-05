@@ -21,11 +21,18 @@ import org.osgi.util.pushstream.PushStream;
  * <p>
  * The subscription is made when a terminal operation connects to the returned stream, and ends
  * when the stream is closed. If the instance is connected, the subscription is in place on the
- * broker when the terminal operation returns; messages published afterwards are received. A subscription survives connection losses: the implementation
- * restores it after a reconnect without the consumer doing anything. Connection changes are
+ * broker when the terminal operation returns; messages published afterwards are received. A
+ * subscription survives connection losses: the implementation restores it after a reconnect
+ * without the consumer doing anything. Connection changes are
  * reported to {@link org.gecko.messaging.api.runtime.ConnectionListener}s, not through the
  * stream — a gap in the stream is visible there. The stream fails only when the subscription
  * cannot be restored (for example the broker denied it) and is closed when the instance goes away.
+ * <p>
+ * Unlike publishing, which reports every failure through its promise, {@code subscribe} checks
+ * the context at once and throws: a {@link FeatureNotSupportedException} for a feature the
+ * instance does not announce (wildcards, queues, acknowledgement and so on), a
+ * {@link MessagingException} for a context without channel. What happens later on the broker
+ * fails the stream.
  */
 @ProviderType
 public interface MessageSubscription {
@@ -36,6 +43,8 @@ public interface MessageSubscription {
 	 * @param channel the channel, a topic or queue name; may contain wildcards if the instance
 	 *            supports {@link MessagingConstants#FEATURE_WILDCARD}
 	 * @return the stream of received messages
+	 * @throws FeatureNotSupportedException if the channel contains a wildcard and the instance
+	 *             does not support {@link MessagingConstants#FEATURE_WILDCARD}
 	 */
 	PushStream<Message> subscribe(String channel);
 
@@ -46,6 +55,8 @@ public interface MessageSubscription {
 	 * @param context the subscription context; {@code null} uses the context the instance is
 	 *            configured with
 	 * @return the stream of received messages
+	 * @throws FeatureNotSupportedException if the context asks for a feature the instance does
+	 *             not announce
 	 * @throws MessagingException if neither the context nor the configuration name a channel
 	 */
 	PushStream<Message> subscribe(MessageContext context);

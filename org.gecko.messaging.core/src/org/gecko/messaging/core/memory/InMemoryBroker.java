@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.gecko.messaging.api.MessagingConstants;
@@ -31,8 +32,12 @@ import org.gecko.messaging.core.SubscriptionHandle;
 
 /**
  * A broker in the JVM. Topics follow MQTT wildcard rules ({@code +}, {@code #}); queues deliver
- * each message to one subscriber, round robin, and re-queue rejected messages on request.
+ * each message to one subscriber, round robin, and re-queue a rejected message once on request.
  * Deliveries run on one thread per broker, like a network would decouple them.
+ * <p>
+ * As the reference of every feature: QoS 1 and 2 are met by an in-process delivery that does not
+ * lose messages; a time-to-live applies to the kept message, the retained one (others are
+ * delivered at once); durable channels last as long as the broker, there is nothing to persist.
  */
 public final class InMemoryBroker {
 
@@ -45,7 +50,17 @@ public final class InMemoryBroker {
 	private final ExecutorService delivery;
 	private volatile boolean available = true;
 
-	private record Envelope(SimpleMessageContext context, byte[] payload) {
+	/**
+	 * A published message.
+	 *
+	 * @param expires {@link System#nanoTime()} after which a kept (retained) message is gone,
+	 *            {@code Long.MAX_VALUE} without time-to-live
+	 */
+	private record Envelope(SimpleMessageContext context, byte[] payload, long expires) {
+
+		boolean expired() {
+			return expires != Long.MAX_VALUE && System.nanoTime() - expires > 0;
+		}
 	}
 
 	/** A client connection. */
@@ -65,6 +80,8 @@ public final class InMemoryBroker {
 			}
 			subscriptions.put(handle.id(), handle);
 			if (!isQueue(handle.context())) {
+				// an expired retained message is gone for every later subscriber
+				retained.values().removeIf(Envelope::expired);
 				for (Map.Entry<String, Envelope> e : retained.entrySet()) {
 					if (matches(handle.channel(), e.getKey())) {
 						delivery.execute(() -> deliver(handle, e.getValue(), 0));
@@ -81,7 +98,10 @@ public final class InMemoryBroker {
 			if (!open) {
 				throw new IllegalStateException("Connection closed");
 			}
-			Envelope e = new Envelope(context, payload);
+			Long ttl = Features.number(context.getExtensions().get(MessagingConstants.EXTENSION_TIME_TO_LIVE));
+			// messages are delivered at once; the time-to-live counts for what is kept, the retained message
+			long expires = ttl == null ? Long.MAX_VALUE : System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, ttl));
+			Envelope e = new Envelope(context, payload, expires);
 			if (!isQueue(context) && Boolean.TRUE.equals(Features.bool(context.getExtensions().get(MessagingConstants.EXTENSION_RETAIN)))) {
 				if (payload.length == 0) {
 					retained.remove(context.getChannel());

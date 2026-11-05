@@ -25,8 +25,9 @@ import org.osgi.util.promise.Promise;
  * a quality of service of at least once, or with publisher confirms, when the broker confirmed
  * it; otherwise when it was written to the connection. It fails with a {@link MessagingException}
  * if the message could not be sent, with a {@link FeatureNotSupportedException} if the context
- * asks for a feature the instance does not support, and while the instance is not connected —
- * unless the instance is configured to buffer messages for a reconnect.
+ * asks for a feature the instance does not support, and while the instance is not connected:
+ * messages are not buffered for a reconnect. Failures are reported through the promise, never
+ * thrown.
  */
 @ProviderType
 public interface MessagePublisher {

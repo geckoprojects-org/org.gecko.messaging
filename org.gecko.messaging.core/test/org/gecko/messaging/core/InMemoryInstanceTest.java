@@ -261,6 +261,21 @@ class InMemoryInstanceTest {
 	}
 
 	@Test
+	void anExpiredRetainedMessageReachesNoLateSubscriber() throws Exception {
+		InMemoryInstance i = start();
+		MessageContext shortLived = i.newBuilder().channel("kept/short").extensionEntry(EXTENSION_RETAIN, true)
+				.extensionEntry(EXTENSION_TIME_TO_LIVE, 50L).buildContext();
+		MessageContext lasting = i.newBuilder().channel("kept/long").extensionEntry(EXTENSION_RETAIN, true).buildContext();
+		i.publish(text(i, "kept/short", "gone"), shortLived).getValue();
+		i.publish(text(i, "kept/long", "here"), lasting).getValue();
+		Thread.sleep(150);
+		List<Message> late = collect(i.subscribe("kept/#"));
+		await(() -> late.size() >= 1);
+		Thread.sleep(200);
+		assertThat(late).extracting(InMemoryInstanceTest::text).containsExactly("here");
+	}
+
+	@Test
 	void aFailingDecisionRejectsWithoutRequeue() throws Exception {
 		InMemoryInstance i = start();
 		AtomicInteger calls = new AtomicInteger();

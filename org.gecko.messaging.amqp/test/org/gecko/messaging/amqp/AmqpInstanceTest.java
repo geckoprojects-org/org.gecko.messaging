@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.nio.ByteBuffer;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,6 +70,15 @@ class AmqpInstanceTest {
 	@Test
 	void aDefaultQosOfTwoIsAConfigurationError() {
 		assertThatThrownBy(() -> instance(Map.of("qos", 2L))).isInstanceOf(MessagingException.class);
+	}
+
+	@Test
+	void headerValuesOfOtherAmqpTypesTravelAsText() {
+		assertThat(AmqpInstance.headerOf("s")).isEqualTo("s");
+		assertThat(AmqpInstance.headerOf(42L)).isEqualTo(42L);
+		assertThat(AmqpInstance.headerOf("x".getBytes())).isEqualTo("x");
+		assertThat(AmqpInstance.headerOf(new Date(0))).isInstanceOf(String.class);
+		assertThat(AmqpInstance.headerOf(Map.of("k", "v"))).isInstanceOf(String.class);
 	}
 
 }

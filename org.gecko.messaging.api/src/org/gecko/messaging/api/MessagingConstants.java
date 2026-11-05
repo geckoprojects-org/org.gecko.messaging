@@ -187,6 +187,16 @@ public final class MessagingConstants {
 	public static final String HEADER_REPLY_COMPLETE = "replycomplete";
 
 	/**
+	 * Header of a response that ends a reply-to exchange with a failure, value a short reason. A
+	 * single response with it fails the promise of
+	 * {@link org.gecko.messaging.api.replyto.ReplyToPublisher#publishWithReply(Message)}; with
+	 * {@link #HEADER_REPLY_COMPLETE} it ends a stream of responses with an error. The reason is
+	 * meant for the requester: it carries no exception text or other detail of the responder.
+	 * The name is a valid CloudEvents extension name.
+	 */
+	public static final String HEADER_REPLY_ERROR = "replyerror";
+
+	/**
 	 * The start of generated reply channels, followed by the client id and a random part. A
 	 * request naming another reply channel is not answered unless the answering instance allows
 	 * it in its configuration: otherwise a sender could direct responses to any channel the

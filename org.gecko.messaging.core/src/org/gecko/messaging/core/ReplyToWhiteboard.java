@@ -16,6 +16,7 @@ package org.gecko.messaging.core;
 import static org.gecko.messaging.api.MessagingConstants.EXTENSION_CHANNEL_TYPE;
 import static org.gecko.messaging.api.MessagingConstants.FEATURE_REPLY_TO_MANY;
 import static org.gecko.messaging.api.MessagingConstants.HEADER_REPLY_COMPLETE;
+import static org.gecko.messaging.api.MessagingConstants.HEADER_REPLY_ERROR;
 import static org.gecko.messaging.api.MessagingConstants.MESSAGING_TARGET_PROPERTY;
 import static org.gecko.messaging.api.replyto.ReplyToSubscriptionConstants.*;
 
@@ -48,6 +49,9 @@ import org.osgi.util.tracker.ServiceTracker;
 final class ReplyToWhiteboard {
 
 	private static final Logger LOG = Logger.getLogger(ReplyToWhiteboard.class.getName());
+
+	/** The reason a failed handler gives the requester: nothing of the responder's internals. */
+	static final String RESPONDER_FAILED = "The responder failed";
 
 	private final AbstractMessagingInstance instance;
 	/** Most requests of one handler waiting for a worker; beyond, the receiving thread handles them. */
@@ -217,12 +221,28 @@ final class ReplyToWhiteboard {
 					responses.close();
 					return;
 				}
-				responses.forEach(m -> instance.publish(m, null)).onResolve(() -> {
+				responses.forEach(m -> instance.publish(m, null)).onSuccess(v -> {
 					MessageContextBuilder end = responseBuilder(request, reply).header(HEADER_REPLY_COMPLETE, Boolean.TRUE);
+					instance.publish(end.buildMessage(), null);
+				}).onFailure(t -> {
+					LOG.log(Level.WARNING, "The responses of reply-to handler " + b.reference + " failed", t);
+					MessageContextBuilder end = responseBuilder(request, reply).header(HEADER_REPLY_COMPLETE, Boolean.TRUE)
+							.header(HEADER_REPLY_ERROR, RESPONDER_FAILED);
 					instance.publish(end.buildMessage(), null);
 				});
 			} else {
-				Message response = ((ReplyToSingleSubscriptionHandler) b.handler).handleResponse(request, responseBuilder(request, reply));
+				Message response;
+				try {
+					response = ((ReplyToSingleSubscriptionHandler) b.handler).handleResponse(request, responseBuilder(request, reply));
+				} catch (RuntimeException e) {
+					LOG.log(Level.WARNING, "Reply-to handler " + b.reference + " failed", e);
+					if (reply != null) {
+						// the requester learns of the failure now, not when its timeout ends
+						instance.publish(responseBuilder(request, reply).header(HEADER_REPLY_ERROR, RESPONDER_FAILED).buildMessage(),
+								null);
+					}
+					return;
+				}
 				if (response != null && reply != null) {
 					instance.publish(response, null).onFailure(
 							t -> LOG.log(Level.WARNING, "Could not publish the response of " + b.reference, t));
