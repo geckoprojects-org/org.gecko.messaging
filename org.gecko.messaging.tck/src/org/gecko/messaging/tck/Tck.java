@@ -22,7 +22,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
@@ -57,7 +59,11 @@ public final class Tck {
 	public static final String PREFIX = "org.gecko.messaging.tck.";
 
 	/** Services that did not show up: later tests fail at once instead of waiting again. */
-	private static final java.util.Map<Class<?>, String> MISSING = new java.util.concurrent.ConcurrentHashMap<>();
+	private static final Map<Class<?>, String> MISSING = new ConcurrentHashMap<>();
+	/** Whether the instance under test was connected once in this run. */
+	private static volatile boolean everConnected;
+	/** Why the instance never connected: later tests fail at once instead of waiting again. */
+	private static volatile String neverConnected;
 
 	private final BundleContext context;
 	private final String filter;
@@ -218,8 +224,20 @@ public final class Tck {
 
 	/** Waits until the instance under test is connected. */
 	public void awaitConnected() {
+		if (neverConnected != null) {
+			throw new AssertionError(neverConnected);
+		}
 		MessageServiceRuntime runtime = service(MessageServiceRuntime.class);
-		await("instance connected", () -> runtime.getConnectionState() == ConnectionState.CONNECTED);
+		try {
+			await("instance connected", () -> runtime.getConnectionState() == ConnectionState.CONNECTED);
+			everConnected = true;
+		} catch (AssertionError e) {
+			if (!everConnected) {
+				// a test may leave the instance reconnecting, but one that never connected stays so
+				neverConnected = "The instance never connected: " + e.getMessage();
+			}
+			throw e;
+		}
 	}
 
 	/**
