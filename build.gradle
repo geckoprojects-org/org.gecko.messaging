@@ -127,3 +127,15 @@ tasks.register('brokerDown', Exec) {
     description = 'Stops the brokers of the TCK runs'
     commandLine "${rootDir}/docker/brokers.sh", 'down'
 }
+
+// Gradle orders tasks named on the command line only by their dependencies, so without this the
+// TCK runs could start before brokerUp (or after brokerDown). mustRunAfter only orders, it does
+// not pull the brokers into runs that do not ask for them.
+subprojects {
+    tasks.matching { it.name == 'testOSGi' || it.name.startsWith('testrun.') }.configureEach {
+        mustRunAfter rootProject.tasks.named('brokerUp')
+    }
+}
+tasks.named('brokerDown') {
+    mustRunAfter subprojects.collect { p -> p.tasks.matching { it.name == 'testOSGi' || it.name.startsWith('testrun.') } }
+}
