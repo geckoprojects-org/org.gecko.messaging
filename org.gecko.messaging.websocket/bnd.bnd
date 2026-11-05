@@ -30,7 +30,7 @@ Import-Package: \
 
 -testpath: \
 	assertj-core;version=latest,\
-	org.gecko.messaging.websocket.hub;version=snapshot,\
+	org.gecko.messaging.websocket.hub;version=snapshot;packages='*',\
 	org.eclipse.jetty.alpn.client;version=latest,\
 	org.eclipse.jetty.io;version=latest,\
 	org.eclipse.jetty.http;version=latest,\
