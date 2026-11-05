@@ -14,6 +14,7 @@
 package org.gecko.messaging.tck;
 
 import java.util.ArrayList;
+import java.util.Dictionary;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -127,7 +128,7 @@ public abstract class AbstractMessagingTest {
 	 * @param service the service
 	 * @param properties the properties
 	 */
-	protected <S> void register(Class<S> type, S service, java.util.Dictionary<String, ?> properties) {
+	protected <S> void register(Class<S> type, S service, Dictionary<String, ?> properties) {
 		registrations.add(bundleContext.registerService(type, service, properties));
 	}
 
