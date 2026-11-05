@@ -25,6 +25,7 @@ import org.gecko.messaging.api.MessagePublisher;
 import org.gecko.messaging.api.MessageSubscription;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
@@ -37,6 +38,8 @@ import org.osgi.util.pushstream.PushStream;
  * the services of a test afterwards.
  */
 @ExtendWith(BundleContextExtension.class)
+// an implementation that never completes a promise fails the test instead of hanging the run
+@Timeout(60)
 public abstract class AbstractMessagingTest {
 
 	@InjectBundleContext
