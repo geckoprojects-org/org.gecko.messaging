@@ -1,0 +1,9 @@
+# Gecko Messaging: the API to program against. The implementations (memory, mqtt, mqtt3, amqp,
+# websocket, websocket.hub) are runtime bundles, chosen in a bndrun.
+-buildpath.messaging: ${messaging.lib}
+
+messaging.lib: \
+	org.gecko.messaging.api;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	org.osgi.util.function;version=latest

@@ -1,0 +1,15 @@
+-resourceonly: true
+-includeresource: resources
+
+Provide-Capability: \
+	${messaging-libraries}
+
+messaging-libraries: \
+	bnd.library; \
+		bnd.library = enableMessaging; \
+		version     = 1.0.0; \
+		path        = messaging
+
+Bundle-Name: Gecko Messaging Project Library
+Bundle-Description: Bnd project library of Gecko Messaging: '-library: enableMessaging' puts the \
+	messaging API on the build path of a project.

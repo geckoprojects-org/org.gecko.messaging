@@ -1,0 +1,18 @@
+-resourceonly: true
+-include: ${.}/buildpath.bnd
+mavendeps: ${sjoin;\n; ${template;-maven-dependencies;${@}}}
+
+-includeresource: {resources}
+
+Provide-Capability: \
+	${messaging-workspace}
+
+messaging-workspace: \
+	bnd.library; \
+		bnd.library = geckoMessaging; \
+		path        = template
+
+Bundle-Name: Gecko Messaging Bnd Workspace Library
+Bundle-Description: Bnd workspace library of Gecko Messaging: '-library: geckoMessaging' in a \
+	workspace's cnf/build.bnd adds a repository with the messaging bundles and everything they need \
+	at runtime (Paho, RabbitMQ client with Netty, Jetty, OSGi promises and push streams).

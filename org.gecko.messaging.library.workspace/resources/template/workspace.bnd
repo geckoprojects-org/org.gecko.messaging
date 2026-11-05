@@ -1,0 +1,9 @@
+-plugin.geckoMessaging: \
+	aQute.bnd.repository.maven.provider.MavenBndRepository;\
+		snapshotUrl = https://central.sonatype.com/repository/maven-snapshots/; \
+		releaseUrl  = https://repo.maven.apache.org/maven2/; \
+		index       = "\${.}/geckoMessaging.maven"; \
+		readOnly    = true; \
+		name        = "Gecko Messaging Dependencies - ${Bundle-Version}"
+
+-require-bnd: "(version>=7.2.0)"

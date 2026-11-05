@@ -1,0 +1,10 @@
+-include: ${.}/required.bndrun
+
+# Everything the messaging bundles need at runtime, from the resolved required.bndrun; the
+# Maven coordinates of these entries make up the repository index of the library.
+-buildpath: ${-runbundles}
+-buildpath.extra: \
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.annotation.versioning;version=latest,\
+	org.osgi.annotation.bundle;version=latest,\
+	org.osgi.framework;version=latest
