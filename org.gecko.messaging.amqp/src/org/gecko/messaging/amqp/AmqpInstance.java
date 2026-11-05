@@ -31,11 +31,10 @@ import java.util.logging.Logger;
 
 import org.gecko.messaging.api.FeatureNotSupportedException;
 import org.gecko.messaging.api.MessageContext;
-import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.core.AbstractMessagingInstance;
 import org.gecko.messaging.core.Acknowledger;
-import org.gecko.messaging.core.Features;
+import org.gecko.messaging.core.Extensions;
 import org.gecko.messaging.core.MessagingConfiguration;
 import org.gecko.messaging.core.SimpleMessageContext;
 import org.gecko.messaging.core.SimpleMessageContextBuilder;
@@ -261,13 +260,13 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 	}
 
 	private int qos(MessageContext context) {
-		int q = Features.qos(context);
+		int q = Extensions.qos(context);
 		return q < 0 ? defaultQos : q;
 	}
 
 	@Override
 	protected void checkContext(MessageContext context, boolean publish) {
-		if (Features.qos(context) == QOS_EXACTLY_ONCE) {
+		if (Extensions.qos(context) == QOS_EXACTLY_ONCE) {
 			throw new FeatureNotSupportedException(FEATURE_QOS, "AMQP offers at most once and at least once, not exactly once");
 		}
 		if (isQueue(context) && context.getChannelExtension() != null) {
@@ -280,7 +279,7 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 	}
 
 	private static boolean flag(MessageContext context, String extension) {
-		return Boolean.TRUE.equals(Features.bool(context.getExtensions().get(extension)));
+		return Boolean.TRUE.equals(Extensions.bool(context.getExtensions().get(extension)));
 	}
 
 	/** Declares an exchange or queue if the context asks for it, once per connection. */
@@ -352,7 +351,7 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		b.correlationId(context.getCorrelationId());
 		b.replyTo(context.getReplyToChannel());
 		b.deliveryMode(flag(context, EXTENSION_DURABLE) ? 2 : 1);
-		Long ttl = Features.number(context.getExtensions().get(EXTENSION_TIME_TO_LIVE));
+		Long ttl = Extensions.number(context.getExtensions().get(EXTENSION_TIME_TO_LIVE));
 		if (ttl != null) {
 			b.expiration(Long.toString(Math.max(0, ttl)));
 		}
@@ -512,7 +511,7 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 	}
 
 	private static SimpleMessageContext context(SubscriptionHandle handle, Envelope envelope, AMQP.BasicProperties p) {
-		MessageContextBuilder b = new SimpleMessageContextBuilder();
+		SimpleMessageContextBuilder b = new SimpleMessageContextBuilder();
 		if (handle.channelExtension() != null) {
 			b.channel(handle.channel(), envelope.getRoutingKey());
 		} else if (isQueue(handle.context())) {
@@ -531,7 +530,7 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 			}
 		}
 		b.extensionEntry(EXTENSION_QOS, handle.context().getExtensions().getOrDefault(EXTENSION_QOS, QOS_AT_LEAST_ONCE));
-		return (SimpleMessageContext) b.buildContext();
+		return b.buildSimple();
 	}
 
 }

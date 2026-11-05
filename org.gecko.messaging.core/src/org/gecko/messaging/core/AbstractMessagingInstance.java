@@ -17,15 +17,11 @@ import static java.util.Objects.requireNonNull;
 import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.nio.ByteBuffer;
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Dictionary;
-import java.util.Hashtable;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -39,7 +35,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -47,13 +42,8 @@ import org.gecko.messaging.api.FeatureNotSupportedException;
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessageContextBuilder;
-import org.gecko.messaging.api.MessagePublisher;
-import org.gecko.messaging.api.MessageSubscription;
 import org.gecko.messaging.api.MessagingException;
-import org.gecko.messaging.api.acknowledge.AcknowledgeType;
-import org.gecko.messaging.api.cloudevents.CloudEvent;
 import org.gecko.messaging.api.cloudevents.CloudEventConstants;
-import org.gecko.messaging.api.cloudevents.CloudEventMessageContext;
 import org.gecko.messaging.api.dto.MessagingRuntimeDTO;
 import org.gecko.messaging.api.dto.ReplyToSubscriptionDTO;
 import org.gecko.messaging.api.dto.SubscriptionDTO;
@@ -61,17 +51,8 @@ import org.gecko.messaging.api.replyto.ReplyToPublisher;
 import org.gecko.messaging.api.runtime.ConnectionEvent;
 import org.gecko.messaging.api.runtime.ConnectionListener;
 import org.gecko.messaging.api.runtime.ConnectionState;
-import org.gecko.messaging.api.runtime.MessageServiceRuntime;
-import org.gecko.messaging.core.cloudevents.CloudEventCodec;
-import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.Filter;
-import org.osgi.framework.FrameworkUtil;
-import org.osgi.framework.InvalidSyntaxException;
-import org.osgi.framework.PrototypeServiceFactory;
 import org.osgi.framework.ServiceReference;
-import org.osgi.framework.ServiceRegistration;
-import org.osgi.framework.dto.ServiceReferenceDTO;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.promise.PromiseFactory;
 import org.osgi.util.pushstream.PushEvent;
@@ -81,7 +62,6 @@ import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.PushbackPolicyOption;
 import org.osgi.util.pushstream.QueuePolicyOption;
-import org.osgi.util.tracker.ServiceTracker;
 
 /**
  * The protocol-neutral part of a messaging instance: one connection, owned and reconnected by the
@@ -129,6 +109,9 @@ public abstract class AbstractMessagingInstance {
 	protected final PromiseFactory promises;
 	private final PushStreamProvider pushStreams = new PushStreamProvider();
 	private final MessageContext defaultContext;
+	/** How messages go on the wire, chosen in {@link #prepare()}. */
+	private volatile CloudEventBinding cloudEvents = CloudEventBinding.NONE;
+	private final CloudEventBinding.Wire wire = this::doPublish;
 
 	private final Object stateLock = new Object();
 	private volatile ConnectionState state = ConnectionState.CONNECTING;
@@ -144,12 +127,8 @@ public abstract class AbstractMessagingInstance {
 	private final List<ConnectionListener> listeners = new CopyOnWriteArrayList<>();
 
 	private final ReplyToSupport replyTo;
-	private ReplyToWhiteboard whiteboard;
-
-	private BundleContext bundleContext;
-	private final List<ServiceRegistration<?>> registrations = new ArrayList<>();
-	private ServiceRegistration<MessageServiceRuntime> runtimeRegistration;
-	private ServiceTracker<ConnectionListener, ConnectionListener> listenerTracker;
+	/** The services of the instance, {@code null} standalone. */
+	private volatile OsgiBinding osgi;
 
 	/**
 	 * Creates the instance.
@@ -236,6 +215,15 @@ public abstract class AbstractMessagingInstance {
 	protected abstract void doUnsubscribe(SubscriptionHandle handle);
 
 	/**
+	 * Releases what the protocol holds beyond a connection, such as a client shared by all
+	 * connections. Called once on {@link #stop()}, after the last {@link #doDisconnect()}. Must
+	 * not throw.
+	 */
+	protected void doClose() {
+		// nothing beyond the connection by default
+	}
+
+	/**
 	 * Returns whether a connect failure ends the reconnect cycle — only authentication and
 	 * authorisation failures should.
 	 *
@@ -272,18 +260,12 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	/**
-	 * Refuses a configuration with the CloudEvents binary mode on a protocol without headers,
-	 * before the instance announces {@code cloudEvents}: otherwise every message would fail.
+	 * Chooses the CloudEvents binding once, before the instance announces anything; refuses the
+	 * binary mode on a protocol without headers, otherwise every message would fail.
 	 */
-	private void checkCloudEventsBinding() {
-		if (CloudEventConstants.MODE_BINARY.equals(config.cloudEventsMode())) {
-			try {
-				cloudEventHeaderPrefix();
-			} catch (FeatureNotSupportedException e) {
-				throw new MessagingException("Messaging instance " + config.name() + ": " + e.getMessage()
-						+ ", use cloudEvents=structured", e);
-			}
-		}
+	private void prepare() {
+		cloudEvents = CloudEventBinding.of(config, this::cloudEventHeaderPrefix);
+		warnPlaintextCredentials();
 	}
 
 	/**
@@ -312,7 +294,7 @@ public abstract class AbstractMessagingInstance {
 
 	void checkProtocol(MessageContext context, boolean publish) {
 		if (createsChannelsImplicitly()
-				&& Boolean.FALSE.equals(Features.bool(context.getExtensions().get(EXTENSION_AUTO_CREATE)))) {
+				&& Boolean.FALSE.equals(Extensions.bool(context.getExtensions().get(EXTENSION_AUTO_CREATE)))) {
 			throw new FeatureNotSupportedException(FEATURE_AUTO_CREATE,
 					protocol + " creates channels on first use and cannot refuse to create one");
 		}
@@ -353,7 +335,7 @@ public abstract class AbstractMessagingInstance {
 	 * @return the context
 	 */
 	protected SimpleMessageContext replySubscriptionContext(String channel) {
-		return (SimpleMessageContext) new SimpleMessageContextBuilder().channel(channel).buildContext();
+		return new SimpleMessageContextBuilder().channel(channel).buildSimple();
 	}
 
 	/**
@@ -379,46 +361,10 @@ public abstract class AbstractMessagingInstance {
 	 * @param context the bundle context to register with
 	 */
 	public void start(BundleContext context) {
-		checkCloudEventsBinding();
-		warnPlaintextCredentials();
-		this.bundleContext = context;
-		Dictionary<String, Object> props = serviceProperties();
-		MessagePublisher publisher = new Publisher();
-		MessageSubscription subscription = new Subscription();
-		registrations.add(context.registerService(MessagePublisher.class, publisher, props));
-		registrations.add(context.registerService(MessageSubscription.class, subscription, props));
-		registrations.add(context.registerService(MessageContextBuilder.class.getName(), new BuilderFactory(), props));
-		if (features.has(FEATURE_REPLY_TO)) {
-			registrations.add(context.registerService(ReplyToPublisher.class, replyTo, props));
-		}
-		runtimeRegistration = context.registerService(MessageServiceRuntime.class, new Runtime(), props);
-		registrations.add(runtimeRegistration);
-		listenerTracker = new ServiceTracker<>(context, ConnectionListener.class, null) {
-			@Override
-			public ConnectionListener addingService(ServiceReference<ConnectionListener> reference) {
-				if (!targets(reference)) {
-					return null;
-				}
-				ConnectionListener l = super.addingService(reference);
-				if (l != null) {
-					listeners.add(l);
-					ConnectionEvent current = new ConnectionEvent(config.name(), null, state, false, false, System.currentTimeMillis(), null);
-					events.execute(() -> notifyListener(l, current));
-				}
-				return l;
-			}
-
-			@Override
-			public void removedService(ServiceReference<ConnectionListener> reference, ConnectionListener service) {
-				listeners.remove(service);
-				super.removedService(reference, service);
-			}
-		};
-		listenerTracker.open();
-		if (features.has(FEATURE_REPLY_TO_SUBSCRIPTION)) {
-			whiteboard = new ReplyToWhiteboard(this, context);
-			whiteboard.open();
-		}
+		prepare();
+		OsgiBinding binding = new OsgiBinding(this, context);
+		osgi = binding;
+		binding.open();
 		synchronized (stateLock) {
 			pendingConnect = scheduler.schedule(this::connectAttempt, 0, TimeUnit.MILLISECONDS);
 		}
@@ -436,11 +382,19 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	/**
+	 * Removes a listener.
+	 *
+	 * @param listener the listener
+	 */
+	public void removeConnectionListener(ConnectionListener listener) {
+		listeners.remove(listener);
+	}
+
+	/**
 	 * Starts connecting without registering services. For use outside a framework.
 	 */
 	public void startStandalone() {
-		checkCloudEventsBinding();
-		warnPlaintextCredentials();
+		prepare();
 		synchronized (stateLock) {
 			pendingConnect = scheduler.schedule(this::connectAttempt, 0, TimeUnit.MILLISECONDS);
 		}
@@ -450,7 +404,7 @@ public abstract class AbstractMessagingInstance {
 	 * Unregisters the services, ends all subscriptions, closes the connection and releases all
 	 * threads.
 	 */
-	public void stop() {
+	public final void stop() {
 		synchronized (stateLock) {
 			if (stopped) {
 				return;
@@ -460,18 +414,11 @@ public abstract class AbstractMessagingInstance {
 				pendingConnect.cancel(false);
 			}
 		}
-		if (whiteboard != null) {
-			whiteboard.close();
-		}
+		OsgiBinding binding = osgi;
 		setState(ConnectionState.CLOSED, false, false, null);
-		for (ServiceRegistration<?> r : registrations) {
-			try {
-				r.unregister();
-			} catch (IllegalStateException e) {
-				// already gone with the bundle
-			}
+		if (binding != null) {
+			binding.unregister();
 		}
-		registrations.clear();
 		replyTo.close();
 		for (SubscriptionHandle h : new ArrayList<>(subscriptions)) {
 			closeSubscription(h, null);
@@ -482,8 +429,13 @@ public abstract class AbstractMessagingInstance {
 			LOG.log(Level.FINE, "Disconnect failed", e);
 		}
 		state = ConnectionState.CLOSED;
-		if (listenerTracker != null) {
-			listenerTracker.close();
+		try {
+			doClose();
+		} catch (RuntimeException e) {
+			LOG.log(Level.FINE, "Closing the protocol failed", e);
+		}
+		if (binding != null) {
+			binding.closeListeners();
 		}
 		scheduler.shutdownNow();
 		workers.shutdown();
@@ -497,54 +449,18 @@ public abstract class AbstractMessagingInstance {
 		}
 	}
 
-	/** Configuration keys that name credentials and stay out of the service properties. */
-	static boolean isSecret(String key) {
-		String k = key.toLowerCase(Locale.ROOT).replace("-", "").replace("_", "").replace(".", "");
-		return k.contains("password") || k.contains("secret") || k.contains("token") || k.contains("credential")
-				|| k.contains("apikey") || k.contains("privatekey");
-	}
-
-	private Dictionary<String, Object> serviceProperties() {
-		Hashtable<String, Object> props = new Hashtable<>();
-		for (Map.Entry<String, Object> e : config.raw().entrySet()) {
-			String k = e.getKey();
-			if (k.startsWith(".") || k.startsWith("component.") || k.startsWith("service.") || k.equals("objectClass")
-					|| isSecret(k) || e.getValue() == null) {
-				continue;
-			}
-			props.put(k, e.getValue());
-		}
-		// every bundle sees the service properties, and the runtime DTO shows them
-		if (config.uri() != null) {
-			props.put("uri", config.displayUri());
-		}
-		props.put(MESSAGING_NAME_PROPERTY, config.name());
-		props.put(MESSAGING_PROVIDER_PROPERTY, PROVIDER);
-		props.put(MESSAGING_PROTOCOL_PROPERTY, new String[] { protocol });
-		props.put(MESSAGING_FEATURE_PROPERTY, features.asSet().toArray(new String[0]));
-		if (maxMessageSize() > 0) {
-			props.put(MESSAGING_MAX_MESSAGE_SIZE_PROPERTY, maxMessageSize());
-		}
-		return props;
-	}
-
+	/**
+	 * @param reference a service that may name a messaging target
+	 * @return {@code true} if it has no target or its target matches this instance
+	 */
 	boolean targets(ServiceReference<?> reference) {
-		Object target = reference.getProperty(MESSAGING_TARGET_PROPERTY);
-		if (target == null) {
-			return true;
-		}
-		return matches(target.toString());
+		OsgiBinding binding = osgi;
+		return binding == null || binding.targets(reference);
 	}
 
-	boolean matches(String target) {
-		try {
-			Filter filter = FrameworkUtil.createFilter(target);
-			ServiceRegistration<MessageServiceRuntime> r = runtimeRegistration;
-			return r != null && filter.match(r.getReference());
-		} catch (InvalidSyntaxException | IllegalStateException e) {
-			LOG.log(Level.WARNING, "Invalid messaging target " + target, e);
-			return false;
-		}
+	/** @return the protocol name */
+	String protocol() {
+		return protocol;
 	}
 
 	// ------------------------------------------------------------------ connection
@@ -756,11 +672,7 @@ public abstract class AbstractMessagingInstance {
 			if (state != ConnectionState.CONNECTED) {
 				throw new MessagingException("Messaging instance " + config.name() + " is not connected (" + state + ")");
 			}
-			SimpleMessageContext simple = SimpleMessageContextBuilder.toSimple(ctx);
-			if (config.cloudEvents()) {
-				return publishCloudEvent(simple, payload);
-			}
-			return doPublish(simple, payload);
+			return cloudEvents.publish(SimpleMessageContextBuilder.toSimple(ctx), payload, wire);
 		} catch (Exception e) {
 			return promises.failed(e);
 		}
@@ -774,33 +686,6 @@ public abstract class AbstractMessagingInstance {
 			return defaultContext;
 		}
 		return newBuilder().withContext(ctx).channel(defaultContext.getChannel(), defaultContext.getChannelExtension()).buildContext();
-	}
-
-	private Promise<Void> publishCloudEvent(SimpleMessageContext ctx, ByteBuffer payload) throws Exception {
-		CloudEvent ce;
-		if (ctx instanceof CloudEventMessageContext cem) {
-			ce = cem.getCloudEvent();
-		} else {
-			ce = new SimpleCloudEvent(UUID.randomUUID().toString(), config.string("cloudEvents.source", "/osgi/messaging/" + config.name()),
-					config.string("cloudEvents.type", "org.gecko.messaging.message"), null, null, OffsetDateTime.now(),
-					ctx.getHeaders());
-		}
-		if (CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
-			byte[] envelope = CloudEventCodec.toStructured(ce, ctx, payload);
-			SimpleMessageContextBuilder b = new SimpleMessageContextBuilder();
-			b.withContext(ctx);
-			b.contentType(CloudEventConstants.STRUCTURED_JSON_CONTENT_TYPE);
-			b.contentEncoding(null);
-			SimpleMessageContext wire = (SimpleMessageContext) b.buildContext();
-			return doPublish(wire, ByteBuffer.wrap(envelope));
-		}
-		Map<String, Object> headers = CloudEventCodec.toBinaryHeaders(ce, cloudEventHeaderPrefix());
-		SimpleMessageContextBuilder b = new SimpleMessageContextBuilder();
-		MessageContext plain = new SimpleMessageContextBuilder().channel(ctx.getChannel(), ctx.getChannelExtension())
-				.contentType(ctx.getContentType()).contentEncoding(ctx.getContentEncoding()).correlationId(ctx.getCorrelationId())
-				.replyTo(ctx.getReplyToChannel()).extensions(ctx.getExtensions()).headers(headers).buildContext();
-		b.withContext(plain);
-		return doPublish((SimpleMessageContext) b.buildContext(), payload);
 	}
 
 	// ------------------------------------------------------------------ subscribe
@@ -914,7 +799,7 @@ public abstract class AbstractMessagingInstance {
 	void deliver(SubscriptionHandle h, SimpleMessageContext messageContext, byte[] payload, Acknowledger acknowledger) {
 		SimpleMessage message;
 		try {
-			message = decode(messageContext, payload);
+			message = cloudEvents.decode(messageContext, payload);
 		} catch (RuntimeException | StackOverflowError e) {
 			// remote input: no stack trace per message at WARNING, it would flood the log
 			LOG.warning(() -> "Dropping an undecodable message on " + h + ": " + e.getClass().getSimpleName());
@@ -934,42 +819,9 @@ public abstract class AbstractMessagingInstance {
 			}
 			return;
 		}
-		SimpleMessageContext sub = h.context();
-		AcknowledgeSupport ack = null;
-		if (acknowledger != null || sub.getPostAcknowledge() != null || sub.getPostReject() != null || h.needsAcknowledger()) {
-			AcknowledgeSupport[] self = new AcknowledgeSupport[1];
-			// on a topic a message published again would reach every subscriber, not just this one
-			ack = new AcknowledgeSupport(acknowledger, sub.isRequeueOnReject() && h.isQueue(), sub.getPostAcknowledge(), sub.getPostReject(),
-					() -> h.openAcknowledgements.remove(self[0]));
-			self[0] = ack;
-			message = message.withContext(((SimpleMessageContext) message.getContext()).withAcknowledgeHandler(ack));
-			ack.setMessage(message);
-		}
-		if (ack != null) {
-			try {
-				if (sub.getAcknowledgeFunction() != null) {
-					sub.getAcknowledgeFunction().accept(message);
-					ack.acknowledge(); // undecided counts as accepted
-					if (ack.getAcknowledgeState() != AcknowledgeType.ACKNOWLEDGED) {
-						return;
-					}
-				} else if (sub.getAcknowledgeFilter() != null) {
-					if (sub.getAcknowledgeFilter().test(message)) {
-						ack.acknowledge();
-					} else {
-						ack.reject();
-						return;
-					}
-				} else if (sub.isManualAcknowledge()) {
-					h.openAcknowledgements.add(ack);
-				} else {
-					ack.acknowledge();
-				}
-			} catch (RuntimeException e) {
-				LOG.log(Level.WARNING, "Acknowledgement decision failed on " + h + ", rejecting without re-queue", e);
-				ack.rejectFailed();
-				return;
-			}
+		message = AcknowledgeSupport.decide(h, message, acknowledger);
+		if (message == null) {
+			return;
 		}
 		try {
 			long r;
@@ -984,70 +836,6 @@ public abstract class AbstractMessagingInstance {
 		}
 	}
 
-	/**
-	 * Decodes a received message.
-	 *
-	 * @return the message, or {@code null} if it is no CloudEvent and the instance takes
-	 *         CloudEvents only
-	 * @throws RuntimeException if the message announces a CloudEvent it is not
-	 */
-	private SimpleMessage decode(SimpleMessageContext ctx, byte[] payload) {
-		if (!config.cloudEvents()) {
-			return SimpleMessage.ofOwned(payload, ctx);
-		}
-		// secure by default: CloudEvents only; plain messages on request, unchanged — nothing is
-		// made up for them
-		SimpleMessage plain = config.cloudEventsAcceptPlain() ? SimpleMessage.ofOwned(payload, ctx) : null;
-		if (CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
-			String ct = ctx.getContentType();
-			CloudEventCodec.Structured s;
-			if (ct != null) {
-				if (!ct.toLowerCase().startsWith(CloudEventConstants.STRUCTURED_JSON_CONTENT_TYPE)) {
-					return plain;
-				}
-				// announced as envelope: one that is not is an error, not a plain message
-				s = CloudEventCodec.fromStructured(payload);
-			} else {
-				// no content type (MQTT 3.1.1, WebSocket): an envelope is what parses as one
-				if (!looksLikeJsonObject(payload)) {
-					return plain;
-				}
-				try {
-					s = CloudEventCodec.fromStructured(payload);
-				} catch (MessagingException e) {
-					return plain;
-				}
-			}
-			MessageContextBuilder b = new SimpleMessageContextBuilder().withContext(ctx).contentType(s.contentType())
-					.contentEncoding(s.contentEncoding());
-			if (ctx.getCorrelationId() == null) {
-				b.correlationId(s.correlationId());
-			}
-			if (ctx.getReplyToChannel() == null) {
-				b.replyTo(s.replyTo());
-			}
-			return SimpleMessage.ofOwned(s.data(), SimpleMessageContextBuilder.cloudEventContext(b.buildContext(), s.cloudEvent()));
-		}
-		CloudEventCodec.Binary bin = CloudEventCodec.fromBinaryHeaders(ctx.getHeaders(), cloudEventHeaderPrefix());
-		if (bin.cloudEvent() == null) {
-			return plain;
-		}
-		SimpleMessageContextBuilder b = new SimpleMessageContextBuilder();
-		b.withContext(ctx);
-		ctx.getHeaders().keySet().forEach(k -> b.header(k, null));
-		b.headers(bin.otherHeaders());
-		return SimpleMessage.ofOwned(payload, SimpleMessageContextBuilder.cloudEventContext(b.buildContext(), bin.cloudEvent()));
-	}
-
-	private static boolean looksLikeJsonObject(byte[] payload) {
-		for (byte b : payload) {
-			if (!Character.isWhitespace(b)) {
-				return b == '{';
-			}
-		}
-		return false;
-	}
-
 	// ------------------------------------------------------------------ runtime
 
 	/**
@@ -1057,13 +845,10 @@ public abstract class AbstractMessagingInstance {
 	 */
 	public MessagingRuntimeDTO getRuntimeDTO() {
 		MessagingRuntimeDTO dto = new MessagingRuntimeDTO();
-		ServiceRegistration<MessageServiceRuntime> r = runtimeRegistration;
-		if (r != null) {
-			try {
-				dto.serviceDTO = r.getReference().adapt(ServiceReferenceDTO.class);
-			} catch (IllegalStateException e) {
-				// unregistered meanwhile
-			}
+		dto.replyToSubscriptions = new ReplyToSubscriptionDTO[0];
+		OsgiBinding binding = osgi;
+		if (binding != null) {
+			binding.fill(dto);
 		}
 		dto.name = config.name();
 		dto.providerName = PROVIDER;
@@ -1076,91 +861,11 @@ public abstract class AbstractMessagingInstance {
 		}
 		dto.subscriptions = subscriptions.stream().filter(h -> !h.isInternal()).map(SubscriptionHandle::toDTO)
 				.toArray(SubscriptionDTO[]::new);
-		dto.replyToSubscriptions = whiteboard == null ? new ReplyToSubscriptionDTO[0] : whiteboard.toDTOs();
 		return dto;
-	}
-
-	BundleContext bundleContext() {
-		return bundleContext;
 	}
 
 	MessageContext defaultContext() {
 		return defaultContext;
-	}
-
-	// ------------------------------------------------------------------ services
-
-	private final class Publisher implements MessagePublisher {
-
-		@Override
-		public Promise<Void> publish(Message message) {
-			return AbstractMessagingInstance.this.publish(message, null);
-		}
-
-		@Override
-		public Promise<Void> publish(Message message, String channel) {
-			requireNonNull(message, "message");
-			MessageContext ctx = newBuilder().withContext(message.getContext()).channel(channel).buildContext();
-			return AbstractMessagingInstance.this.publish(message, ctx);
-		}
-
-		@Override
-		public Promise<Void> publish(Message message, MessageContext context) {
-			return AbstractMessagingInstance.this.publish(message, context);
-		}
-
-		@Override
-		public Promise<Void> publish(Function<MessageContextBuilder, Message> builderFunction) {
-			try {
-				return publish(builderFunction.apply(newBuilder()));
-			} catch (RuntimeException e) {
-				return promises.failed(e);
-			}
-		}
-
-	}
-
-	private final class Subscription implements MessageSubscription {
-
-		@Override
-		public PushStream<Message> subscribe(String channel) {
-			return AbstractMessagingInstance.this.subscribe(channel);
-		}
-
-		@Override
-		public PushStream<Message> subscribe(MessageContext context) {
-			return AbstractMessagingInstance.this.subscribe(context);
-		}
-
-	}
-
-	private final class BuilderFactory implements PrototypeServiceFactory<MessageContextBuilder> {
-
-		@Override
-		public MessageContextBuilder getService(Bundle bundle, ServiceRegistration<MessageContextBuilder> registration) {
-			return newBuilder();
-		}
-
-		@Override
-		public void ungetService(Bundle bundle, ServiceRegistration<MessageContextBuilder> registration,
-				MessageContextBuilder service) {
-			// nothing to release
-		}
-
-	}
-
-	private final class Runtime implements MessageServiceRuntime {
-
-		@Override
-		public MessagingRuntimeDTO getRuntimeDTO() {
-			return AbstractMessagingInstance.this.getRuntimeDTO();
-		}
-
-		@Override
-		public ConnectionState getConnectionState() {
-			return state;
-		}
-
 	}
 
 	/** @return the reply-to support of this instance */

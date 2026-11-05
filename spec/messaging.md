@@ -770,7 +770,13 @@ configuration, building on `org.gecko.messaging.core`.
 | `maxMessageSize` | `1048576` | bytes, sent and received |
 | `sharedGroup` | `messaging` (`DEFAULT_SHARED_GROUP`) | group of shared subscriptions; one group for all instances, so every instance on a queue competes |
 
-Several local subscriptions of the same topic filter share one broker subscription (see §17).
+Several local subscriptions of the same topic filter share one broker subscription
+(`SubscriptionGroup`, also used by mqtt3 and websocket): every one receives a message on a topic,
+one in turn on a queue, and the message is completed on the broker once all have decided. A later
+subscription needing a higher QoS subscribes the filter again with it; the broker subscription
+keeps the QoS the broker granted and is not lowered when that subscription ends. The repeated
+subscribe sets retain handling 1, so existing subscriptions do not receive a retained message
+again — and a later local subscription of an already subscribed filter does not receive it at all.
 
 ### 13.3 MQTT 3.1.1 (`mqtt3`)
 
@@ -793,6 +799,10 @@ A binding of its own for brokers and devices without MQTT 5.
 | `qos` | `1` | default QoS |
 | `maxMessageSize` | `1048576` | bytes, sent and largest inbound packet |
 | `sharedGroup` | `messaging` (`DEFAULT_SHARED_GROUP`) | group of shared subscriptions; one group for all instances, so every instance on a queue competes |
+
+Shared broker subscriptions as mqtt. MQTT 3.1.1 has no retain handling: when a filter is
+subscribed again for a higher QoS, the broker sends its retained message again, and existing
+subscriptions may receive it twice.
 
 ### 13.4 AMQP 0-9-1 (`amqp`)
 
@@ -1006,7 +1016,7 @@ Example (`org.gecko.messaging.mqtt.tck/configs/tck.json`):
 }
 ```
 
-### 15.5 The Ten Runs
+### 15.5 The Thirteen Runs
 
 | # | Project | bndrun | Broker | BrokerControl | Extra properties |
 |---|---|---|---|---|---|
@@ -1020,6 +1030,12 @@ Example (`org.gecko.messaging.mqtt.tck/configs/tck.json`):
 | 8 | amqp.tck | tck-cloudevents | same | same | filter, separator, wildcard |
 | 9 | websocket.tck | tck | `WebSocketHub` `:18090` (in the run) | `TcpProxy` `:18091` | — |
 | 10 | websocket.tck | tck-cloudevents | same | same | filter |
+| 11 | memory.tck | tck-cloudevents-binary | in-memory `memory://tck-ce-binary` | `InMemoryBrokerControl` | filter, `org.gecko.messaging.memory.tck.broker=tck-ce-binary` |
+| 12 | mqtt.tck | tck-cloudevents-binary | Mosquitto 2 `:11883` | `TcpProxy` `:11884` | filter |
+| 13 | amqp.tck | tck-cloudevents-binary | RabbitMQ 4.1 `:15675` | `TcpProxy` `:15676` | filter, separator, wildcard |
+
+Runs 11–13 use the CloudEvents binary mode, where the protocol has headers; the other
+`tck-cloudevents` runs the structured mode.
 
 ### 15.6 Test Classes
 
@@ -1060,11 +1076,11 @@ to a channel).
 | MSG100b | MUST | Asynchronously send messages to a channel | Met | 6 | `PublishSubscribeTest.roundTrip`, `publishToGivenChannel`, `contextParameterReplacesTheMessageContext` |
 | MSG120 | MUST | Point-to-point channels | Met (not WebSocket) | 4.1 | `ChannelTypesTest.queueDeliversEachMessageToOneReceiver` |
 | MSG130 | MUST | Publish-subscribe channels | Met | 4.1 | `PublishSubscribeTest.everySubscriberOfATopicReceives` |
-| MSG140 | MUST | Quality of service | Met (AMQP 0–1, WebSocket 0) | 6 | `DeliveryOptionsTest.atLeastOnceIsConfirmed`, `atMostOnceIsAlwaysAccepted`, `invalidQosFails` |
+| MSG140 | MUST | Quality of service | Met (AMQP 0–1, WebSocket 0) | 6 | `DeliveryOptionsTest.atLeastOnceIsConfirmed`, `atMostOnceIsAlwaysAccepted`, `invalidQosFails`, `subscriptionsOfOneChannelWithDifferentQosAllReceive` |
 | MSG150 | MUST | Send-and-forget and send-and-forward | Met | 6 | `DeliveryOptionsTest.atMostOnceIsAlwaysAccepted`, `atLeastOnceIsConfirmed` |
 | MSG160 | SHOULD | Reply-to, caller and receiver side | Met | 9 | `ReplyToTest.*`, `ReplyToWhiteboardTest.*` (incl. `requestNamingAForeignReplyChannelIsNotAnswered`, `aFailingHandlerFailsTheRequestAtOnce`, `aFailingResponseStreamEndsWithAnError`) |
 | MSG170 | SHOULD | Filter semantics: exchange/routing key, wildcards | Met (memory, MQTT, AMQP) | 4.2, 4.3 | `ChannelTypesTest.singleLevelWildcard`, `multiLevelWildcard`, `channelExtension` |
-| MSG180 | MAY | Auto-create / do-not-autocreate | Partly — do-not-autocreate only on AMQP | 4.4 | — (`AcknowledgeTest` uses `autoCreate`) |
+| MSG180 | MAY | Auto-create / do-not-autocreate | Met — do-not-autocreate kept on AMQP, refused with `FeatureNotSupportedException` where channels are created on first use (MQTT) | 4.4 | `ChannelTypesTest.noAutoCreateIsKeptOrRefused`, `DeliveryOptionsTest.durableQueueDelivers` |
 | MSG200 | MUST | Byte bodies | Met | 5.1 | `PublishSubscribeTest.allByteValuesSurvive`, `emptyPayload`; `MessageContextTest.payloadBuffersAreIndependent` |
 | MSG205 | MAY / SHOULD signal | Size limits, signalled | Met — `osgi.messaging.maxMessageSize` on mqtt, mqtt3, amqp, websocket; memory unlimited | 2.3, 6 | `DeliveryOptionsTest.aMessageAboveTheAnnouncedLimitFails` |
 | MSG210 | SHOULD | Further properties: sequencing, correlation | Partly — correlation and per-subscription order, no sequence numbers | 5.2, 7, 9 | `MessageContextTest.correlationIdAndReplyToTravel`, `headersTravel`; `PublishSubscribeTest.manyMessagesArriveInOrder` |
@@ -1081,42 +1097,32 @@ WebSocket, buffering of messages published while disconnected.
 
 ## 17 Open Issues
 
-### 17.1 Tracked
+### 17.1 Behaviour to Decide
 
-1. **GitHub #12 — split `AbstractMessagingInstance`** (~1120 lines, several reasons to change):
-   extract a `CloudEventBinding` strategy (NONE/BINARY/STRUCTURED, chosen once; removes per-message
-   map lookup and `toLowerCase()`), the acknowledgement decision into `AcknowledgeSupport`, and an
-   `OsgiBinding` for registration, properties and target tracking; a `doClose()` hook instead of
-   WebSocket overriding `stop()`. Acceptance: TCK unchanged and green for all ten runs.
-2. **GitHub #13 — MQTT QoS of shared broker subscriptions.** mqtt and mqtt3 map several local
-   subscriptions of one topic filter to one broker subscription; only the first one's QoS counts
-   (`MqttInstance.java:279`, `Mqtt3Instance.java:257`, `if (!first) return;`). A later QoS 1
-   subscription on a filter subscribed with QoS 0 silently gets QoS 0. Also ~150 lines duplicated
-   between mqtt and mqtt3.
-
-### 17.2 Behaviour to Decide
-
-3. **Reserved MQTT user properties** `requeued` and `content-encoding`
-   (`MqttInstance.java:419-422`): an application header with these names is stripped or read as
-   content encoding.
-4. **`autoCreate` and `durable` only effective on AMQP.** `autoCreate=false` is accepted
-   everywhere, but MQTT, memory and WebSocket create channels implicitly (MSG180 Partly); MQTT does
-   not announce `durable` (sessions via `cleanStart`/`sessionExpiryInterval`).
-5. **Unknown extension keys** (including unknown `osgi.messaging.*` keys) are ignored rather than
+1. **Unknown extension keys** (including unknown `osgi.messaging.*` keys) are ignored rather than
    refused; only known keys with unsupported values fail (MSG100a).
 
-### 17.3 Gaps
+### 17.2 Gaps
 
-6. **No sequence numbers** (MSG210 Partly: correlation and per-subscription order only) and no
+2. **No sequence numbers** (MSG210 Partly: correlation and per-subscription order only) and no
    journalling (MSG250).
-7. **TCK coverage missing** for `durable`, `autoCreate`, a CloudEvents binary-mode run (all
-   CloudEvents runs are structured), and the envelope limits of §14.3, which are unit-tested in
-   core only.
+3. **The envelope limits of §14.3** (depth, number length) are unit-tested in core only, not in
+   the TCK.
+4. **MQTT does not announce `durable`**; sessions are configured with
+   `cleanStart`/`sessionExpiryInterval` (mqtt) and `cleanSession` (mqtt3).
 
-### 17.4 Resolved since the first draft
+### 17.3 Resolved since the first draft
 
 - Received messages that are no CloudEvent: dropped and counted by default, delivered unchanged
   with `cloudEvents.acceptPlain` (§11.1).
+- GitHub #12: `AbstractMessagingInstance` split — `CloudEventBinding` (chosen once at start),
+  the acknowledgement decision in `AcknowledgeSupport`, the services in `OsgiBinding`,
+  `Extensions` for extension values, `SimpleMessageContextBuilder.buildSimple()`, a `doClose()`
+  hook with `stop()` final.
+- GitHub #13: shared MQTT broker subscriptions take the highest QoS (`SubscriptionGroup`, §13.2).
+- Reserved MQTT user properties `requeued` and `content-encoding` are refused as application
+  headers; `autoCreate=false` is refused where channels are created on first use (MSG180).
+- TCK runs for `durable`, `autoCreate` and the CloudEvents binary mode (§15.5).
 
 Wildcard enforcement, size limits on AMQP and WebSocket, the previous state of reconnect events,
 feature names from `adapt()`, the `MessagePublisher`/`MessageSubscription` failure Javadoc,

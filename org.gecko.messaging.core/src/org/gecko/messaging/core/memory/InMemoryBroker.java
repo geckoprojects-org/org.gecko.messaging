@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.gecko.messaging.api.MessagingConstants;
 import org.gecko.messaging.core.Acknowledger;
-import org.gecko.messaging.core.Features;
+import org.gecko.messaging.core.Extensions;
 import org.gecko.messaging.core.SimpleMessageContext;
 import org.gecko.messaging.core.SimpleMessageContextBuilder;
 import org.gecko.messaging.core.SubscriptionHandle;
@@ -98,11 +98,11 @@ public final class InMemoryBroker {
 			if (!open) {
 				throw new IllegalStateException("Connection closed");
 			}
-			Long ttl = Features.number(context.getExtensions().get(MessagingConstants.EXTENSION_TIME_TO_LIVE));
+			Long ttl = Extensions.number(context.getExtensions().get(MessagingConstants.EXTENSION_TIME_TO_LIVE));
 			// messages are delivered at once; the time-to-live counts for what is kept, the retained message
 			long expires = ttl == null ? Long.MAX_VALUE : System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, ttl));
 			Envelope e = new Envelope(context, payload, expires);
-			if (!isQueue(context) && Boolean.TRUE.equals(Features.bool(context.getExtensions().get(MessagingConstants.EXTENSION_RETAIN)))) {
+			if (!isQueue(context) && Boolean.TRUE.equals(Extensions.bool(context.getExtensions().get(MessagingConstants.EXTENSION_RETAIN)))) {
 				if (payload.length == 0) {
 					retained.remove(context.getChannel());
 				} else {

@@ -96,7 +96,7 @@ public final class Features {
 		if (context.getExtensions().get(EXTENSION_TIME_TO_LIVE) != null) {
 			require(FEATURE_TIME_TO_LIVE, "A time-to-live");
 		}
-		if (Boolean.TRUE.equals(bool(context.getExtensions().get(EXTENSION_RETAIN)))) {
+		if (Boolean.TRUE.equals(Extensions.bool(context.getExtensions().get(EXTENSION_RETAIN)))) {
 			require(FEATURE_RETAIN, "A retained message");
 		}
 		if (context instanceof CloudEventMessageContext) {
@@ -143,15 +143,15 @@ public final class Features {
 		Map<String, Object> ext = context.getExtensions();
 		Object qos = ext.get(EXTENSION_QOS);
 		if (qos != null) {
-			int q = qos(context);
+			int q = Extensions.qos(context);
 			if (q != QOS_AT_MOST_ONCE) {
 				require(FEATURE_QOS, "Quality of service " + q);
 			}
 		}
-		if (Boolean.TRUE.equals(bool(ext.get(EXTENSION_DURABLE)))) {
+		if (Boolean.TRUE.equals(Extensions.bool(ext.get(EXTENSION_DURABLE)))) {
 			require(FEATURE_DURABLE, "A durable channel");
 		}
-		if (Boolean.TRUE.equals(bool(ext.get(EXTENSION_AUTO_CREATE)))) {
+		if (Boolean.TRUE.equals(Extensions.bool(ext.get(EXTENSION_AUTO_CREATE)))) {
 			require(FEATURE_AUTO_CREATE, "Creating channels");
 		}
 		Object type = ext.get(EXTENSION_CHANNEL_TYPE);
@@ -162,56 +162,6 @@ public final class Features {
 		} else if (type != null) {
 			throw new FeatureNotSupportedException(EXTENSION_CHANNEL_TYPE, "Unknown channel type '" + type + "'");
 		}
-	}
-
-	/**
-	 * Returns the quality of service of a context.
-	 *
-	 * @param context the context
-	 * @return the QoS, {@code -1} if not set
-	 * @throws FeatureNotSupportedException if the value is no valid QoS
-	 */
-	public static int qos(MessageContext context) {
-		Object qos = context.getExtensions().get(EXTENSION_QOS);
-		if (qos == null) {
-			return -1;
-		}
-		int q;
-		try {
-			q = qos instanceof Number n ? n.intValue() : Integer.parseInt(qos.toString().trim());
-		} catch (NumberFormatException e) {
-			throw new FeatureNotSupportedException(FEATURE_QOS, "Invalid quality of service '" + qos + "'");
-		}
-		if (q < QOS_AT_MOST_ONCE || q > QOS_EXACTLY_ONCE) {
-			throw new FeatureNotSupportedException(FEATURE_QOS, "Invalid quality of service " + q);
-		}
-		return q;
-	}
-
-	/**
-	 * Reads a boolean extension value.
-	 *
-	 * @param value the value
-	 * @return the boolean, or {@code null}
-	 */
-	public static Boolean bool(Object value) {
-		if (value == null) {
-			return null;
-		}
-		return value instanceof Boolean b ? b : Boolean.valueOf(value.toString().trim());
-	}
-
-	/**
-	 * Reads a long extension value.
-	 *
-	 * @param value the value
-	 * @return the long, or {@code null}
-	 */
-	public static Long number(Object value) {
-		if (value == null) {
-			return null;
-		}
-		return value instanceof Number n ? n.longValue() : Long.valueOf(value.toString().trim());
 	}
 
 }

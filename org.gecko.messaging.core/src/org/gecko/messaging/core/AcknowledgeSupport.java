@@ -48,6 +48,55 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 		this.onDecided = onDecided;
 	}
 
+	/**
+	 * Makes the acknowledgement decision of a received message as its subscription asks: by
+	 * function, by filter, manually in the stream, or at once.
+	 *
+	 * @param h the subscription
+	 * @param message the decoded message
+	 * @param acknowledger the protocol's side, {@code null} if it has none
+	 * @return the message for the stream, carrying its handler if it has one, or {@code null} if
+	 *         it is decided not to reach the stream
+	 */
+	static SimpleMessage decide(SubscriptionHandle h, SimpleMessage message, Acknowledger acknowledger) {
+		SimpleMessageContext sub = h.context();
+		if (acknowledger == null && sub.getPostAcknowledge() == null && sub.getPostReject() == null && !h.needsAcknowledger()) {
+			return message;
+		}
+		AcknowledgeSupport[] self = new AcknowledgeSupport[1];
+		// on a topic a message published again would reach every subscriber, not just this one
+		AcknowledgeSupport ack = new AcknowledgeSupport(acknowledger, sub.isRequeueOnReject() && h.isQueue(), sub.getPostAcknowledge(),
+				sub.getPostReject(), () -> h.openAcknowledgements.remove(self[0]));
+		self[0] = ack;
+		SimpleMessage m = message.withContext(((SimpleMessageContext) message.getContext()).withAcknowledgeHandler(ack));
+		ack.setMessage(m);
+		try {
+			if (sub.getAcknowledgeFunction() != null) {
+				sub.getAcknowledgeFunction().accept(m);
+				ack.acknowledge(); // undecided counts as accepted
+				return ack.getAcknowledgeState() == AcknowledgeType.ACKNOWLEDGED ? m : null;
+			}
+			if (sub.getAcknowledgeFilter() != null) {
+				if (sub.getAcknowledgeFilter().test(m)) {
+					ack.acknowledge();
+					return m;
+				}
+				ack.reject();
+				return null;
+			}
+			if (sub.isManualAcknowledge()) {
+				h.openAcknowledgements.add(ack);
+			} else {
+				ack.acknowledge();
+			}
+			return m;
+		} catch (RuntimeException e) {
+			LOG.log(Level.WARNING, "Acknowledgement decision failed on " + h + ", rejecting without re-queue", e);
+			ack.rejectFailed();
+			return null;
+		}
+	}
+
 	void setMessage(Message message) {
 		this.message = message;
 	}

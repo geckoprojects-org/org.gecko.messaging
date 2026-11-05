@@ -16,7 +16,6 @@ package org.gecko.messaging.mqtt3;
 import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,7 +39,7 @@ import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.core.AbstractMessagingInstance;
 import org.gecko.messaging.core.Acknowledger;
-import org.gecko.messaging.core.Features;
+import org.gecko.messaging.core.Extensions;
 import org.gecko.messaging.core.MessagingConfiguration;
 import org.gecko.messaging.core.SimpleMessageContext;
 import org.gecko.messaging.core.SimpleMessageContextBuilder;
@@ -209,7 +208,7 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	}
 
 	private int qos(MessageContext context) {
-		int q = Features.qos(context);
+		int q = Extensions.qos(context);
 		return q < 0 ? defaultQos : q;
 	}
 
@@ -228,7 +227,7 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		payload.get(bytes);
 		MqttMessage message = new MqttMessage(bytes);
 		message.setQos(qos(context));
-		message.setRetained(Boolean.TRUE.equals(Features.bool(context.getExtensions().get(EXTENSION_RETAIN))));
+		message.setRetained(Boolean.TRUE.equals(Extensions.bool(context.getExtensions().get(EXTENSION_RETAIN))));
 		Deferred<Void> deferred = promises.deferred();
 		client().publish(context.getChannel(), message, null, new IMqttActionListener() {
 			@Override
@@ -341,7 +340,7 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		if (message.isRetained()) {
 			b.extensionEntry(EXTENSION_RETAIN, Boolean.TRUE);
 		}
-		return (SimpleMessageContext) b.buildContext();
+		return b.buildSimple();
 	}
 
 	private final class Callback implements MqttCallback {

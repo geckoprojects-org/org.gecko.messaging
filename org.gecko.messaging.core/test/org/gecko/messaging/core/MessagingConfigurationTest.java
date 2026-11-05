@@ -64,10 +64,10 @@ class MessagingConfigurationTest {
 	@Test
 	void credentialKeysAreSecret() {
 		for (String k : new String[] { "password", ".password", "apiKey", "api-key", "accessToken", "client_secret", "credentials" }) {
-			assertThat(AbstractMessagingInstance.isSecret(k)).as(k).isTrue();
+			assertThat(OsgiBinding.isSecret(k)).as(k).isTrue();
 		}
-		assertThat(AbstractMessagingInstance.isSecret("uri")).isFalse();
-		assertThat(AbstractMessagingInstance.isSecret("keepAliveInterval")).isFalse();
+		assertThat(OsgiBinding.isSecret("uri")).isFalse();
+		assertThat(OsgiBinding.isSecret("keepAliveInterval")).isFalse();
 	}
 
 	@Test

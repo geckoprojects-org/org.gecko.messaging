@@ -187,8 +187,7 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	}
 
 	@Override
-	public void stop() {
-		super.stop();
+	protected void doClose() {
 		WebSocketClient c;
 		synchronized (this) {
 			c = client;
@@ -331,7 +330,7 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	private void dispatch(String channel, byte[] payload) {
 		SubscriptionGroup group = subscriptions.get(channel);
 		if (group != null) {
-			group.dispatch((SimpleMessageContext) new SimpleMessageContextBuilder().channel(channel).buildContext(), payload,
+			group.dispatch(new SimpleMessageContextBuilder().channel(channel).buildSimple(), payload,
 					NO_BROKER);
 		}
 	}

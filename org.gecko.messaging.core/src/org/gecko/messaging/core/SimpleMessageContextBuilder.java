@@ -70,7 +70,7 @@ public class SimpleMessageContextBuilder
 	}
 
 	@Override
-	public MessageContextBuilder withContext(MessageContext context) {
+	public SimpleMessageContextBuilder withContext(MessageContext context) {
 		requireNonNull(context, "context");
 		ContextData d = new ContextData();
 		d.channel = context.getChannel();
@@ -110,7 +110,7 @@ public class SimpleMessageContextBuilder
 	}
 
 	@Override
-	public MessageContextBuilder content(ByteBuffer content) {
+	public SimpleMessageContextBuilder content(ByteBuffer content) {
 		this.content = content == null ? null : content.duplicate();
 		return this;
 	}
@@ -122,44 +122,44 @@ public class SimpleMessageContextBuilder
 	}
 
 	@Override
-	public MessageContextBuilder channel(String channelName) {
+	public SimpleMessageContextBuilder channel(String channelName) {
 		data.channel = channelName;
 		return this;
 	}
 
 	@Override
-	public MessageContextBuilder channel(String channelName, String channelExtension) {
+	public SimpleMessageContextBuilder channel(String channelName, String channelExtension) {
 		data.channel = channelName;
 		data.channelExtension = channelExtension;
 		return this;
 	}
 
 	@Override
-	public MessageContextBuilder replyTo(String replyToChannel) {
+	public SimpleMessageContextBuilder replyTo(String replyToChannel) {
 		data.replyToChannel = replyToChannel;
 		return this;
 	}
 
 	@Override
-	public MessageContextBuilder correlationId(String correlationId) {
+	public SimpleMessageContextBuilder correlationId(String correlationId) {
 		data.correlationId = correlationId;
 		return this;
 	}
 
 	@Override
-	public MessageContextBuilder contentType(String contentType) {
+	public SimpleMessageContextBuilder contentType(String contentType) {
 		data.contentType = contentType;
 		return this;
 	}
 
 	@Override
-	public MessageContextBuilder contentEncoding(String contentEncoding) {
+	public SimpleMessageContextBuilder contentEncoding(String contentEncoding) {
 		data.contentEncoding = contentEncoding;
 		return this;
 	}
 
 	@Override
-	public MessageContextBuilder header(String key, Object value) {
+	public SimpleMessageContextBuilder header(String key, Object value) {
 		requireNonNull(key, "key");
 		if (value == null) {
 			data.headers.remove(key);
@@ -172,7 +172,7 @@ public class SimpleMessageContextBuilder
 	}
 
 	@Override
-	public MessageContextBuilder headers(Map<String, ?> headers) {
+	public SimpleMessageContextBuilder headers(Map<String, ?> headers) {
 		if (headers != null) {
 			headers.forEach(this::header);
 		}
@@ -180,7 +180,7 @@ public class SimpleMessageContextBuilder
 	}
 
 	@Override
-	public MessageContextBuilder extensionEntry(String key, Object value) {
+	public SimpleMessageContextBuilder extensionEntry(String key, Object value) {
 		requireNonNull(key, "key");
 		if (value == null) {
 			data.extensions.remove(key);
@@ -191,7 +191,7 @@ public class SimpleMessageContextBuilder
 	}
 
 	@Override
-	public MessageContextBuilder extensions(Map<String, ?> extensions) {
+	public SimpleMessageContextBuilder extensions(Map<String, ?> extensions) {
 		if (extensions != null) {
 			extensions.forEach(this::extensionEntry);
 		}
@@ -200,6 +200,15 @@ public class SimpleMessageContextBuilder
 
 	@Override
 	public MessageContext buildContext() {
+		return buildSimple();
+	}
+
+	/**
+	 * Builds the context as the implementation type, for the protocols.
+	 *
+	 * @return the context
+	 */
+	public SimpleMessageContext buildSimple() {
 		try {
 			return createContext(data);
 		} finally {

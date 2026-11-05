@@ -155,7 +155,7 @@ final class ReplyToSupport implements ReplyToPublisher {
 							end(PushEvent.error(failure));
 							return true;
 						}
-						if (Boolean.TRUE.equals(Features.bool(message.getContext().getHeaders().get(HEADER_REPLY_COMPLETE)))) {
+						if (Boolean.TRUE.equals(Extensions.bool(message.getContext().getHeaders().get(HEADER_REPLY_COMPLETE)))) {
 							end(PushEvent.close());
 							return true;
 						}
@@ -250,7 +250,7 @@ final class ReplyToSupport implements ReplyToPublisher {
 			replyTo = sharedChannel();
 			shared = true;
 		}
-		Long t = Features.number(ctx.getExtensions().get(EXTENSION_REPLY_TIMEOUT));
+		Long t = Extensions.number(ctx.getExtensions().get(EXTENSION_REPLY_TIMEOUT));
 		long timeout = t != null && t > 0 ? t : instance.getConfiguration().replyTimeout();
 		MessageContext request = instance.newBuilder().withContext(ctx).correlationId(correlationId).replyTo(replyTo)
 				.extensionEntry(EXTENSION_REPLY_TIMEOUT, null).buildContext();

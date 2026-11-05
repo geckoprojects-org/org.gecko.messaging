@@ -40,11 +40,10 @@ import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import org.eclipse.paho.mqttv5.common.packet.UserProperty;
 import org.gecko.messaging.api.FeatureNotSupportedException;
 import org.gecko.messaging.api.MessageContext;
-import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.core.AbstractMessagingInstance;
 import org.gecko.messaging.core.Acknowledger;
-import org.gecko.messaging.core.Features;
+import org.gecko.messaging.core.Extensions;
 import org.gecko.messaging.core.MessagingConfiguration;
 import org.gecko.messaging.core.SimpleMessageContext;
 import org.gecko.messaging.core.SimpleMessageContextBuilder;
@@ -223,7 +222,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 	}
 
 	private int qos(MessageContext context) {
-		int q = Features.qos(context);
+		int q = Extensions.qos(context);
 		return q < 0 ? defaultQos : q;
 	}
 
@@ -242,7 +241,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		payload.get(bytes);
 		MqttMessage message = new MqttMessage(bytes);
 		message.setQos(qos(context));
-		message.setRetained(Boolean.TRUE.equals(Features.bool(context.getExtensions().get(EXTENSION_RETAIN))));
+		message.setRetained(Boolean.TRUE.equals(Extensions.bool(context.getExtensions().get(EXTENSION_RETAIN))));
 		MqttProperties props = new MqttProperties();
 		if (context.getContentType() != null) {
 			props.setContentType(context.getContentType());
@@ -253,7 +252,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		if (context.getCorrelationId() != null) {
 			props.setCorrelationData(context.getCorrelationId().getBytes(UTF_8));
 		}
-		Long ttl = Features.number(context.getExtensions().get(EXTENSION_TIME_TO_LIVE));
+		Long ttl = Extensions.number(context.getExtensions().get(EXTENSION_TIME_TO_LIVE));
 		if (ttl != null) {
 			props.setMessageExpiryInterval(Math.max(1, (ttl + 999) / 1000));
 		}
@@ -380,7 +379,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 	}
 
 	private static SimpleMessageContext context(String topic, MqttMessage message) {
-		MessageContextBuilder b = new SimpleMessageContextBuilder().channel(topic);
+		SimpleMessageContextBuilder b = new SimpleMessageContextBuilder().channel(topic);
 		MqttProperties p = message.getProperties();
 		if (p != null) {
 			b.contentType(p.getContentType());
@@ -405,7 +404,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		if (message.isRetained()) {
 			b.extensionEntry(EXTENSION_RETAIN, Boolean.TRUE);
 		}
-		return (SimpleMessageContext) b.buildContext();
+		return b.buildSimple();
 	}
 
 	private final class Callback implements MqttCallback {

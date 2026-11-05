@@ -145,13 +145,13 @@ final class ReplyToWhiteboard {
 			LOG.warning(() -> "Messaging instance " + instance.getName() + " cannot stream responses; handler " + reference + " not bound");
 			return null;
 		}
-		MessageContextBuilder ctx = new SimpleMessageContextBuilder().channel(channel, b.channelExtension);
+		SimpleMessageContextBuilder ctx = new SimpleMessageContextBuilder().channel(channel, b.channelExtension);
 		String type = string(reference, REPLY_TO_SUBSCRIPTION_CHANNEL_TYPE_PROPERTY);
 		if (type != null) {
 			ctx.extensionEntry(EXTENSION_CHANNEL_TYPE, type);
 		}
 		try {
-			SimpleMessageContext sub = (SimpleMessageContext) ctx.buildContext();
+			SimpleMessageContext sub = ctx.buildSimple();
 			instance.getFeatures().checkSubscribe(sub);
 			instance.checkProtocol(sub, false);
 			b.handle = instance.addSubscription(sub, new SubscriptionHandle.Sink() {
