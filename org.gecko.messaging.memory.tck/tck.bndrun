@@ -1,0 +1,10 @@
+# The TCK against the in-memory implementation. The instance under test is 'tck'; a second
+# instance with structured CloudEvents is tested by tck-cloudevents.bndrun.
+-library: enableOSGi-Test
+-include: ${workspace}/cnf/ext/tck-run.bnd
+
+-runrequires: \
+	bnd.identity;id='org.gecko.messaging.tck',\
+	bnd.identity;id='org.gecko.messaging.memory',\
+	bnd.identity;id='org.gecko.messaging.memory.tck',\
+	${tck.runrequires}

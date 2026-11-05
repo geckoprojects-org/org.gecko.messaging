@@ -1,0 +1,17 @@
+Bundle-Name: Gecko Messaging In-Memory TCK Run
+Bundle-Description: Runs the messaging TCK against the in-memory implementation: the reference \
+	run that needs no broker. Holds the instance configurations and the broker control.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.core;version=snapshot,\
+	org.gecko.messaging.tck;version=snapshot,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest
+
+-includeresource: \
+	OSGI-INF/configurator/=configs/
+Require-Capability: osgi.extender;filter:='(osgi.extender=osgi.configurator)'
+
+# the run projects hold launches only; they depend on every bundle they launch
+-dependson: org.gecko.messaging.api, org.gecko.messaging.core, org.gecko.messaging.memory, org.gecko.messaging.tck

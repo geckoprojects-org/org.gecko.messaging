@@ -1,0 +1,3 @@
+// The TCK bundle is launched by the TCK run projects (org.gecko.messaging.*.tck) against an
+// implementation; on its own it has nothing to test.
+tasks.named('testOSGi') { enabled = false }

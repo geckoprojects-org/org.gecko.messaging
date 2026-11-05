@@ -20,7 +20,8 @@ import org.osgi.util.pushstream.PushStream;
  * Subscribes to channels.
  * <p>
  * The subscription is made when a terminal operation connects to the returned stream, and ends
- * when the stream is closed. A subscription survives connection losses: the implementation
+ * when the stream is closed. If the instance is connected, the subscription is in place on the
+ * broker when the terminal operation returns; messages published afterwards are received. A subscription survives connection losses: the implementation
  * restores it after a reconnect without the consumer doing anything. Connection changes are
  * reported to {@link org.gecko.messaging.api.runtime.ConnectionListener}s, not through the
  * stream — a gap in the stream is visible there. The stream fails only when the subscription

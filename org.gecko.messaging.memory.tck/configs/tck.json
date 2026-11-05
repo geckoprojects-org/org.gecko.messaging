@@ -1,0 +1,14 @@
+{
+	":configurator:resource-version": 1,
+	"org.gecko.messaging.memory~tck": {
+		"osgi.messaging.name": "tck",
+		"uri": "memory://tck",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200
+	},
+	"org.gecko.messaging.memory~tckce": {
+		"osgi.messaging.name": "tck-cloudevents",
+		"uri": "memory://tck-cloudevents",
+		"cloudEvents": "structured"
+	}
+}

@@ -1,0 +1,17 @@
+Bundle-Name: Gecko Messaging TCK
+Bundle-Description: Technology compatibility kit of the messaging specification (spec/). \
+	Protocol neutral: it tests the instance selected by the framework property \
+	org.gecko.messaging.tck.filter, checks every announced feature and that every feature not \
+	announced fails. Run it from a TCK run project (org.gecko.messaging.*.tck).
+
+-library: enableOSGi-Test
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
+	org.osgi.framework;version=latest,\
+	org.osgi.dto;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest,\
+	org.osgi.util.tracker;version=latest

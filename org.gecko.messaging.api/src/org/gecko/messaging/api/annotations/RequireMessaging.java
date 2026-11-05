@@ -36,7 +36,7 @@ import org.osgi.namespace.implementation.ImplementationNamespace;
 @Requirement(namespace = ImplementationNamespace.IMPLEMENTATION_NAMESPACE, //
 		name = MessagingConstants.MESSAGING_IMPLEMENTATION, //
 		filter = "(&(osgi.implementation=" + MessagingConstants.MESSAGING_IMPLEMENTATION + ")${frange;"
-				+ MessagingConstants.MESSAGING_SPECIFICATION_VERSION + "}${if;${protocol};(osgi.messaging.protocol=${protocol})})")
+				+ MessagingConstants.MESSAGING_SPECIFICATION_VERSION + "}${if;${#protocol};(osgi.messaging.protocol=${#protocol})})")
 public @interface RequireMessaging {
 
 	/**

@@ -1,0 +1,14 @@
+Bundle-Name: Gecko Messaging In-Memory
+Bundle-Description: Messaging inside the JVM: a broker per name, every feature of the \
+	specification. For tests of messaging applications, and the reference run of the TCK \
+	without external broker. Factory configuration org.gecko.messaging.memory.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
+	org.gecko.messaging.core;version=snapshot,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.namespace.service;version=latest,\
+	org.osgi.util.promise;version=latest

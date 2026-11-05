@@ -1,0 +1,14 @@
+# The TCK against the in-memory implementation with structured CloudEvents.
+
+-library: enableOSGi-Test
+-include: ${workspace}/cnf/ext/tck-run.bnd
+
+-runrequires: \
+	bnd.identity;id='org.gecko.messaging.tck',\
+	bnd.identity;id='org.gecko.messaging.memory',\
+	bnd.identity;id='org.gecko.messaging.memory.tck',\
+	${tck.runrequires}
+
+-runproperties.instance: \
+	org.gecko.messaging.tck.filter='(osgi.messaging.name=tck-cloudevents)',\
+	org.gecko.messaging.memory.tck.broker=tck-cloudevents

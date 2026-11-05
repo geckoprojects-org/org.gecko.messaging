@@ -336,7 +336,18 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	/**
-	 * Starts connecting without registering services. For tests outside a framework.
+	 * Adds a listener directly, without the whiteboard. For use outside a framework.
+	 *
+	 * @param listener the listener; told the current state at once
+	 */
+	public void addConnectionListener(ConnectionListener listener) {
+		listeners.add(listener);
+		ConnectionEvent current = new ConnectionEvent(config.name(), null, state, false, false, System.currentTimeMillis(), null);
+		events.execute(() -> notifyListener(listener, current));
+	}
+
+	/**
+	 * Starts connecting without registering services. For use outside a framework.
 	 */
 	public void startStandalone() {
 		synchronized (stateLock) {
@@ -361,9 +372,7 @@ public abstract class AbstractMessagingInstance {
 		if (whiteboard != null) {
 			whiteboard.close();
 		}
-		if (listenerTracker != null) {
-			setState(ConnectionState.CLOSED, false, false, null);
-		}
+		setState(ConnectionState.CLOSED, false, false, null);
 		for (ServiceRegistration<?> r : registrations) {
 			try {
 				r.unregister();

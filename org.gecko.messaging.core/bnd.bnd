@@ -12,7 +12,9 @@ Bundle-Description: The protocol-neutral part of the Gecko messaging implementat
 	org.osgi.util.function;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	org.osgi.util.pushstream;version=latest,\
-	org.osgi.util.tracker;version=latest
+	org.osgi.util.tracker;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.namespace.service;version=latest
 
 -testpath: \
 	assertj-core;version=latest

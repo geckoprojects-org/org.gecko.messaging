@@ -1,0 +1,18 @@
+# Shared setup of the TCK run projects (org.gecko.messaging.*.tck), included by their bndruns.
+-runfw: org.apache.felix.framework;version='[7.0.5,8)'
+-runee: JavaSE-21
+-resolve.effective: active
+-tester: biz.aQute.tester.junit-platform
+
+tck.runrequires: \
+	bnd.identity;id='org.apache.felix.scr',\
+	bnd.identity;id='org.apache.felix.configadmin',\
+	bnd.identity;id='org.apache.felix.configurator',\
+	bnd.identity;id='org.apache.felix.cm.json',\
+	bnd.identity;id='org.eclipse.parsson.jakarta.json',\
+	bnd.identity;id='org.apache.aries.spifly.dynamic.framework.extension',\
+	bnd.identity;id='junit-jupiter-engine',\
+	bnd.identity;id='junit-platform-launcher'
+
+-runproperties.tck: \
+	org.gecko.messaging.tck.timeout=10000
