@@ -1,0 +1,18 @@
+// The run project launches the TCK from its bndruns. Each bndrun is resolved into the build
+// folder and run from there, so the checked-in bndruns carry no -runbundles.
+['tck', 'tck-cloudevents'].each { name ->
+    def resolve = tasks.named("resolve.${name}") {
+        outputBndrun = layout.buildDirectory.file("${name}.bndrun")
+        // resolves against the manifests of snapshot bundles, which Gradle does not see as inputs
+        outputs.upToDateWhen { false }
+    }
+    tasks.named("testrun.${name}") {
+        bndrun = resolve.flatMap { it.outputBndrun }
+        // the launched bundles are snapshots of other projects, which Gradle does not see as
+        // inputs; a requested TCK run always runs
+        outputs.upToDateWhen { false }
+    }
+    tasks.named('testOSGi') { dependsOn "testrun.${name}" }
+}
+// the project's own bundle has no tests; only the bndruns above run
+tasks.named('testOSGi') { actions.clear() }

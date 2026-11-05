@@ -1,0 +1,17 @@
+Bundle-Name: Gecko Messaging AMQP TCK Run
+Bundle-Description: Runs the messaging TCK against the AMQP implementation and a real broker \
+	(RabbitMQ from docker/brokers.sh, port 15675, user tck). The instances connect through a TCP \
+	proxy that serves as broker control. Holds the instance configurations and the proxy.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.tck;version=snapshot,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest
+
+-includeresource: \
+	OSGI-INF/configurator/=configs/
+Require-Capability: osgi.extender;filter:='(osgi.extender=osgi.configurator)'
+
+# the run projects hold launches only; they depend on every bundle they launch
+-dependson: org.gecko.messaging.api, org.gecko.messaging.core, org.gecko.messaging.amqp, org.gecko.messaging.tck

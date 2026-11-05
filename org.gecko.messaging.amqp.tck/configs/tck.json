@@ -1,0 +1,22 @@
+{
+	":configurator:resource-version": 1,
+	"org.gecko.messaging.amqp~tck": {
+		"osgi.messaging.name": "tck",
+		"uri": "amqp://localhost:15676",
+		"username": "tck",
+		".password": "tck",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"connectTimeout:Long": 3000
+	},
+	"org.gecko.messaging.amqp~tckce": {
+		"osgi.messaging.name": "tck-cloudevents",
+		"uri": "amqp://localhost:15676",
+		"username": "tck",
+		".password": "tck",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"connectTimeout:Long": 3000,
+		"cloudEvents": "structured"
+	}
+}
