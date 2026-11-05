@@ -15,3 +15,6 @@ Require-Capability: osgi.extender;filter:='(osgi.extender=osgi.configurator)'
 
 # the run projects hold launches only; they depend on every bundle they launch
 -dependson: org.gecko.messaging.api, org.gecko.messaging.core, org.gecko.messaging.mqtt, org.gecko.messaging.tck
+
+# a run project: launches and configurations, nothing to publish
+-releaserepo:

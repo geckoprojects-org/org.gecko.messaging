@@ -6,3 +6,5 @@ build/
 bin/
 bin_test/
 /cnf/cache
+/dist/
+/.m2/

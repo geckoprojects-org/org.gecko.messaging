@@ -1,9 +1,8 @@
 # Eclipse Fennec workspace fragment (Gradle) — additive bnd properties.
 #
-# Layered on top of the bndtools `workspace-minimal` base template, which already
-# provides the Local + Release LocalIndexedRepos and `-releaserepo: Release`.
-# We therefore only ADD what is missing and deliberately do NOT redefine the Local
-# or Release repositories and do NOT override `-releaserepo`.
+# Layered on top of the bndtools `workspace-minimal` base template (Local repository). Where a
+# release goes — the DIM Nexus and Sonatype, the Release repository and `-releaserepo` — is
+# cnf/ext/release.bnd.
 
 # Single source of truth for the project coordinates: gradle.properties at the
 # workspace root (also read natively by Gradle). bnd imports it so the same values
@@ -39,3 +38,21 @@ javac.target: 21
 github-orga:    ${github_org}
 github-project: ${github_repository}
 -groupid:       ${maven_group_id}
+
+# Bundle and pom metadata of the Gecko project, over the fennec library's Eclipse defaults; the
+# Sonatype Central Portal checks the pom's license, developers and scm.
+Bundle-Vendor: Data In Motion
+Bundle-License: EPL-2.0;description="Eclipse Public License 2.0";link="https://www.eclipse.org/legal/epl-2.0/"
+Bundle-Developers: \
+	jalbert; \
+		email="j.albert@data-in-motion.biz"; \
+		name="Juergen Albert"; \
+		organization="Data In Motion"; \
+		organizationUrl="https://www.datainmotion.de"; \
+		roles="architect,developer", \
+	mhoffmann; \
+		name="Mark Hoffmann"; \
+		email="m.hoffmann@data-in-motion.biz"; \
+		organization="Data In Motion"; \
+		organizationUrl="https://www.datainmotion.de"; \
+		roles="developer,architect"
