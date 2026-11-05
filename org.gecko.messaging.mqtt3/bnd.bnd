@@ -1,0 +1,24 @@
+Bundle-Name: Gecko Messaging MQTT 3.1.1
+Bundle-Description: Messaging over MQTT 3.1.1 with Eclipse Paho (the build of \
+	geckoprojects-org/paho), for brokers and devices without MQTT 5. One client per instance, \
+	reconnects owned by the instance, manual acknowledgement, shared subscriptions as queues \
+	where the broker offers them. MQTT 3.1.1 has no message properties: content type, headers, \
+	correlation and reply-to are available only with structured CloudEvents. Factory \
+	configuration org.gecko.messaging.mqtt3.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
+	org.gecko.messaging.core;version=snapshot,\
+	org.eclipse.paho.client.mqttv3;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.namespace.service;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest
+
+-testpath: \
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.tracker;version=latest,\
+	org.osgi.dto;version=latest

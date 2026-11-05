@@ -43,8 +43,9 @@ org.apache.aries.spifly:org.apache.aries.spifly.dynamic.bundle:1.3.7
 # --- AMQP 0-9-1: RabbitMQ Java client ---
 com.rabbitmq:amqp-client:5.37.0
 
-# --- MQTT 5: Paho, the build of geckoprojects-org/paho (Sonatype snapshots) ---
+# --- MQTT 5 and 3.1.1: Paho, the build of geckoprojects-org/paho (Sonatype snapshots) ---
 org.geckoprojects.paho:org.eclipse.paho.mqttv5.client:1.3.0-SNAPSHOT
+org.geckoprojects.paho:org.eclipse.paho.client.mqttv3:1.3.0-SNAPSHOT
 
 # --- WebSocket: Jetty 12 (client, and the server of the embedded hub) ---
 org.eclipse.jetty:jetty-util:12.1.14
