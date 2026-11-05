@@ -1,0 +1,18 @@
+{
+	":configurator:resource-version": 1,
+	"org.gecko.messaging.mqtt3~tck": {
+		"osgi.messaging.name": "tck",
+		"uri": "tcp://localhost:11886",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"connectTimeout:Long": 3000
+	},
+	"org.gecko.messaging.mqtt3~tckce": {
+		"osgi.messaging.name": "tck-cloudevents",
+		"uri": "tcp://localhost:11886",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"connectTimeout:Long": 3000,
+		"cloudEvents": "structured"
+	}
+}
