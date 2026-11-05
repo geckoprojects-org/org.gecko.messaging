@@ -100,6 +100,12 @@ public final class InMemoryInstance extends AbstractMessagingInstance {
 	}
 
 	@Override
+	protected boolean createsChannelsImplicitly() {
+		// topics and queues exist as soon as they are used
+		return true;
+	}
+
+	@Override
 	protected String cloudEventHeaderPrefix() {
 		return "ce-";
 	}

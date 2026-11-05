@@ -189,6 +189,11 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	}
 
 	@Override
+	protected boolean createsChannelsImplicitly() {
+		return true;
+	}
+
+	@Override
 	protected long maxMessageSize() {
 		return maxMessageSize;
 	}

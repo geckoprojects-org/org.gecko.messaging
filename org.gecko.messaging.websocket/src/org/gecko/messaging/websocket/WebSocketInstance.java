@@ -135,6 +135,11 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	}
 
 	@Override
+	protected boolean createsChannelsImplicitly() {
+		return true;
+	}
+
+	@Override
 	protected long maxMessageSize() {
 		return maxMessageSize;
 	}

@@ -40,6 +40,7 @@ import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.eclipse.paho.mqttv5.common.MqttSubscription;
 import org.eclipse.paho.mqttv5.common.packet.MqttProperties;
 import org.eclipse.paho.mqttv5.common.packet.UserProperty;
+import org.gecko.messaging.api.FeatureNotSupportedException;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagingException;
@@ -178,6 +179,25 @@ public final class MqttInstance extends AbstractMessagingInstance {
 			c.close(true);
 		} catch (MqttException | RuntimeException e) {
 			LOG.log(Level.FINE, "MQTT close failed", e);
+		}
+	}
+
+	@Override
+	protected boolean createsChannelsImplicitly() {
+		return true;
+	}
+
+	/** User property names the binding uses itself; an application header must not take them. */
+	static final Set<String> RESERVED_PROPERTIES = Set.of(REQUEUED_PROPERTY, CONTENT_ENCODING_PROPERTY);
+
+	@Override
+	protected void checkContext(MessageContext context, boolean publish) {
+		for (String key : context.getHeaders().keySet()) {
+			if (RESERVED_PROPERTIES.contains(key)) {
+				// it would be stripped (requeued) or read as content encoding on receipt
+				throw new FeatureNotSupportedException(FEATURE_HEADERS,
+						"The header '" + key + "' is reserved by the MQTT binding");
+			}
 		}
 	}
 

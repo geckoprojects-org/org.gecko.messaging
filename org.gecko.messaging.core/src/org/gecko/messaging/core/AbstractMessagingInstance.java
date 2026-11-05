@@ -300,6 +300,26 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	/**
+	 * Returns whether the protocol creates every channel on first use, so that it cannot keep to
+	 * {@code autoCreate=false} ("do not create, fail if missing"). Such an instance refuses an
+	 * explicit {@code autoCreate=false} instead of ignoring it.
+	 *
+	 * @return {@code true} for protocols without channel management, such as MQTT
+	 */
+	protected boolean createsChannelsImplicitly() {
+		return false;
+	}
+
+	void checkProtocol(MessageContext context, boolean publish) {
+		if (createsChannelsImplicitly()
+				&& Boolean.FALSE.equals(Features.bool(context.getExtensions().get(EXTENSION_AUTO_CREATE)))) {
+			throw new FeatureNotSupportedException(FEATURE_AUTO_CREATE,
+					protocol + " creates channels on first use and cannot refuse to create one");
+		}
+		checkContext(context, publish);
+	}
+
+	/**
 	 * Returns the default queue policy of subscription buffers.
 	 *
 	 * @return {@code BLOCK}, {@code DISCARD_OLDEST} or {@code FAIL}
@@ -727,7 +747,7 @@ public abstract class AbstractMessagingInstance {
 				ctx = mergeDefaultChannel(ctx);
 			}
 			features.checkPublish(ctx);
-			checkContext(ctx, true);
+			checkProtocol(ctx, true);
 			ByteBuffer payload = message.payload();
 			long max = maxMessageSize();
 			if (max > 0 && payload.remaining() > max) {
@@ -797,7 +817,7 @@ public abstract class AbstractMessagingInstance {
 			ctx = mergeDefaultChannel(ctx);
 		}
 		features.checkSubscribe(ctx);
-		checkContext(ctx, false);
+		checkProtocol(ctx, false);
 		SimpleMessageContext simple = SimpleMessageContextBuilder.toSimple(ctx);
 		PushEventSource<Message> source = consumer -> open(simple, consumer);
 		return pushStreams.buildStream(source)

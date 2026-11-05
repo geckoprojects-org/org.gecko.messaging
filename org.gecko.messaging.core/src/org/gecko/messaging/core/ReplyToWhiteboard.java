@@ -153,7 +153,7 @@ final class ReplyToWhiteboard {
 		try {
 			SimpleMessageContext sub = (SimpleMessageContext) ctx.buildContext();
 			instance.getFeatures().checkSubscribe(sub);
-			instance.checkContext(sub, false);
+			instance.checkProtocol(sub, false);
 			b.handle = instance.addSubscription(sub, new SubscriptionHandle.Sink() {
 				@Override
 				public long accept(Message message) {
