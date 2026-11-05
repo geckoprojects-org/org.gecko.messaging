@@ -38,7 +38,9 @@ up)
 	# The config goes in as an environment variable and is written inside the container: a bind
 	# mount or `cp` keeps the owner and mode of the checkout, which differ between developer
 	# machines and CI agents (the Jenkins agent's file was unreadable for the mosquitto user).
-	$RUNTIME run -d --name gecko-msg-mosquitto -p "$MQTT_PORT:1883" \
+	# Running as mosquitto, the owner of /mosquitto/config, works without any capability; the
+	# Jenkins agent's podman does not give root in the container CAP_DAC_OVERRIDE.
+	$RUNTIME run -d --name gecko-msg-mosquitto --user mosquitto -p "$MQTT_PORT:1883" \
 		-e MOSQUITTO_CONF="$(cat "$DIR/mosquitto.conf")" "$MOSQUITTO_IMAGE" \
 		sh -c 'printf "%s\n" "$MOSQUITTO_CONF" > /mosquitto/config/tck.conf && exec mosquitto -c /mosquitto/config/tck.conf' >/dev/null
 	$RUNTIME run -d --name gecko-msg-rabbitmq -p "$AMQP_PORT:5672" "$RABBITMQ_IMAGE" >/dev/null
