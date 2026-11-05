@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.gecko.messaging.api.MessagingConstants.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
 
@@ -95,7 +96,7 @@ public class MessageContextTest extends AbstractMessagingTest {
 
 	@Test
 	void payloadBuffersAreIndependent() {
-		java.nio.ByteBuffer source = Tck.bytes("abc");
+		ByteBuffer source = Tck.bytes("abc");
 		Message m = builder().channel("c").content(source).buildMessage();
 		source.put(0, (byte) 'z');
 		m.payload().get();

@@ -19,6 +19,8 @@ import static org.gecko.messaging.api.MessagingConstants.*;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagePublisher;
 import org.gecko.messaging.api.MessageSubscription;
+import org.gecko.messaging.api.acknowledge.AcknowledgeMessageContextBuilder;
+import org.gecko.messaging.api.cloudevents.CloudEventMessageContextBuilder;
 import org.gecko.messaging.api.dto.MessagingRuntimeDTO;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
 import org.gecko.messaging.api.runtime.ConnectionState;
@@ -88,9 +90,9 @@ public class InstanceServicesTest extends AbstractMessagingTest {
 
 	@Test
 	void buildersAdaptOnlyToAnnouncedFeatures() {
-		assertThat(builder().isAdaptable(org.gecko.messaging.api.acknowledge.AcknowledgeMessageContextBuilder.class))
+		assertThat(builder().isAdaptable(AcknowledgeMessageContextBuilder.class))
 				.isEqualTo(tck.has(FEATURE_ACKNOWLEDGE));
-		assertThat(builder().isAdaptable(org.gecko.messaging.api.cloudevents.CloudEventMessageContextBuilder.class))
+		assertThat(builder().isAdaptable(CloudEventMessageContextBuilder.class))
 				.isEqualTo(tck.has(FEATURE_CLOUD_EVENTS));
 	}
 

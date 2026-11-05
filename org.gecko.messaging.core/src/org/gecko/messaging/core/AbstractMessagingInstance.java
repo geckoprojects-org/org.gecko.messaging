@@ -17,6 +17,7 @@ import static java.util.Objects.requireNonNull;
 import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.nio.ByteBuffer;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Dictionary;
@@ -57,6 +58,7 @@ import org.gecko.messaging.api.runtime.ConnectionListener;
 import org.gecko.messaging.api.runtime.ConnectionState;
 import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.gecko.messaging.core.cloudevents.CloudEventCodec;
+import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Filter;
 import org.osgi.framework.FrameworkUtil;
@@ -669,7 +671,7 @@ public abstract class AbstractMessagingInstance {
 			ce = cem.getCloudEvent();
 		} else {
 			ce = new SimpleCloudEvent(UUID.randomUUID().toString(), config.string("cloudEvents.source", "/osgi/messaging/" + config.name()),
-					config.string("cloudEvents.type", "org.gecko.messaging.message"), null, null, java.time.OffsetDateTime.now(),
+					config.string("cloudEvents.type", "org.gecko.messaging.message"), null, null, OffsetDateTime.now(),
 					ctx.getHeaders());
 		}
 		if (CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
@@ -988,12 +990,12 @@ public abstract class AbstractMessagingInstance {
 	private final class BuilderFactory implements PrototypeServiceFactory<MessageContextBuilder> {
 
 		@Override
-		public MessageContextBuilder getService(org.osgi.framework.Bundle bundle, ServiceRegistration<MessageContextBuilder> registration) {
+		public MessageContextBuilder getService(Bundle bundle, ServiceRegistration<MessageContextBuilder> registration) {
 			return newBuilder();
 		}
 
 		@Override
-		public void ungetService(org.osgi.framework.Bundle bundle, ServiceRegistration<MessageContextBuilder> registration,
+		public void ungetService(Bundle bundle, ServiceRegistration<MessageContextBuilder> registration,
 				MessageContextBuilder service) {
 			// nothing to release
 		}

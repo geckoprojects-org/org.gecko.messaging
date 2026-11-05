@@ -24,6 +24,7 @@ import java.util.concurrent.TimeoutException;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
+import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,7 +56,7 @@ public class ReplyToTest extends AbstractMessagingTest {
 		});
 	}
 
-	private org.gecko.messaging.api.MessageContextBuilder response(MessageContext request) {
+	private MessageContextBuilder response(MessageContext request) {
 		return builder().channel(request.getReplyToChannel()).correlationId(request.getCorrelationId());
 	}
 

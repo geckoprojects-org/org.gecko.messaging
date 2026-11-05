@@ -23,6 +23,7 @@ import java.lang.annotation.Target;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessagingConstants;
+import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.osgi.annotation.bundle.Attribute;
 import org.osgi.annotation.bundle.Capability;
 import org.osgi.namespace.implementation.ImplementationNamespace;
@@ -42,7 +43,7 @@ import org.osgi.namespace.service.ServiceNamespace;
 		uses = { Message.class })
 @Capability(namespace = ServiceNamespace.SERVICE_NAMESPACE, //
 		attribute = "objectClass:List<String>=\"org.gecko.messaging.api.MessagePublisher,org.gecko.messaging.api.MessageSubscription,org.gecko.messaging.api.MessageContextBuilder,org.gecko.messaging.api.runtime.MessageServiceRuntime\"", //
-		uses = { org.gecko.messaging.api.Message.class, org.gecko.messaging.api.runtime.MessageServiceRuntime.class })
+		uses = { Message.class, MessageServiceRuntime.class })
 public @interface ProvideMessagingImplementation {
 
 	/**
