@@ -10,5 +10,10 @@
 		"osgi.messaging.name": "tck-cloudevents",
 		"uri": "memory://tck-cloudevents",
 		"cloudEvents": "structured"
+	},
+	"org.gecko.messaging.memory~tckcebin": {
+		"osgi.messaging.name": "tck-ce-binary",
+		"uri": "memory://tck-ce-binary",
+		"cloudEvents": "binary"
 	}
 }

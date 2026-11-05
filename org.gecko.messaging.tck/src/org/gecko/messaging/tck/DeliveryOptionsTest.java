@@ -90,4 +90,16 @@ public class DeliveryOptionsTest extends AbstractMessagingTest {
 		assertThat(failure).as("MSG205: a message above " + max + " bytes").isInstanceOf(MessagingException.class);
 	}
 
+	@Test
+	void durableQueueDelivers() throws Exception {
+		assumeTrue(tck.has(FEATURE_DURABLE) && tck.has(FEATURE_POINT_TO_POINT));
+		MessageContext ctx = builder().channel(tck.channel("durable")).extensionEntry(EXTENSION_CHANNEL_TYPE, CHANNEL_TYPE_QUEUE)
+				.extensionEntry(EXTENSION_DURABLE, true)
+				.extensionEntry(EXTENSION_AUTO_CREATE, tck.has(FEATURE_AUTO_CREATE) ? Boolean.TRUE : null).buildContext();
+		List<Message> received = collect(ctx);
+		publisher.publish(builder().content(Tck.bytes("kept")).buildMessage(), ctx).getValue();
+		tck.awaitSize(received, 1);
+		assertThat(Tck.text(received.get(0))).isEqualTo("kept");
+	}
+
 }

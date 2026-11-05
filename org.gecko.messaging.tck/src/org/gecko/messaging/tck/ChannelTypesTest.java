@@ -18,10 +18,14 @@ import static org.gecko.messaging.api.MessagingConstants.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
+import org.gecko.messaging.api.FeatureNotSupportedException;
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
+import org.gecko.messaging.api.MessageContextBuilder;
 import org.junit.jupiter.api.Test;
+import org.osgi.util.pushstream.PushStream;
 
 /**
  * Point-to-point channels, wildcards and channel extensions (MSG120, MSG170, MSG180).
@@ -80,6 +84,35 @@ public class ChannelTypesTest extends AbstractMessagingTest {
 		assertThat(red.get(0).getContext().getChannelExtension()).isEqualTo("red");
 		tck.settle();
 		assertThat(blue).as("routing by extension").isEmpty();
+	}
+
+	@Test
+	void noAutoCreateIsKeptOrRefused() throws Exception {
+		MessageContextBuilder b = builder().channel(tck.channel("missing")).extensionEntry(EXTENSION_AUTO_CREATE, false);
+		if (tck.has(FEATURE_POINT_TO_POINT)) {
+			b.extensionEntry(EXTENSION_CHANNEL_TYPE, CHANNEL_TYPE_QUEUE);
+		}
+		MessageContext ctx = b.buildContext();
+		PushStream<Message> stream;
+		try {
+			stream = track(subscription.subscribe(ctx));
+		} catch (FeatureNotSupportedException e) {
+			// a protocol that creates every channel on use refuses instead of ignoring (MSG180)
+			assertThat(e.getFeature()).isEqualTo(FEATURE_AUTO_CREATE);
+			return;
+		}
+		assumeTrue(tck.has(FEATURE_POINT_TO_POINT), "a topic needs no creation");
+		// the protocol keeps to it: subscribing to a queue that does not exist fails — when the
+		// stream connects, or later through the stream
+		Throwable failure;
+		try {
+			failure = stream.forEach(m -> {
+			}).timeout(tck.timeout()).getFailure();
+		} catch (RuntimeException e) {
+			failure = e;
+		}
+		assertThat(failure).as("subscription to a missing queue without autoCreate").isNotNull()
+				.isNotInstanceOf(TimeoutException.class);
 	}
 
 }

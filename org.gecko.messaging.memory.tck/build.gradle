@@ -1,6 +1,6 @@
 // The run project launches the TCK from its bndruns. Each bndrun is resolved into the build
 // folder and run from there, so the checked-in bndruns carry no -runbundles.
-['tck', 'tck-cloudevents'].each { name ->
+['tck', 'tck-cloudevents', 'tck-cloudevents-binary'].each { name ->
     def resolve = tasks.named("resolve.${name}") {
         outputBndrun = layout.buildDirectory.file("${name}.bndrun")
         // resolves against the manifests of snapshot bundles, which Gradle does not see as inputs

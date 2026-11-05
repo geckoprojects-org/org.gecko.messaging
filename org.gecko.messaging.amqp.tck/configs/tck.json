@@ -18,5 +18,15 @@
 		"reconnectMaxDelay:Long": 200,
 		"connectTimeout:Long": 3000,
 		"cloudEvents": "structured"
+	},
+	"org.gecko.messaging.amqp~tckcebin": {
+		"osgi.messaging.name": "tck-ce-binary",
+		"uri": "amqp://localhost:15676",
+		"username": "tck",
+		".password": "tck",
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"connectTimeout:Long": 3000,
+		"cloudEvents": "binary"
 	}
 }
