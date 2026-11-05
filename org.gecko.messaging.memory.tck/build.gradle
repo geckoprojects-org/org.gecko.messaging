@@ -6,6 +6,9 @@
     }
     tasks.named("testrun.${name}") {
         bndrun = resolve.flatMap { it.outputBndrun }
+        // the launched bundles are snapshots of other projects, which Gradle does not see as
+        // inputs; a requested TCK run always runs
+        outputs.upToDateWhen { false }
     }
     tasks.named('testOSGi') { dependsOn "testrun.${name}" }
 }
