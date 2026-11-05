@@ -35,7 +35,6 @@ import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
-import org.eclipse.paho.client.mqttv3.MqttTopic;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessagingException;
@@ -196,15 +195,6 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		return h.channel();
 	}
 
-	/** @return the topic filter of a shared subscription filter, or {@code null} for others */
-	static String sharedTopicFilter(String filter) {
-		if (!filter.startsWith("$share/")) {
-			return null;
-		}
-		int slash = filter.indexOf('/', "$share/".length());
-		return slash < 0 ? null : filter.substring(slash + 1);
-	}
-
 	// ------------------------------------------------------------------ publish
 
 	@Override
@@ -245,9 +235,7 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 			return;
 		}
 		MqttAsyncClient c = client();
-		boolean queue = sharedTopicFilter(filter) != null;
-		// Paho stores a '$share/<group>/a' listener under that filter and never matches it with
-		// 'a' (geckoprojects-org/paho#54); such messages arrive in Callback.messageArrived.
+		boolean queue = filter.startsWith("$share/");
 		IMqttMessageListener listener = (topic, message) -> dispatch(c, handles, queue, topic, message);
 		try {
 			IMqttToken token = c.subscribe(filter, qos, null, null, listener);
@@ -383,16 +371,8 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 
 		@Override
 		public void messageArrived(String topic, MqttMessage message) {
-			// Only messages no subscription listener took: from a shared subscription (Paho does
-			// not match '$share/<group>/' filters, geckoprojects-org/paho#54), or left over from an
-			// ended subscription, which are acknowledged and dropped.
-			for (Map.Entry<String, Set<SubscriptionHandle>> e : filters.entrySet()) {
-				String shared = sharedTopicFilter(e.getKey());
-				if (shared != null && MqttTopic.isMatched(shared, topic)) {
-					dispatch(owner, e.getValue(), true, topic, message);
-					return;
-				}
-			}
+			// only messages no subscription listener took, left over from an ended subscription;
+			// acknowledge and drop
 			complete(owner, message);
 		}
 
