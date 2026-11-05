@@ -1,7 +1,6 @@
 # Licence header check, build, unit and OSGi/TCK tests against real brokers — on every branch.
-# GitHub Actions is meant to become the only place tests run; for now Jenkins runs the same
-# tests with the same broker setup (docker/brokers.sh via brokerUp/brokerDown). Publishing is
-# still Jenkins' job (see Jenkinsfile), which is why there is no snapshot or release workflow.
+# This is the only place the tests run. Jenkins (see Jenkinsfile) only builds and publishes
+# snapshots and releases, which is why there is no snapshot or release workflow here.
 #
 # Self-contained on purpose. This used to call eclipse-fennec/.github reusable workflows, which
 # expect that org's setup and do not fit a repository in geckoprojects-org.
@@ -44,7 +43,7 @@ jobs:
 
       # `build` covers compile, bnd bundle assembly and plain JUnit tests; testOSGi runs the
       # OSGi integration tests and the TCK runners against Mosquitto and RabbitMQ, started by
-      # brokerUp (docker/brokers.sh, the same script Jenkins uses).
+      # brokerUp (docker/brokers.sh, which also works locally).
       - name: Build, start brokers and run OSGi/TCK tests
         run: ./gradlew build brokerUp testOSGi --no-daemon --stacktrace
 

@@ -35,11 +35,9 @@ case "${1:-}" in
 up)
 	$RUNTIME rm -f gecko-msg-mosquitto gecko-msg-rabbitmq >/dev/null 2>&1 || true
 	# No --rm, so the logs of a container that died stay readable; down removes the containers.
-	# The config goes in as an environment variable and is written inside the container: a bind
-	# mount or `cp` keeps the owner and mode of the checkout, which differ between developer
-	# machines and CI agents (the Jenkins agent's file was unreadable for the mosquitto user).
-	# Running as mosquitto, the owner of /mosquitto/config, works without any capability; the
-	# Jenkins agent's podman does not give root in the container CAP_DAC_OVERRIDE.
+	# The config goes in as an environment variable and is written inside the container, by
+	# mosquitto, the owner of /mosquitto/config: a bind mount or `cp` keeps the owner and mode of
+	# the checkout, which differ between machines, and needs no capability this way.
 	$RUNTIME run -d --name gecko-msg-mosquitto --user mosquitto -p "$MQTT_PORT:1883" \
 		-e MOSQUITTO_CONF="$(cat "$DIR/mosquitto.conf")" "$MOSQUITTO_IMAGE" \
 		sh -c 'printf "%s\n" "$MOSQUITTO_CONF" > /mosquitto/config/tck.conf && exec mosquitto -c /mosquitto/config/tck.conf' >/dev/null

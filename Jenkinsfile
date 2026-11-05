@@ -12,19 +12,17 @@ pipeline  {
     }
 
     stages {
-        // The TCK runs against RabbitMQ and Mosquitto (docker/brokers.sh); the WebSocket TCK
-        // brings its own Jetty hub. brokerUp/brokerDown start and stop the containers.
-        // GitHub Actions runs the same tests with the same setup and is meant to take over
-        // testing completely; this stage goes away then.
-        stage('Unit, Integration & TCK Tests') {
+        // Jenkins only builds and publishes. All tests that need brokers (OSGi integration tests
+        // and the TCK runs) run in GitHub Actions (.github/workflows/build.yml), which is meant to
+        // gate main and snapshot. This stage only compiles and assembles the bundles and runs the
+        // plain JUnit tests.
+        stage('Build') {
             steps {
-                script {
-                    try {
-                        sh './gradlew clean build brokerUp testOSGi --info --stacktrace -Dmaven.repo.local=${WORKSPACE}/.m2 --no-daemon'
-                    } finally {
-                        sh './gradlew brokerDown --no-daemon || true'
-                        junit testResults: '**/generated/test-reports/**/TEST-*.xml', skipPublishingChecks: true
-                    }
+                sh './gradlew clean build --info --stacktrace -Dmaven.repo.local=${WORKSPACE}/.m2 --no-daemon'
+            }
+            post {
+                always {
+                    junit testResults: '**/generated/test-reports/**/TEST-*.xml', allowEmptyResults: true, skipPublishingChecks: true
                 }
             }
         }

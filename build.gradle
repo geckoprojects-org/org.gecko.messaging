@@ -115,8 +115,8 @@ tasks.named("sonar") {
     dependsOn(codeCoverageReport)
 }
 
-// Brokers of the TCK runs (docker/brokers.sh, docker or podman). GitHub Actions and Jenkins
-// call brokerUp before testOSGi and brokerDown afterwards.
+// Brokers of the TCK runs (docker/brokers.sh, docker or podman). GitHub Actions calls brokerUp
+// before testOSGi and brokerDown afterwards; locally the same works.
 tasks.register('brokerUp', Exec) {
     group = 'verification'
     description = 'Starts Mosquitto and RabbitMQ for the TCK runs'
