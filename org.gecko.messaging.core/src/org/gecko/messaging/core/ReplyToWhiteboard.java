@@ -21,6 +21,7 @@ import static org.gecko.messaging.api.replyto.ReplyToSubscriptionConstants.*;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -49,6 +50,8 @@ final class ReplyToWhiteboard {
 	private static final Logger LOG = Logger.getLogger(ReplyToWhiteboard.class.getName());
 
 	private final AbstractMessagingInstance instance;
+	/** Most requests of one handler waiting for a worker; beyond, the receiving thread handles them. */
+	private final int limit;
 	private final ServiceTracker<Object, Binding> tracker;
 	private final Map<ServiceReference<Object>, Binding> bindings = new ConcurrentHashMap<>();
 
@@ -62,6 +65,8 @@ final class ReplyToWhiteboard {
 		final boolean many;
 		final AtomicLong handled = new AtomicLong();
 		final AtomicLong refused = new AtomicLong();
+		/** Requests accepted and not handled yet. */
+		final AtomicInteger inFlight = new AtomicInteger();
 		volatile SubscriptionHandle handle;
 
 		Binding(ServiceReference<Object> reference, Object handler, String channel, String channelExtension, String replyChannel) {
@@ -77,6 +82,7 @@ final class ReplyToWhiteboard {
 
 	ReplyToWhiteboard(AbstractMessagingInstance instance, BundleContext context) {
 		this.instance = instance;
+		this.limit = instance.getConfiguration().bufferSize();
 		Filter filter;
 		try {
 			filter = FrameworkUtil.createFilter("(&(|(" + Constants.OBJECTCLASS + "=" + ReplyToSingleSubscriptionHandler.class.getName()
@@ -143,10 +149,27 @@ final class ReplyToWhiteboard {
 		try {
 			SimpleMessageContext sub = (SimpleMessageContext) ctx.buildContext();
 			instance.getFeatures().checkSubscribe(sub);
+			instance.checkContext(sub, false);
 			b.handle = instance.addSubscription(sub, new SubscriptionHandle.Sink() {
 				@Override
 				public long accept(Message message) {
-					instance.workers().execute(() -> handle(b, message));
+					if (b.inFlight.incrementAndGet() > limit) {
+						// caller runs: the receiving thread slows down, so broker flow control and
+						// TCP hold back further requests instead of the heap
+						try {
+							handle(b, message);
+						} finally {
+							b.inFlight.decrementAndGet();
+						}
+						return 0;
+					}
+					instance.workers().execute(() -> {
+						try {
+							handle(b, message);
+						} finally {
+							b.inFlight.decrementAndGet();
+						}
+					});
 					return 0;
 				}
 
