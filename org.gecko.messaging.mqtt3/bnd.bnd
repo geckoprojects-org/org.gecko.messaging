@@ -19,6 +19,7 @@ Bundle-Description: Messaging over MQTT 3.1.1 with Eclipse Paho (the build of \
 	org.osgi.util.pushstream;version=latest
 
 -testpath: \
+	assertj-core;version=latest,\
 	org.osgi.util.function;version=latest,\
 	org.osgi.util.tracker;version=latest,\
 	org.osgi.dto;version=latest

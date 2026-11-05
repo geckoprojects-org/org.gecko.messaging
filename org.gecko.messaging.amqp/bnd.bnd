@@ -18,6 +18,7 @@ Bundle-Description: Messaging over AMQP 0-9-1 with the RabbitMQ Java client. One
 	org.osgi.util.pushstream;version=latest
 
 -testpath: \
+	assertj-core;version=latest,\
 	org.osgi.util.function;version=latest,\
 	org.osgi.util.tracker;version=latest,\
 	org.osgi.dto;version=latest

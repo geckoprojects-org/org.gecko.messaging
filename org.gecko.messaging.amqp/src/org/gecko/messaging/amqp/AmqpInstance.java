@@ -28,6 +28,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.gecko.messaging.api.FeatureNotSupportedException;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagingException;
@@ -65,7 +66,8 @@ import com.rabbitmq.client.ShutdownSignalException;
  * <li>a queue is a named queue on the default exchange; several subscriptions of a queue are
  * competing consumers, the broker hands each message to one of them.</li>
  * </ul>
- * Publishing with QoS 1 waits for the publisher confirm; QoS 2 does not exist in AMQP and fails.
+ * Publishing with QoS 1 waits for the publisher confirm; QoS 2 does not exist in AMQP and is
+ * refused as unsupported feature before anything is sent, as is a queue with a channel extension.
  * Received messages are acknowledged manually (QoS 1, the default) or on delivery (QoS 0); a
  * rejected message is nacked, with re-queue if asked. The instance owns reconnecting: the client's
  * automatic recovery is off, subscriptions are restored by the instance. There is no retain.
@@ -112,6 +114,9 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 			throw new MessagingException("An AMQP instance needs a 'uri'");
 		}
 		this.defaultQos = (int) config.number("qos", QOS_AT_LEAST_ONCE);
+		if (defaultQos != QOS_AT_MOST_ONCE && defaultQos != QOS_AT_LEAST_ONCE) {
+			throw new MessagingException("AMQP offers QoS 0 and 1, not " + defaultQos);
+		}
 		this.topicExchange = config.string("exchange", "amq.topic");
 		this.prefetch = (int) config.number("prefetch", 100);
 	}
@@ -245,11 +250,17 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 
 	private int qos(MessageContext context) {
 		int q = Features.qos(context);
-		q = q < 0 ? defaultQos : q;
-		if (q == QOS_EXACTLY_ONCE) {
-			throw new MessagingException("AMQP offers at most once and at least once, not exactly once");
+		return q < 0 ? defaultQos : q;
+	}
+
+	@Override
+	protected void checkContext(MessageContext context, boolean publish) {
+		if (Features.qos(context) == QOS_EXACTLY_ONCE) {
+			throw new FeatureNotSupportedException(FEATURE_QOS, "AMQP offers at most once and at least once, not exactly once");
 		}
-		return q;
+		if (isQueue(context) && context.getChannelExtension() != null) {
+			throw new FeatureNotSupportedException(FEATURE_CHANNEL_EXTENSION, "A queue has no channel extension");
+		}
 	}
 
 	private static boolean isQueue(MessageContext context) {
@@ -288,9 +299,6 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		AMQP.BasicProperties props = properties(context);
 		boolean queue = isQueue(context);
 		String extension = context.getChannelExtension();
-		if (queue && extension != null) {
-			throw new MessagingException("A queue has no channel extension");
-		}
 		Deferred<Void> deferred = promises.deferred();
 		synchronized (publishLock) {
 			Channel ch = publishChannel();
@@ -363,9 +371,6 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		boolean manual = qos != QOS_AT_MOST_ONCE || handle.needsAcknowledger();
 		boolean queue = isQueue(context);
 		String extension = handle.channelExtension();
-		if (queue && extension != null) {
-			throw new MessagingException("A queue has no channel extension");
-		}
 		Channel ch = connection().createChannel();
 		try {
 			ch.basicQos(prefetch);

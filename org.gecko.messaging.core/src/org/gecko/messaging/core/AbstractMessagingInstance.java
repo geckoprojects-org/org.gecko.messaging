@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Dictionary;
 import java.util.Hashtable;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,10 +48,12 @@ import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagePublisher;
 import org.gecko.messaging.api.MessageSubscription;
 import org.gecko.messaging.api.MessagingException;
+import org.gecko.messaging.api.acknowledge.AcknowledgeType;
 import org.gecko.messaging.api.cloudevents.CloudEvent;
 import org.gecko.messaging.api.cloudevents.CloudEventConstants;
 import org.gecko.messaging.api.cloudevents.CloudEventMessageContext;
 import org.gecko.messaging.api.dto.MessagingRuntimeDTO;
+import org.gecko.messaging.api.dto.ReplyToSubscriptionDTO;
 import org.gecko.messaging.api.dto.SubscriptionDTO;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
 import org.gecko.messaging.api.runtime.ConnectionEvent;
@@ -101,6 +104,14 @@ public abstract class AbstractMessagingInstance {
 
 	private static final Logger LOG = Logger.getLogger(AbstractMessagingInstance.class.getName());
 
+	/**
+	 * What the structured CloudEvents envelope carries for any protocol: content type, headers as
+	 * extensions, correlation and reply-to, and with them reply-to as a whole.
+	 */
+	static final List<String> STRUCTURED_ENVELOPE_FEATURES = List.of(FEATURE_CONTENT_TYPE, FEATURE_HEADERS,
+			FEATURE_REPLY_TO, FEATURE_REPLY_TO_MANY, FEATURE_REPLY_TO_SUBSCRIPTION, FEATURE_GENERATE_CORRELATION_ID,
+			FEATURE_GENERATE_REPLY_CHANNEL);
+
 	/** The provider name of this implementation. */
 	public static final String PROVIDER = "gecko";
 
@@ -143,9 +154,13 @@ public abstract class AbstractMessagingInstance {
 	protected AbstractMessagingInstance(String protocol, MessagingConfiguration config, Collection<String> features) {
 		this.protocol = requireNonNull(protocol);
 		this.config = requireNonNull(config);
-		List<String> f = new ArrayList<>(features);
-		if (config.cloudEvents() && !f.contains(FEATURE_CLOUD_EVENTS)) {
+		Set<String> f = new LinkedHashSet<>(features);
+		if (config.cloudEvents()) {
 			f.add(FEATURE_CLOUD_EVENTS);
+		}
+		if (CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
+			// the envelope carries these whatever the protocol has itself
+			f.addAll(STRUCTURED_ENVELOPE_FEATURES);
 		}
 		this.features = new Features(f);
 		String name = config.name();
@@ -235,6 +250,34 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	/**
+	 * Refuses a configuration with the CloudEvents binary mode on a protocol without headers,
+	 * before the instance announces {@code cloudEvents}: otherwise every message would fail.
+	 */
+	private void checkCloudEventsBinding() {
+		if (CloudEventConstants.MODE_BINARY.equals(config.cloudEventsMode())) {
+			try {
+				cloudEventHeaderPrefix();
+			} catch (FeatureNotSupportedException e) {
+				throw new MessagingException("Messaging instance " + config.name() + ": " + e.getMessage()
+						+ ", use cloudEvents=structured", e);
+			}
+		}
+	}
+
+	/**
+	 * Checks what the protocol cannot do beyond the announced features, such as a quality of
+	 * service above its maximum, before anything is sent or subscribed. Called after the feature
+	 * check, for every publish and subscribe.
+	 *
+	 * @param context the context of the publish or subscription
+	 * @param publish {@code true} for a publish, {@code false} for a subscription
+	 * @throws FeatureNotSupportedException if the protocol cannot do what the context asks
+	 */
+	protected void checkContext(MessageContext context, boolean publish) {
+		// nothing beyond the features by default
+	}
+
+	/**
 	 * Returns the default queue policy of subscription buffers.
 	 *
 	 * @return {@code BLOCK}, {@code DISCARD_OLDEST} or {@code FAIL}
@@ -294,6 +337,7 @@ public abstract class AbstractMessagingInstance {
 	 * @param context the bundle context to register with
 	 */
 	public void start(BundleContext context) {
+		checkCloudEventsBinding();
 		this.bundleContext = context;
 		Dictionary<String, Object> props = serviceProperties();
 		MessagePublisher publisher = new Publisher();
@@ -352,6 +396,7 @@ public abstract class AbstractMessagingInstance {
 	 * Starts connecting without registering services. For use outside a framework.
 	 */
 	public void startStandalone() {
+		checkCloudEventsBinding();
 		synchronized (stateLock) {
 			pendingConnect = scheduler.schedule(this::connectAttempt, 0, TimeUnit.MILLISECONDS);
 		}
@@ -637,6 +682,7 @@ public abstract class AbstractMessagingInstance {
 				ctx = mergeDefaultChannel(ctx);
 			}
 			features.checkPublish(ctx);
+			checkContext(ctx, true);
 			ByteBuffer payload = message.payload();
 			long max = maxMessageSize();
 			if (max > 0 && payload.remaining() > max) {
@@ -706,6 +752,7 @@ public abstract class AbstractMessagingInstance {
 			ctx = mergeDefaultChannel(ctx);
 		}
 		features.checkSubscribe(ctx);
+		checkContext(ctx, false);
 		SimpleMessageContext simple = SimpleMessageContextBuilder.toSimple(ctx);
 		PushEventSource<Message> source = consumer -> open(simple, consumer);
 		return pushStreams.buildStream(source)
@@ -827,7 +874,7 @@ public abstract class AbstractMessagingInstance {
 				if (sub.getAcknowledgeFunction() != null) {
 					sub.getAcknowledgeFunction().accept(message);
 					ack.acknowledge(); // undecided counts as accepted
-					if (ack.getAcknowledgeState() != org.gecko.messaging.api.acknowledge.AcknowledgeType.ACKNOWLEDGED) {
+					if (ack.getAcknowledgeState() != AcknowledgeType.ACKNOWLEDGED) {
 						return;
 					}
 				} else if (sub.getAcknowledgeFilter() != null) {
@@ -931,7 +978,7 @@ public abstract class AbstractMessagingInstance {
 		}
 		dto.subscriptions = subscriptions.stream().filter(h -> !h.isInternal()).map(SubscriptionHandle::toDTO)
 				.toArray(SubscriptionDTO[]::new);
-		dto.replyToSubscriptions = whiteboard == null ? new org.gecko.messaging.api.dto.ReplyToSubscriptionDTO[0] : whiteboard.toDTOs();
+		dto.replyToSubscriptions = whiteboard == null ? new ReplyToSubscriptionDTO[0] : whiteboard.toDTOs();
 		return dto;
 	}
 

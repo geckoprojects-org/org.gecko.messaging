@@ -39,7 +39,6 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.eclipse.jetty.websocket.client.WebSocketClient;
 import org.gecko.messaging.api.MessagingException;
-import org.gecko.messaging.api.cloudevents.CloudEventConstants;
 import org.gecko.messaging.core.AbstractMessagingInstance;
 import org.gecko.messaging.core.MessagingConfiguration;
 import org.gecko.messaging.core.SimpleMessageContext;
@@ -76,10 +75,6 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 
 	static final List<String> FEATURES = List.of(FEATURE_PUBLISH_SUBSCRIBE, FEATURE_AUTO_CREATE);
 
-	/** What the structured CloudEvents envelope adds. */
-	static final List<String> STRUCTURED_FEATURES = List.of(FEATURE_CONTENT_TYPE, FEATURE_HEADERS, FEATURE_REPLY_TO,
-			FEATURE_REPLY_TO_MANY, FEATURE_REPLY_TO_SUBSCRIPTION, FEATURE_GENERATE_CORRELATION_ID,
-			FEATURE_GENERATE_REPLY_CHANNEL);
 
 	private final URI base;
 	private final long keepAliveMillis;
@@ -98,25 +93,13 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	 * @param config the configuration
 	 */
 	public WebSocketInstance(MessagingConfiguration config) {
-		super(PROTOCOL, config, features(config));
+		super(PROTOCOL, config, FEATURES);
 		if (config.uri() == null) {
 			throw new MessagingException("A WebSocket instance needs a 'uri'");
-		}
-		if (CloudEventConstants.MODE_BINARY.equals(config.cloudEventsMode())) {
-			throw new MessagingException("WebSocket messages have no headers: CloudEvents only in the structured mode");
 		}
 		String u = config.uri();
 		this.base = URI.create(u.endsWith("/") ? u.substring(0, u.length() - 1) : u);
 		this.keepAliveMillis = TimeUnit.SECONDS.toMillis(config.number("keepAliveInterval", 30));
-	}
-
-	static List<String> features(MessagingConfiguration config) {
-		if (!CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
-			return FEATURES;
-		}
-		List<String> f = new ArrayList<>(FEATURES);
-		f.addAll(STRUCTURED_FEATURES);
-		return f;
 	}
 
 	// ------------------------------------------------------------------ connection

@@ -38,7 +38,6 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessagingException;
-import org.gecko.messaging.api.cloudevents.CloudEventConstants;
 import org.gecko.messaging.core.AbstractMessagingInstance;
 import org.gecko.messaging.core.Acknowledger;
 import org.gecko.messaging.core.Features;
@@ -80,10 +79,6 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	static final List<String> FEATURES = List.of(FEATURE_PUBLISH_SUBSCRIBE, FEATURE_POINT_TO_POINT, FEATURE_WILDCARD,
 			FEATURE_QOS, FEATURE_RETAIN, FEATURE_AUTO_CREATE, FEATURE_ACKNOWLEDGE);
 
-	/** What the structured CloudEvents envelope adds. */
-	static final List<String> STRUCTURED_FEATURES = List.of(FEATURE_CONTENT_TYPE, FEATURE_HEADERS, FEATURE_REPLY_TO,
-			FEATURE_REPLY_TO_MANY, FEATURE_REPLY_TO_SUBSCRIPTION, FEATURE_GENERATE_CORRELATION_ID,
-			FEATURE_GENERATE_REPLY_CHANNEL);
 
 	/** Connect return codes that end the reconnect cycle: bad credentials, not authorised. */
 	private static final Set<Integer> FATAL = Set.of((int) MqttException.REASON_CODE_FAILED_AUTHENTICATION,
@@ -103,21 +98,12 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	 * @param config the configuration
 	 */
 	public Mqtt3Instance(MessagingConfiguration config) {
-		super(PROTOCOL, config, features(config));
+		super(PROTOCOL, config, FEATURES);
 		if (config.uri() == null) {
 			throw new MessagingException("An MQTT instance needs a 'uri'");
 		}
 		this.defaultQos = (int) config.number("qos", QOS_AT_LEAST_ONCE);
 		this.sharedGroup = config.string("sharedGroup", config.name());
-	}
-
-	static List<String> features(MessagingConfiguration config) {
-		if (!CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
-			return FEATURES;
-		}
-		List<String> f = new ArrayList<>(FEATURES);
-		f.addAll(STRUCTURED_FEATURES);
-		return f;
 	}
 
 	@Override
