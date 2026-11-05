@@ -42,6 +42,23 @@ public class DeliveryOptionsTest extends AbstractMessagingTest {
 	}
 
 	@Test
+	void subscriptionsOfOneChannelWithDifferentQosAllReceive() throws Exception {
+		assumeTrue(tck.has(FEATURE_QOS));
+		String channel = tck.channel("qosmix");
+		// a protocol subscribing a channel once for all local subscriptions must serve the later,
+		// higher one as well (subscribing the broker again with it), not deliver at the lower one
+		List<Message> low = collect(builder().channel(channel).extensionEntry(EXTENSION_QOS, QOS_AT_MOST_ONCE).buildContext());
+		List<Message> high = collect(builder().channel(channel).extensionEntry(EXTENSION_QOS, QOS_AT_LEAST_ONCE).buildContext());
+		MessageContext ctx = builder().channel(channel).extensionEntry(EXTENSION_QOS, QOS_AT_LEAST_ONCE).buildContext();
+		publisher.publish(builder().content(Tck.bytes("both")).buildMessage(), ctx).getValue();
+		tck.awaitSize(low, 1);
+		tck.awaitSize(high, 1);
+		tck.settle();
+		assertThat(low).as("once each, also after the broker subscription changed").hasSize(1);
+		assertThat(high).hasSize(1);
+	}
+
+	@Test
 	void atMostOnceIsAlwaysAccepted() throws Exception {
 		String channel = tck.channel("qos0");
 		List<Message> received = collect(channel);

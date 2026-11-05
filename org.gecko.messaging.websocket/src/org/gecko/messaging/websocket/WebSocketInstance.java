@@ -25,9 +25,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +43,7 @@ import org.gecko.messaging.core.AbstractMessagingInstance;
 import org.gecko.messaging.core.MessagingConfiguration;
 import org.gecko.messaging.core.SimpleMessageContext;
 import org.gecko.messaging.core.SimpleMessageContextBuilder;
+import org.gecko.messaging.core.SubscriptionGroup;
 import org.gecko.messaging.core.SubscriptionHandle;
 import org.osgi.util.promise.Deferred;
 import org.osgi.util.promise.Promise;
@@ -91,7 +90,20 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	/** Sessions by channel. */
 	private final Map<String, ChannelSession> sessions = new ConcurrentHashMap<>();
 	/** Local subscriptions by channel. */
-	private final Map<String, Set<SubscriptionHandle>> subscriptions = new ConcurrentHashMap<>();
+	private final Map<String, SubscriptionGroup> subscriptions = new ConcurrentHashMap<>();
+
+	/** WebSocket has nothing to complete or re-queue: no acknowledgement. */
+	private static final SubscriptionGroup.Broker NO_BROKER = new SubscriptionGroup.Broker() {
+		@Override
+		public void complete() {
+			// nothing to complete
+		}
+
+		@Override
+		public void requeue() {
+			// no queues
+		}
+	};
 	/** Channels with a session but no subscription, least recently published to first; under sessions. */
 	private final Map<String, Boolean> publishOnly = new LinkedHashMap<>(16, 0.75f, true);
 	private final int maxPublishSessions;
@@ -284,7 +296,7 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	@Override
 	protected void doSubscribe(SubscriptionHandle handle) throws Exception {
 		String channel = handle.channel();
-		subscriptions.computeIfAbsent(channel, c -> new CopyOnWriteArraySet<>()).add(handle);
+		subscriptions.computeIfAbsent(channel, c -> new SubscriptionGroup(false)).add(handle, 0);
 		synchronized (sessions) {
 			publishOnly.remove(channel);
 		}
@@ -309,30 +321,18 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 
 	/** @return {@code true} if it was the last subscription of its channel */
 	private boolean unsubscribeLocal(SubscriptionHandle handle) {
-		Set<SubscriptionHandle> handles = subscriptions.get(handle.channel());
-		if (handles == null) {
+		SubscriptionGroup group = subscriptions.get(handle.channel());
+		if (group == null || !group.remove(handle)) {
 			return false;
 		}
-		synchronized (handles) {
-			handles.remove(handle);
-			if (handles.isEmpty()) {
-				subscriptions.remove(handle.channel(), handles);
-				return true;
-			}
-			return false;
-		}
+		return subscriptions.remove(handle.channel(), group);
 	}
 
 	private void dispatch(String channel, byte[] payload) {
-		Set<SubscriptionHandle> handles = subscriptions.get(channel);
-		if (handles == null || handles.isEmpty()) {
-			return;
-		}
-		SimpleMessageContext ctx = (SimpleMessageContext) new SimpleMessageContextBuilder().channel(channel).buildContext();
-		List<SubscriptionHandle> targets = new ArrayList<>(handles);
-		for (int i = 0; i < targets.size(); i++) {
-			byte[] own = i == targets.size() - 1 ? payload : payload.clone();
-			targets.get(i).deliver(ctx, own, null);
+		SubscriptionGroup group = subscriptions.get(channel);
+		if (group != null) {
+			group.dispatch((SimpleMessageContext) new SimpleMessageContextBuilder().channel(channel).buildContext(), payload,
+					NO_BROKER);
 		}
 	}
 

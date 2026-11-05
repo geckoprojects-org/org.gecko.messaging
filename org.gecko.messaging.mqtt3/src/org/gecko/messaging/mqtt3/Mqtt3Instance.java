@@ -23,8 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -46,6 +44,7 @@ import org.gecko.messaging.core.Features;
 import org.gecko.messaging.core.MessagingConfiguration;
 import org.gecko.messaging.core.SimpleMessageContext;
 import org.gecko.messaging.core.SimpleMessageContextBuilder;
+import org.gecko.messaging.core.SubscriptionGroup;
 import org.gecko.messaging.core.SubscriptionHandle;
 import org.osgi.util.promise.Deferred;
 import org.osgi.util.promise.Promise;
@@ -100,7 +99,7 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	private final long maxMessageSize;
 	private volatile MqttAsyncClient client;
 	/** Broker subscriptions by topic filter, with the local subscriptions they feed. */
-	private final Map<String, Set<SubscriptionHandle>> filters = new ConcurrentHashMap<>();
+	private final Map<String, SubscriptionGroup> filters = new ConcurrentHashMap<>();
 	/** Most fingerprints of re-queued messages kept, see {@link #requeue}. */
 	static final int REQUEUE_MEMORY = 1024;
 
@@ -119,8 +118,6 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		}
 	};
 
-	/** Turns of the local queue subscriptions, see {@link #dispatch}. */
-	private final AtomicInteger queueTurn = new AtomicInteger();
 
 	/**
 	 * Creates the instance.
@@ -252,19 +249,26 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	@Override
 	protected void doSubscribe(SubscriptionHandle handle) throws Exception {
 		String filter = topicFilter(handle);
-		int qos = qos(handle.context());
-		Set<SubscriptionHandle> handles = filters.computeIfAbsent(filter, f -> new CopyOnWriteArraySet<>());
-		boolean first;
-		synchronized (handles) {
-			first = handles.isEmpty();
-			handles.add(handle);
-		}
-		if (!first) {
-			return;
+		SubscriptionGroup group = filters.computeIfAbsent(filter, f -> new SubscriptionGroup(f.startsWith("$share/")));
+		int qos = group.add(handle, qos(handle.context()));
+		if (qos < 0) {
+			return; // the broker subscription serves it
 		}
 		MqttAsyncClient c = client();
-		boolean queue = filter.startsWith("$share/");
-		IMqttMessageListener listener = (topic, message) -> dispatch(c, handles, queue, topic, message);
+		// subscribed again for a higher QoS, the broker sends retained messages again: MQTT 3.1.1
+		// has no retain handling, so existing receivers may get a retained message twice then
+		IMqttMessageListener listener = (topic, message) -> group.dispatch(context(topic, message), message.getPayload(),
+				new SubscriptionGroup.Broker() {
+					@Override
+					public void complete() {
+						Mqtt3Instance.this.complete(c, message);
+					}
+
+					@Override
+					public void requeue() {
+						Mqtt3Instance.this.requeue(c, topic, message);
+					}
+				});
 		try {
 			IMqttToken token = c.subscribe(filter, qos, null, null, listener);
 			token.waitForCompletion(config.connectTimeout());
@@ -272,12 +276,10 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 			if (granted != null && granted.length > 0 && granted[0] >= 0x80) {
 				throw new MessagingException("The broker refused the subscription of " + filter);
 			}
+			group.subscribed(granted != null && granted.length > 0 ? granted[0] : qos);
 		} catch (Exception e) {
-			synchronized (handles) {
-				handles.remove(handle);
-				if (handles.isEmpty()) {
-					filters.remove(filter, handles);
-				}
+			if (group.remove(handle)) {
+				filters.remove(filter, group);
 			}
 			throw e;
 		}
@@ -286,68 +288,17 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	@Override
 	protected void doUnsubscribe(SubscriptionHandle handle) {
 		String filter = topicFilter(handle);
-		Set<SubscriptionHandle> handles = filters.get(filter);
-		if (handles == null) {
+		SubscriptionGroup group = filters.get(filter);
+		if (group == null || !group.remove(handle)) {
 			return;
 		}
-		boolean last;
-		synchronized (handles) {
-			handles.remove(handle);
-			last = handles.isEmpty();
-			if (last) {
-				filters.remove(filter, handles);
-			}
-		}
+		filters.remove(filter, group);
 		MqttAsyncClient c = client;
-		if (last && c != null && c.isConnected()) {
+		if (c != null && c.isConnected()) {
 			try {
 				c.unsubscribe(filter);
 			} catch (MqttException | RuntimeException e) {
 				LOG.log(Level.FINE, "MQTT unsubscribe of " + filter + " failed", e);
-			}
-		}
-	}
-
-	private void dispatch(MqttAsyncClient c, Set<SubscriptionHandle> handles, boolean queue, String topic,
-			MqttMessage message) {
-		List<SubscriptionHandle> targets = new ArrayList<>(handles);
-		if (queue && targets.size() > 1) {
-			// competing consumers: one local subscription gets the message
-			targets = List.of(targets.get(Math.floorMod(queueTurn.getAndIncrement(), targets.size())));
-		}
-		AtomicInteger open = new AtomicInteger(Math.max(1, targets.size()));
-		Runnable done = () -> {
-			if (open.decrementAndGet() == 0) {
-				complete(c, message);
-			}
-		};
-		if (targets.isEmpty()) {
-			done.run();
-			return;
-		}
-		SimpleMessageContext ctx = context(topic, message);
-		byte[] payload = message.getPayload();
-		for (int i = 0; i < targets.size(); i++) {
-			SubscriptionHandle h = targets.get(i);
-			byte[] own = i == targets.size() - 1 ? payload : payload.clone();
-			if (h.needsAcknowledger()) {
-				h.deliver(ctx, own, new Acknowledger() {
-					@Override
-					public void acknowledge() {
-						done.run();
-					}
-
-					@Override
-					public void reject(boolean requeue) {
-						if (requeue) {
-							requeue(c, topic, message);
-						}
-						done.run();
-					}
-				});
-			} else {
-				h.deliver(ctx, own, null);
-				done.run();
 			}
 		}
 	}
