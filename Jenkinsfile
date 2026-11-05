@@ -21,10 +21,11 @@ pipeline  {
                 sh 'ci/wait-for-github.sh'
             }
         }
-        // Compiles and assembles the bundles and runs the plain JUnit tests.
+        // Compiles and assembles the bundles and runs the plain JUnit tests; the OSGi and TCK runs
+        // (testOSGi) need the brokers and are left to GitHub Actions.
         stage('Build') {
             steps {
-                sh './gradlew clean build --info --stacktrace -Dmaven.repo.local=${WORKSPACE}/.m2 --no-daemon'
+                sh './gradlew clean build -x testOSGi --info --stacktrace -Dmaven.repo.local=${WORKSPACE}/.m2 --no-daemon'
             }
             post {
                 always {

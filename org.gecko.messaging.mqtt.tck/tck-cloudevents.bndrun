@@ -1,0 +1,13 @@
+# The TCK against the MQTT implementation with structured CloudEvents; needs the broker of
+# docker/brokers.sh (brokerUp).
+-library: enableOSGi-Test
+-include: ${workspace}/cnf/ext/tck-run.bnd
+
+-runrequires: \
+	bnd.identity;id='org.gecko.messaging.tck',\
+	bnd.identity;id='org.gecko.messaging.mqtt',\
+	bnd.identity;id='org.gecko.messaging.mqtt.tck',\
+	${tck.runrequires}
+
+-runproperties.instance: \
+	org.gecko.messaging.tck.filter='(osgi.messaging.name=tck-cloudevents)'
