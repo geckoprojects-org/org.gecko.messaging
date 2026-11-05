@@ -1,0 +1,29 @@
+Bundle-Name: Gecko Messaging WebSocket
+Bundle-Description: Messaging over raw WebSocket with the Jetty 12 client: a channel is a URL \
+	path below the configured base URI, a hub (org.gecko.messaging.websocket.hub or any server \
+	that relays the messages of a path to its sessions) connects the participants. Publish and \
+	subscribe only; content type, headers, correlation and reply-to with structured CloudEvents. \
+	Factory configuration org.gecko.messaging.websocket.
+
+# jetty-client 12.1 imports org.eclipse.jetty.compression as optional but needs it to create a
+# client; a resolver leaves optional imports out. Importing it here brings the bundle into a
+# resolved runtime, where the framework then wires jetty-client's optional import too.
+Import-Package: \
+	org.eclipse.jetty.compression;version="[12.1,13)",\
+	*
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
+	org.gecko.messaging.core;version=snapshot,\
+	org.eclipse.jetty.util;version=latest,\
+	org.eclipse.jetty.client;version=latest,\
+	org.eclipse.jetty.compression.common;version=latest,\
+	org.eclipse.jetty.websocket.api;version=latest,\
+	org.eclipse.jetty.websocket.client;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.namespace.service;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest

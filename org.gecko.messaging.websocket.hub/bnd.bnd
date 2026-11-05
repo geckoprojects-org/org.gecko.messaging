@@ -1,0 +1,17 @@
+Bundle-Name: Gecko Messaging WebSocket Hub
+Bundle-Description: An embedded Jetty 12 WebSocket server that relays every message received on \
+	a URL path to all sessions of that path, the sender included: the counterpart of \
+	org.gecko.messaging.websocket. No authentication; binds to localhost unless configured \
+	otherwise. Factory configuration org.gecko.messaging.websocket.hub.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.eclipse.jetty.util;version=latest,\
+	org.eclipse.jetty.io;version=latest,\
+	org.eclipse.jetty.http;version=latest,\
+	org.eclipse.jetty.server;version=latest,\
+	org.eclipse.jetty.websocket.api;version=latest,\
+	org.eclipse.jetty.websocket.server;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.metatype.annotations;version=latest
