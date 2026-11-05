@@ -1,0 +1,22 @@
+Bundle-Name: Gecko Messaging MQTT
+Bundle-Description: Messaging over MQTT 5 with Eclipse Paho (the build of geckoprojects-org/paho). \
+	One client per instance, reconnects owned by the instance, manual acknowledgement, shared \
+	subscriptions as queues, response topic and correlation data for reply-to, CloudEvents MQTT \
+	binding. Factory configuration org.gecko.messaging.mqtt.
+
+-buildpath: \
+	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
+	org.gecko.messaging.core;version=snapshot,\
+	org.eclipse.paho.mqttv5.client;version=latest,\
+	org.osgi.framework;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.namespace.implementation;version=latest,\
+	org.osgi.namespace.service;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	org.osgi.util.pushstream;version=latest
+
+-testpath: \
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.tracker;version=latest,\
+	org.osgi.dto;version=latest
