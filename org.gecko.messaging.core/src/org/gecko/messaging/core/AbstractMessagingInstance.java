@@ -803,8 +803,10 @@ public abstract class AbstractMessagingInstance {
 		SimpleMessage message;
 		try {
 			message = decode(messageContext, payload);
-		} catch (RuntimeException e) {
-			LOG.log(Level.WARNING, "Dropping an undecodable message on " + h, e);
+		} catch (RuntimeException | StackOverflowError e) {
+			// remote input: no stack trace per message at WARNING, it would flood the log
+			LOG.warning(() -> "Dropping an undecodable message on " + h + ": " + e.getClass().getSimpleName());
+			LOG.log(Level.FINE, "Undecodable message", e);
 			if (acknowledger != null) {
 				acknowledger.reject(false);
 			}

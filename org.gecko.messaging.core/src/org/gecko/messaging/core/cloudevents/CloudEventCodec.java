@@ -86,7 +86,7 @@ public final class CloudEventCodec {
 			}
 		}
 		if (b.isEmpty()) {
-			throw new MessagingException("'" + name + "' gives no valid CloudEvents attribute name");
+			throw new MessagingException("'" + printable(name) + "' gives no valid CloudEvents attribute name");
 		}
 		return b.toString();
 	}
@@ -143,7 +143,7 @@ public final class CloudEventCodec {
 				str(headers.get(prefix + "type")), str(headers.get(prefix + "dataschema")), str(headers.get(prefix + "subject")),
 				time(headers.get(prefix + "time")), ext);
 		if (ce.getId() == null || ce.getSource() == null || ce.getType() == null) {
-			throw new MessagingException("A binary CloudEvent misses id, source or type: " + headers.keySet());
+			throw new MessagingException("A binary CloudEvent misses id, source or type: " + printable(headers.keySet()));
 		}
 		return new Binary(ce, other);
 	}
@@ -219,7 +219,7 @@ public final class CloudEventCodec {
 			throw new MessagingException("No valid CloudEvents JSON envelope: " + e.getMessage(), e);
 		}
 		if (!CloudEventConstants.SPEC_VERSION.equals(str(m.get("specversion")))) {
-			throw new MessagingException("Unsupported CloudEvents specversion " + m.get("specversion"));
+			throw new MessagingException("Unsupported CloudEvents specversion " + printable(m.get("specversion")));
 		}
 		Map<String, Object> ext = new LinkedHashMap<>();
 		for (Map.Entry<String, Object> e : m.entrySet()) {
@@ -313,6 +313,23 @@ public final class CloudEventCodec {
 		}
 	}
 
+	/**
+	 * Makes a received value fit for an exception message, which ends up in logs: at most 64
+	 * characters, control characters replaced, so a sender can neither flood nor forge log lines.
+	 */
+	static String printable(Object value) {
+		String v = String.valueOf(value);
+		StringBuilder b = new StringBuilder(Math.min(v.length(), 64) + 3);
+		for (int i = 0; i < v.length() && i < 64; i++) {
+			char c = v.charAt(i);
+			b.append(Character.isISOControl(c) ? '?' : c);
+		}
+		if (v.length() > 64) {
+			b.append("...");
+		}
+		return b.toString();
+	}
+
 	private static String str(Object o) {
 		return o == null ? null : o.toString();
 	}
@@ -324,7 +341,7 @@ public final class CloudEventCodec {
 		try {
 			return OffsetDateTime.parse(o.toString());
 		} catch (DateTimeParseException e) {
-			throw new MessagingException("Invalid CloudEvents time '" + o + "'", e);
+			throw new MessagingException("Invalid CloudEvents time '" + printable(o) + "'", e);
 		}
 	}
 

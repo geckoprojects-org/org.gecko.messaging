@@ -24,6 +24,16 @@ import java.util.Map;
  */
 final class Json {
 
+	/**
+	 * Deepest nesting of arrays and objects, the envelope object counting as the first level. The
+	 * envelope is flat; the limit keeps a hostile envelope from exhausting the stack of the
+	 * receiving thread.
+	 */
+	static final int MAX_DEPTH = 64;
+
+	/** Longest number token: a long has 20 characters, a decimal of the envelope is short too. */
+	static final int MAX_NUMBER_LENGTH = 64;
+
 	/** A JSON value kept as its source text. */
 	record Raw(String text) {
 	}
@@ -64,7 +74,7 @@ final class Json {
 		try {
 			Json p = new Json(text);
 			p.ws();
-			p.skipValue();
+			p.skipValue(0);
 			p.ws();
 			return p.pos == p.s.length();
 		} catch (IllegalArgumentException e) {
@@ -86,6 +96,10 @@ final class Json {
 			ws();
 			expect(':');
 			ws();
+			if (members.containsKey(key)) {
+				// last-wins would let a second member hide what a first one said
+				throw error("Duplicate member");
+			}
 			members.put(key, value());
 			ws();
 			char c = next();
@@ -106,7 +120,7 @@ final class Json {
 			case '{':
 			case '[': {
 				int start = pos;
-				skipValue();
+				skipValue(1);
 				return new Raw(s.substring(start, pos));
 			}
 			case 't':
@@ -123,9 +137,12 @@ final class Json {
 		}
 	}
 
-	private void skipValue() {
+	private void skipValue(int depth) {
 		char c = peek();
 		if (c == '{' || c == '[') {
+			if (depth >= MAX_DEPTH) {
+				throw error("Nested deeper than " + MAX_DEPTH);
+			}
 			char close = c == '{' ? '}' : ']';
 			pos++;
 			ws();
@@ -141,7 +158,7 @@ final class Json {
 					expect(':');
 					ws();
 				}
-				skipValue();
+				skipValue(depth + 1);
 				ws();
 				char n = next();
 				if (n == close) {
@@ -163,6 +180,9 @@ final class Json {
 		while (pos < s.length() && "0123456789.eE+-".indexOf(s.charAt(pos)) >= 0) {
 			pos++;
 		}
+		if (pos - start > MAX_NUMBER_LENGTH) {
+			throw error("Number longer than " + MAX_NUMBER_LENGTH);
+		}
 		String n = s.substring(start, pos);
 		if (n.isEmpty() || n.equals("-")) {
 			throw error("Expected a value");
@@ -174,7 +194,8 @@ final class Json {
 			}
 			return d;
 		} catch (ArithmeticException | NumberFormatException e) {
-			throw error("Invalid number " + n);
+			// the token stays out of the message: it is remote input and ends up in logs
+			throw error("Invalid number");
 		}
 	}
 
@@ -196,13 +217,18 @@ final class Json {
 					case 'r' -> b.append('\r');
 					case 't' -> b.append('\t');
 					case 'u' -> {
-						if (pos + 4 > s.length()) {
-							throw error("Bad unicode escape");
+						int code = 0;
+						for (int i = 0; i < 4; i++) {
+							int digit = pos < s.length() ? Character.digit(s.charAt(pos), 16) : -1;
+							if (digit < 0) {
+								throw error("Bad unicode escape");
+							}
+							code = code * 16 + digit;
+							pos++;
 						}
-						b.append((char) Integer.parseInt(s.substring(pos, pos + 4), 16));
-						pos += 4;
+						b.append((char) code);
 					}
-					default -> throw error("Bad escape \\" + e);
+					default -> throw error("Bad escape");
 				}
 			} else if (c < 0x20) {
 				throw error("Control character in string");

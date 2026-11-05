@@ -87,4 +87,13 @@ class CloudEventCodecTest {
 		assertThat(CloudEventCodec.attributeName("Content-Encoding_1")).isEqualTo("contentencoding1");
 	}
 
+	@Test
+	void receivedValuesInMessagesAreShortAndOnOneLine() {
+		assertThat(CloudEventCodec.printable("a\r\nFAKE log line")).isEqualTo("a??FAKE log line");
+		assertThat(CloudEventCodec.printable("x".repeat(1000))).hasSize(67).endsWith("...");
+		byte[] envelope = "{\"specversion\":\"9\\r\\nINJECTED\",\"id\":\"1\",\"source\":\"/s\",\"type\":\"t\"}".getBytes(UTF_8);
+		assertThatThrownBy(() -> CloudEventCodec.fromStructured(envelope)).isInstanceOf(MessagingException.class)
+				.hasMessageNotContaining("\n").hasMessageContaining("??INJECTED");
+	}
+
 }
