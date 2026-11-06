@@ -26,6 +26,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
@@ -36,6 +38,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.TestReporter;
 import org.junit.jupiter.api.Timeout;
 import org.osgi.util.promise.Promise;
+import org.osgi.util.pushstream.PushStreamProvider;
 
 /**
  * Load profiles (#17): the subscription streams must not become the blocker. Runs only when the
@@ -136,6 +139,28 @@ public class LoadTest extends AbstractMessagingTest {
 		run.report(count, published);
 		run.assertComplete(count);
 		run.assertPublisherKeptItsRate(count, rate, published);
+	}
+
+	/**
+	 * A stream published at full speed (#18): the send window of the instance, not the caller,
+	 * keeps it within the protocol's limits — no failed publish, nothing lost.
+	 */
+	@Test
+	void aStreamPublishedAtFullSpeedStaysWithinTheWindow() throws Exception {
+		int count = (int) (3000 * scale);
+		Run run = new Run("stream", 0);
+		long start = System.nanoTime();
+		Stream<Message> messages = IntStream.range(0, count).mapToObj(i -> {
+			ByteBuffer payload = ByteBuffer.allocate(payloadSize);
+			payload.putLong(0, i);
+			payload.putLong(8, System.nanoTime());
+			return builder().content(payload).buildMessage();
+		});
+		assertThat(publisher.publish(new PushStreamProvider().streamOf(messages), run.context).getValue()).isEqualTo(count);
+		long published = System.nanoTime() - start;
+		run.awaitAll(count, 30_000);
+		run.report(count, published);
+		run.assertComplete(count);
 	}
 
 	/** One profile run: a subscription with a given processing time per message. */

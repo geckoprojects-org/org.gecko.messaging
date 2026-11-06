@@ -402,6 +402,27 @@ subscribers; an empty payload clears it (MQTT, memory). Not on queues.
 MQTT 3.1.1, AMQP and WebSocket limit to `maxMessageSize` (default 1 MiB), sent and received; the
 in-memory binding has no limit.
 
+### 6.1 Publishing a Stream
+
+`publish(PushStream<? extends Message>)` and `publish(PushStream<? extends Message>, MessageContext)`
+publish every message of a stream in its order, through the pipeline above, each to the channel
+of its context or with the given context.
+
+- **Send window.** At most `publishWindow` messages (default 20) are not yet handed over; the
+  thread delivering the stream waits for room, never a thread of the protocol. The window must
+  stay within the protocol's own limit (MQTT: the broker's receive maximum, `maxInflight`), so
+  that a stream at full speed never runs into it.
+- **Result.** The promise resolves with the number of messages once the stream has ended and
+  every message is handed over; it fails with the first failure of a message or of the stream,
+  and the stream is closed then. Closing the stream ends the publishing.
+- **Passing a subscription on.** `publish(subscription.subscribe(a).map(f), contextOfB)` relays
+  from one channel or broker to another, throttled end to end: with §8 the source acknowledges a
+  message only once the relay has taken it.
+- **Threads.** Room in the window is made by promise callbacks, which run on a thread of their
+  own, apart from the workers: a stream delivered by the workers cannot wait for itself.
+
+TCK: `StreamPublishTest`; load profile `aStreamPublishedAtFullSpeedStaysWithinTheWindow` (§15.6).
+
 ---
 
 ## 7 Subscribing
@@ -450,7 +471,7 @@ Requires `acknowledge`. A subscription configures it with
 | Function | `acknowledgeFunction(Consumer<Message>)` | Called before the stream with the message's `AcknowledgeHandler`. If it decides nothing the message is acknowledged; a rejected message does not enter the stream. |
 | Filter | `acknowledgeFilter(Predicate<Message>)` | Accepted → acknowledged and streamed; refused → rejected, not streamed. |
 | Manual | `manualAcknowledge()` | The consumer calls `acknowledge()`/`reject()` on `((AcknowledgeMessageContext) m.getContext()).getAcknowledgeHandler()`. Messages still open when the stream closes are rejected. |
-| Automatic | — | Acknowledged on receipt. |
+| Automatic | — | Acknowledged when the stream takes the message from the subscription buffer. |
 
 Further options: `requeueOnReject(boolean)` (re-queue instead of dead-letter/discard),
 `postAcknowledge(Consumer)` and `postReject(Consumer)` (called after the decision; failures are
@@ -476,8 +497,20 @@ re-queue only on a queue.
 | amqp | `basicAck` | `basicNack` without requeue | `basicNack` with requeue | broker `redelivered` flag (also set after a lost connection) |
 | websocket | not supported | — | — | — |
 
-On MQTT and AMQP the protocol acknowledgement is deferred until the decision, so `receiveMaximum`
-/ `prefetch` bound the unacknowledged messages.
+**Acknowledged when taken (flow control).** The protocol hears of an accepted message only once
+the stream has taken it from the subscription buffer, also when a function or filter accepted it
+before: until then the message holds a place of the broker's flow control (`receiveMaximum`
+mqtt, the broker's in-flight limit mqtt3, `prefetch` amqp). A slow or stalled subscriber thereby
+throttles the broker instead of blocking a thread of the protocol (which, on MQTT, would stop
+the keep-alive and drop the connection), and a buffer at least as large as that window never
+fills. Where several local subscriptions share one broker subscription (§13.2), the message is
+completed once every one has taken and decided it. A message still in the buffer when the
+subscription ends is rejected, with re-queue on a queue; one a `DISCARD_OLDEST` buffer discards
+is counted as dropped and rejected without re-queue. Without broker flow control (QoS 0, AMQP
+auto-ack, WebSocket) the queue policy applies; WebSocket reads further frames only while fewer
+than `bufferSize` messages are in flight, so that TCP throttles the hub. MQTT flow control is per
+connection: a slow subscription holds back the QoS ≥ 1 messages of every subscription of its
+instance, so slow consumers belong in an instance of their own.
 
 ---
 
@@ -1049,6 +1082,7 @@ buffer of 256: a protocol thread held up by a full buffer then shows as a reconn
 | `sustainedLoadTheSubscriberKeepsUpWith` | 500/s for 5 s | all, in order; no reconnect |
 | `sustainedLoadAboveTheSubscriberIsThrottled` (QoS) | 200/s for 6 s, subscriber 125/s | all, in order; no reconnect; the publisher keeps its rate |
 | `aStalledSubscriberDoesNotBlockTheConnection` (QoS) | 100/s for 8 s, the subscriber stalls 10 s once | all, in order; no reconnect; the publisher keeps its rate |
+| `aStreamPublishedAtFullSpeedStaysWithinTheWindow` | 3000 messages as one stream at full speed | all, in order; no failed publish; no reconnect |
 
 Throughput and latency (p50, p99, max) are reported as JUnit report entries, not asserted.
 `LOAD_SCALE` in the environment scales counts and durations (CI: 1). Without broker flow

@@ -219,6 +219,16 @@ final class OsgiBinding {
 		}
 
 		@Override
+		public Promise<Long> publish(PushStream<? extends Message> messages) {
+			return instance.publish(messages, null);
+		}
+
+		@Override
+		public Promise<Long> publish(PushStream<? extends Message> messages, MessageContext context) {
+			return instance.publish(messages, context);
+		}
+
+		@Override
 		public Promise<Void> publish(Function<MessageContextBuilder, Message> builderFunction) {
 			try {
 				return publish(builderFunction.apply(instance.newBuilder()));

@@ -82,8 +82,9 @@ import org.osgi.util.pushstream.QueuePolicyOption;
  * <li>{@link #doSubscribe(SubscriptionHandle)} makes one subscription on the broker; received
  * messages go to {@link SubscriptionHandle#deliver(SimpleMessageContext, byte[], Acknowledger)}.</li>
  * </ul>
- * Threads: one scheduler thread for connect and timeouts, plus {@code workerThreads} that deliver
- * messages and run handlers; all are released on {@link #stop()}.
+ * Threads: one scheduler thread for connect and timeouts, {@code workerThreads} that deliver
+ * messages and run handlers, and one thread, started on demand, for promise callbacks and
+ * connection events; all are released on {@link #stop()}.
  */
 public abstract class AbstractMessagingInstance {
 
@@ -108,6 +109,11 @@ public abstract class AbstractMessagingInstance {
 	protected final Features features;
 	private final ScheduledThreadPoolExecutor scheduler;
 	private final ThreadPoolExecutor workers;
+	/**
+	 * Promise callbacks and connection events: one thread, started on demand, apart from the
+	 * workers, so that handlers blocking the workers never hold back what releases them.
+	 */
+	private final ThreadPoolExecutor callbacks;
 	private final SerialExecutor events;
 	protected final PromiseFactory promises;
 	private final PushStreamProvider pushStreams = new PushStreamProvider();
@@ -159,8 +165,11 @@ public abstract class AbstractMessagingInstance {
 		int n = config.workerThreads();
 		this.workers = new ThreadPoolExecutor(n, n, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), threads("msg-" + name + "-worker"));
 		this.workers.allowCoreThreadTimeOut(true);
-		this.events = new SerialExecutor(workers);
-		this.promises = new PromiseFactory(workers, scheduler);
+		this.callbacks = new ThreadPoolExecutor(1, 1, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
+				threads("msg-" + name + "-callbacks"));
+		this.callbacks.allowCoreThreadTimeOut(true);
+		this.events = new SerialExecutor(callbacks);
+		this.promises = new PromiseFactory(callbacks, scheduler);
 		this.defaultContext = config.defaultContext();
 		this.replyTo = new ReplyToSupport(this);
 	}
@@ -441,13 +450,18 @@ public abstract class AbstractMessagingInstance {
 			binding.closeListeners();
 		}
 		scheduler.shutdownNow();
-		workers.shutdown();
+		shutdown(workers);
+		shutdown(callbacks);
+	}
+
+	private static void shutdown(ThreadPoolExecutor executor) {
+		executor.shutdown();
 		try {
-			if (!workers.awaitTermination(2, TimeUnit.SECONDS)) {
-				workers.shutdownNow();
+			if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+				executor.shutdownNow();
 			}
 		} catch (InterruptedException e) {
-			workers.shutdownNow();
+			executor.shutdownNow();
 			Thread.currentThread().interrupt();
 		}
 	}
@@ -678,6 +692,39 @@ public abstract class AbstractMessagingInstance {
 			return cloudEvents.publish(SimpleMessageContextBuilder.toSimple(ctx), payload, wire);
 		} catch (Exception e) {
 			return promises.failed(e);
+		}
+	}
+
+	/**
+	 * Publishes every message of a stream in its order, with at most {@link #publishWindow()}
+	 * messages not yet handed over.
+	 *
+	 * @param messages the messages
+	 * @param context the context of every message, {@code null} for the context of each message
+	 * @return the promise of the number of messages handed over
+	 */
+	public Promise<Long> publish(PushStream<? extends Message> messages, MessageContext context) {
+		requireNonNull(messages, "messages");
+		StreamPublish publish = new StreamPublish(this, context, publishWindow(), promises.deferred());
+		messages.forEachEvent(publish);
+		return publish.promise();
+	}
+
+	/**
+	 * Returns the messages a stream publish may have outstanding at once. Within the protocol's
+	 * own limit (MQTT: the broker's receive maximum and {@code maxInflight}), so that a stream
+	 * never runs into it.
+	 *
+	 * @return the window, configuration key {@code publishWindow}, default 20
+	 */
+	protected int publishWindow() {
+		return (int) Math.max(1, config.number("publishWindow", 20));
+	}
+
+	/** @return whether the instance is stopped */
+	boolean isStopped() {
+		synchronized (stateLock) {
+			return stopped;
 		}
 	}
 
