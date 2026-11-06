@@ -47,6 +47,12 @@ public class MessagingRuntimeDTO extends DTO {
 	/** The number of reconnects since the instance started. */
 	public long reconnects;
 
+	/**
+	 * The messages of stream publishes that failed and were skipped
+	 * ({@code streamPublishFailures=continue}).
+	 */
+	public long streamPublishFailures;
+
 	/** The active subscriptions. */
 	public SubscriptionDTO[] subscriptions;
 

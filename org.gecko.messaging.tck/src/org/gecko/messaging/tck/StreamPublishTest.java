@@ -108,4 +108,20 @@ public class StreamPublishTest extends AbstractMessagingTest {
 		assertThat(done.isDone()).isFalse();
 	}
 
+	@Test
+	void streamsAtFullSpeedShareTheSendWindowOfTheInstance() throws Exception {
+		// together they would overrun the protocol's own limit (MQTT: the broker's receive
+		// maximum) if each had a window of its own
+		String channel = tck.channel("stream", "shared");
+		List<Message> received = collect(channel);
+		int count = 1000;
+		Object qos = tck.has(FEATURE_QOS) ? QOS_AT_LEAST_ONCE : null;
+		MessageContext ctx = builder().channel(channel).extensionEntry(EXTENSION_QOS, qos).buildContext();
+		Promise<Long> first = publisher.publish(streams.streamOf(IntStream.range(0, count).mapToObj(i -> builder().content(Tck.bytes("a" + i)).buildMessage())), ctx);
+		Promise<Long> second = publisher.publish(streams.streamOf(IntStream.range(0, count).mapToObj(i -> builder().content(Tck.bytes("b" + i)).buildMessage())), ctx);
+		assertThat(first.getValue()).isEqualTo(count);
+		assertThat(second.getValue()).isEqualTo(count);
+		tck.awaitSize(received, 2 * count);
+	}
+
 }

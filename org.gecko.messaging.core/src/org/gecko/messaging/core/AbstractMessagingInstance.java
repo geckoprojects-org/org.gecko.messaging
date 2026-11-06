@@ -36,6 +36,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -118,6 +119,11 @@ public abstract class AbstractMessagingInstance {
 	private final MessageContext defaultContext;
 	/** How messages go on the wire, chosen in {@link #prepare()}. */
 	private volatile CloudEventBinding cloudEvents = CloudEventBinding.NONE;
+	/** The send window of the stream publishes, see {@link #acquireSend()}. */
+	private final Object sendLock = new Object();
+	/** Guarded by sendLock. */
+	private int streamOutstanding;
+	private final AtomicLong streamPublishFailures = new AtomicLong();
 	private final CloudEventBinding.Wire wire = this::doPublish;
 
 	private final Object stateLock = new Object();
@@ -715,20 +721,71 @@ public abstract class AbstractMessagingInstance {
 	 */
 	public Promise<Long> publish(PushStream<? extends Message> messages, MessageContext context) {
 		requireNonNull(messages, "messages");
-		StreamPublish publish = new StreamPublish(this, context, publishWindow(), promises.deferred());
+		if (!List.of("stop", "continue").contains(streamFailures())) {
+			messages.close();
+			return promises.failed(new MessagingException("streamPublishFailures must be stop or continue, not " + streamFailures()));
+		}
+		StreamPublish publish = new StreamPublish(this, context, streamFailures(), promises.deferred());
 		messages.forEachEvent(publish);
 		return publish.promise();
 	}
 
 	/**
-	 * Returns the messages a stream publish may have outstanding at once. Within the protocol's
-	 * own limit (MQTT: the broker's receive maximum and {@code maxInflight}), so that a stream
-	 * never runs into it.
+	 * Returns the messages the stream publishes of this instance may have outstanding together:
+	 * the protocol's own limit ({@link #protocolSendWindow()}), at most {@code publishWindow}
+	 * (default 100). Asked for every message, so that a new limit after a reconnect applies.
 	 *
-	 * @return the window, configuration key {@code publishWindow}, default 20
+	 * @return the window
 	 */
-	protected int publishWindow() {
-		return (int) Math.max(1, config.number("publishWindow", 20));
+	final int publishWindow() {
+		return (int) Math.max(1, Math.min(config.number("publishWindow", 100), protocolSendWindow()));
+	}
+
+	/**
+	 * Returns how many messages the protocol takes not yet handed over before it refuses more:
+	 * MQTT 5 the broker's receive maximum, MQTT 3.1.1 {@code maxInflight}.
+	 *
+	 * @return the limit, {@link Integer#MAX_VALUE} for none
+	 */
+	protected int protocolSendWindow() {
+		return Integer.MAX_VALUE;
+	}
+
+	/**
+	 * Waits for room in the send window shared by the stream publishes of the instance.
+	 *
+	 * @return {@code false} if the instance stopped meanwhile
+	 * @throws InterruptedException if interrupted
+	 */
+	boolean acquireSend() throws InterruptedException {
+		synchronized (sendLock) {
+			while (streamOutstanding >= publishWindow()) {
+				if (isStopped()) {
+					return false;
+				}
+				sendLock.wait(100);
+			}
+			streamOutstanding++;
+			return true;
+		}
+	}
+
+	/** A message of a stream publish was handed over or failed. */
+	void releaseSend() {
+		synchronized (sendLock) {
+			streamOutstanding--;
+			sendLock.notifyAll();
+		}
+	}
+
+	/** A message of a stream publish failed and was skipped. */
+	void streamPublishFailed() {
+		streamPublishFailures.incrementAndGet();
+	}
+
+	/** @return {@code stop} or {@code continue}: what a failed message of a stream publish does */
+	private String streamFailures() {
+		return config.string("streamPublishFailures", "stop").trim().toLowerCase(Locale.ROOT);
 	}
 
 	/** @return whether the instance is stopped */
@@ -997,6 +1054,7 @@ public abstract class AbstractMessagingInstance {
 		synchronized (stateLock) {
 			dto.reconnects = reconnects;
 		}
+		dto.streamPublishFailures = streamPublishFailures.get();
 		dto.subscriptions = subscriptions.stream().filter(h -> !h.isInternal()).map(SubscriptionHandle::toDTO)
 				.toArray(SubscriptionDTO[]::new);
 		return dto;

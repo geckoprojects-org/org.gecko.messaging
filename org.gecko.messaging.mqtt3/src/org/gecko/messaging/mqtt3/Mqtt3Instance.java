@@ -133,6 +133,12 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		this.maxMessageSize = Math.min(Integer.MAX_VALUE, config.number("maxMessageSize", 1 << 20));
 	}
 
+	/** The client refuses publishes beyond {@code maxInflight}. */
+	@Override
+	protected int protocolSendWindow() {
+		return (int) config.number("maxInflight", 100);
+	}
+
 	@Override
 	protected boolean doConnect(long timeoutMillis) throws Exception {
 		MqttAsyncClient c = new MqttAsyncClient(config.uri(), config.clientId(), new MemoryPersistence());

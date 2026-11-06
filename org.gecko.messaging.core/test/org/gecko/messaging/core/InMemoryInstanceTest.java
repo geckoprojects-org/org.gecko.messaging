@@ -31,6 +31,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import org.gecko.messaging.api.FeatureNotSupportedException;
 import org.gecko.messaging.api.Message;
@@ -52,6 +54,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.pushstream.PushStream;
+import org.osgi.util.pushstream.PushStreamProvider;
 
 class InMemoryInstanceTest {
 
@@ -662,6 +665,27 @@ class InMemoryInstanceTest {
 		}
 		await(() -> answers.size() == 3);
 		assertThat(answers).containsOnly("answer");
+	}
+
+	@Test
+	void aStreamPublishCanSkipFailedMessages() throws Exception {
+		InMemoryInstance i = start(Map.of("streamPublishFailures", "continue"));
+		List<Message> received = collect(i.subscribe("skip"));
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		// the third message has an invalid quality of service and fails
+		PushStream<Message> stream = new PushStreamProvider().streamOf(IntStream.range(0, 5)
+				.mapToObj(n -> n == 2 ? i.newBuilder().channel("skip").extensionEntry(EXTENSION_QOS, 9).content(ByteBuffer.wrap(new byte[1])).buildMessage()
+						: text(i, "skip", "m" + n)));
+		assertThat(i.publish(stream, null).getValue()).isEqualTo(4);
+		assertThat(i.getRuntimeDTO().streamPublishFailures).isEqualTo(1);
+		await(() -> received.size() == 4);
+	}
+
+	@Test
+	void anUnknownStreamFailureModeIsRefused() throws Exception {
+		InMemoryInstance i = start(Map.of("streamPublishFailures", "ignore"));
+		PushStream<Message> stream = new PushStreamProvider().streamOf(Stream.of(text(i, "x", "m")));
+		assertThat(i.publish(stream, null).getFailure()).isInstanceOf(MessagingException.class);
 	}
 
 }

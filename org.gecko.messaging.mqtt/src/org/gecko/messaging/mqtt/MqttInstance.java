@@ -111,6 +111,8 @@ public final class MqttInstance extends AbstractMessagingInstance {
 	private volatile MqttAsyncClient client;
 	/** Broker subscriptions by topic filter, with the local subscriptions they feed. */
 	private final Map<String, SubscriptionGroup> filters = new ConcurrentHashMap<>();
+	/** The broker's receive maximum of the current connection, from its CONNACK. */
+	private volatile int serverReceiveMaximum = 65_535;
 
 	/**
 	 * Creates the instance.
@@ -153,7 +155,16 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		if (!c.isConnected()) {
 			throw new MessagingException("MQTT connect to " + config.displayUri() + " did not complete");
 		}
+		// the client refuses publishes beyond the broker's receive maximum (65535 when not sent)
+		MqttProperties connack = token.getResponseProperties();
+		Integer receiveMaximum = connack == null ? null : connack.getReceiveMaximum();
+		serverReceiveMaximum = receiveMaximum == null || receiveMaximum <= 0 ? 65_535 : receiveMaximum;
 		return token.getSessionPresent();
+	}
+
+	@Override
+	protected int protocolSendWindow() {
+		return serverReceiveMaximum;
 	}
 
 	@Override

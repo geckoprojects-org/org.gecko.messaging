@@ -13,8 +13,6 @@
  */
 package org.gecko.messaging.core;
 
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -29,16 +27,21 @@ import org.osgi.util.pushstream.PushEvent;
 import org.osgi.util.pushstream.PushEventConsumer;
 
 /**
- * Publishes the messages of a stream in its order, with at most a window of messages not yet
- * handed over: the thread delivering the stream waits for room, never a thread of the protocol.
- * Room is made by the promise callbacks, which run apart from the workers, so that a stream
- * delivered by the workers (a subscription passed on) cannot wait for itself.
+ * Publishes the messages of a stream in its order, within the send window of the instance —
+ * shared by all its stream publishes and derived from the protocol's own limit, so that the
+ * protocol never refuses a message for being one too many: the thread delivering the stream
+ * waits for room, never a thread of the protocol. Room is made by the promise callbacks, which run
+ * apart from the workers, so that a stream delivered by the workers (a subscription passed on)
+ * cannot wait for itself.
+ * <p>
+ * A failed message ends the publishing ({@code streamPublishFailures=stop}, the default) or is
+ * skipped and counted ({@code continue}).
  */
 final class StreamPublish implements PushEventConsumer<Message> {
 
 	private final AbstractMessagingInstance instance;
 	private final MessageContext context;
-	private final Semaphore window;
+	private final boolean skipFailures;
 	private final Deferred<Long> result;
 	private final AtomicLong handedOver = new AtomicLong();
 	private final AtomicInteger outstanding = new AtomicInteger();
@@ -49,13 +52,13 @@ final class StreamPublish implements PushEventConsumer<Message> {
 	/**
 	 * @param instance the instance publishing
 	 * @param context the context of every message, {@code null} for the context of each message
-	 * @param window the messages not yet handed over at most
+	 * @param failures {@code stop} or {@code continue}
 	 * @param result resolved with the number of messages handed over
 	 */
-	StreamPublish(AbstractMessagingInstance instance, MessageContext context, int window, Deferred<Long> result) {
+	StreamPublish(AbstractMessagingInstance instance, MessageContext context, String failures, Deferred<Long> result) {
 		this.instance = instance;
 		this.context = context;
-		this.window = new Semaphore(Math.max(1, window));
+		this.skipFailures = "continue".equals(failures);
 		this.result = result;
 	}
 
@@ -85,11 +88,9 @@ final class StreamPublish implements PushEventConsumer<Message> {
 		if (failure.get() != null) {
 			return ABORT;
 		}
-		while (!window.tryAcquire(100, TimeUnit.MILLISECONDS)) {
-			if (instance.isStopped()) {
-				fail(new MessagingException("Messaging instance " + instance.getName() + " is stopped"));
-				return ABORT;
-			}
+		if (!instance.acquireSend()) {
+			fail(new MessagingException("Messaging instance " + instance.getName() + " is stopped"));
+			return ABORT;
 		}
 		outstanding.incrementAndGet();
 		Promise<Void> p = instance.publish(message, context);
@@ -98,7 +99,7 @@ final class StreamPublish implements PushEventConsumer<Message> {
 	}
 
 	private void handedOver(Promise<Void> p) {
-		window.release();
+		instance.releaseSend();
 		Throwable f;
 		try {
 			f = p.getFailure();
@@ -106,7 +107,9 @@ final class StreamPublish implements PushEventConsumer<Message> {
 			Thread.currentThread().interrupt();
 			f = e;
 		}
-		if (f != null) {
+		if (f != null && skipFailures) {
+			instance.streamPublishFailed();
+		} else if (f != null) {
 			fail(f);
 		} else {
 			handedOver.incrementAndGet();

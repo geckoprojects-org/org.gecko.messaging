@@ -146,7 +146,8 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `bufferSize` | int | `1024` (min 1) | Buffer of each subscription stream; in-flight limit of each reply-to handler. |
 | `bufferBytes` | long | `16777216` (16 MiB) | Payload bytes of each subscription buffer. |
 | `queuePolicy` | String | `BLOCK` (all bindings) | Policy of a full subscription buffer: `BLOCK`, `DISCARD_OLDEST`, `FAIL`. |
-| `publishWindow` | int | `20` | Messages a stream publish has outstanding at once (§6.1). |
+| `publishWindow` | int | `100` | Upper bound of the send window of the stream publishes (§6.1); the protocol's limit applies below it. |
+| `streamPublishFailures` | String | `stop` | A failed message of a stream publish ends it (`stop`) or is skipped and counted (`continue`, §6.1). |
 | `context.channel` | String | — | Default channel for `subscribe(null)` and publishing without channel. |
 | `context.channelExtension` | String | — | Default channel extension (with `context.channel`). |
 | `context.contentType` | String | — | Default content type of the default context. |
@@ -420,13 +421,26 @@ in-memory binding has no limit.
 publish every message of a stream in its order, through the pipeline above, each to the channel
 of its context or with the given context.
 
-- **Send window.** At most `publishWindow` messages (default 20) are not yet handed over; the
-  thread delivering the stream waits for room, never a thread of the protocol. The window must
-  stay within the protocol's own limit (MQTT: the broker's receive maximum, `maxInflight`), so
-  that a stream at full speed never runs into it.
-- **Result.** The promise resolves with the number of messages once the stream has ended and
-  every message is handed over; it fails with the first failure of a message or of the stream,
-  and the stream is closed then. Closing the stream ends the publishing.
+- **Send window.** The stream publishes of an instance share one window of messages not yet
+  handed over; the thread delivering a stream waits for room, never a thread of the protocol. The
+  window is the protocol's own limit — the point where its client refuses a publish — at most
+  `publishWindow` (default 100), and asked for every message, so that a new limit after a
+  reconnect applies:
+
+  | Binding | Limit |
+  |---|---|
+  | mqtt | the broker's receive maximum from its CONNACK (65535 when not sent) |
+  | mqtt3 | `maxInflight` of the client |
+  | amqp, websocket, memory | none: `publishWindow` |
+
+  The window counts the messages of stream publishes, not single `publish` calls: those keep
+  their cost, and a caller mixing many of them with streams can still meet the protocol's limit.
+- **Result.** The promise resolves with the number of messages handed over once the stream has
+  ended and every message is settled. With `streamPublishFailures=stop` (default) the first
+  failure of a message fails the promise and closes the stream; with `continue` a failed message
+  is skipped and counted in `MessagingRuntimeDTO.streamPublishFailures` — also every message
+  while the instance is disconnected. A failure of the stream itself always fails the promise.
+  Closing the stream ends the publishing.
 - **Passing a subscription on.** `publish(subscription.subscribe(a).map(f), contextOfB)` relays
   from one channel or broker to another, throttled end to end: with §8 the source acknowledges a
   message only once the relay has taken it.
@@ -808,6 +822,7 @@ state.
 | `connectionURI` | URI without user info |
 | `connectionState` | name of `ConnectionState` |
 | `reconnects` | reconnects since start |
+| `streamPublishFailures` | messages of stream publishes skipped after a failure (`streamPublishFailures=continue`) |
 | `subscriptions` | `SubscriptionDTO[]` — application subscriptions only (reply-to internals excluded) |
 | `replyToSubscriptions` | `ReplyToSubscriptionDTO[]` of bound handlers |
 
