@@ -512,4 +512,35 @@ class InMemoryInstanceTest {
 		assertThat(i.broker().connectionCount()).isZero();
 	}
 
+	@Test
+	void discardOldestRejectsAndCountsWhatItDiscards() throws Exception {
+		InMemoryInstance i = start(Map.of("queuePolicy", "DISCARD_OLDEST", "bufferSize", 1L));
+		List<Message> rejected = new CopyOnWriteArrayList<>();
+		MessageContext ctx = i.newBuilder().channel("slow").adapt(AcknowledgeMessageContextBuilder.class).manualAcknowledge()
+				.postReject(rejected::add).messageContextBuilder().buildContext();
+		CountDownLatch release = new CountDownLatch(1);
+		List<String> handled = new CopyOnWriteArrayList<>();
+		i.subscribe(ctx).forEach(m -> {
+			try {
+				release.await(5, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			handled.add(text(m));
+			((AcknowledgeMessageContext) m.getContext()).getAcknowledgeHandler().acknowledge();
+		});
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		for (int n = 0; n < 6; n++) {
+			i.publish(text(i, "slow", "m" + n), null).getValue();
+		}
+		// at most one in the handler and one in the buffer of one place: the others are discarded
+		await(() -> rejected.size() >= 4);
+		assertThat(i.getRuntimeDTO().subscriptions[0].droppedMessages).isEqualTo(rejected.size());
+		assertThat(rejected).allSatisfy(
+				m -> assertThat(((AcknowledgeMessageContext) m.getContext()).getAcknowledgeState()).isEqualTo(AcknowledgeType.REJECTED));
+		release.countDown();
+		await(() -> handled.size() + rejected.size() == 6);
+		assertThat(handled).as("the newest is kept").contains("m5");
+	}
+
 }

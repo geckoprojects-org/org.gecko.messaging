@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -35,6 +36,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -61,6 +63,7 @@ import org.osgi.util.pushstream.PushEventSource;
 import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.PushbackPolicyOption;
+import org.osgi.util.pushstream.QueuePolicy;
 import org.osgi.util.pushstream.QueuePolicyOption;
 
 /**
@@ -704,10 +707,15 @@ public abstract class AbstractMessagingInstance {
 		features.checkSubscribe(ctx);
 		checkProtocol(ctx, false);
 		SimpleMessageContext simple = SimpleMessageContextBuilder.toSimple(ctx);
-		PushEventSource<Message> source = consumer -> open(simple, consumer);
+		AtomicReference<SubscriptionHandle> handle = new AtomicReference<>();
+		PushEventSource<Message> source = consumer -> open(simple, consumer, handle);
+		QueuePolicyOption option = QueuePolicyOption.valueOf(config.queuePolicy(defaultQueuePolicy()));
+		QueuePolicy<Message, BlockingQueue<PushEvent<? extends Message>>> policy = option == QueuePolicyOption.DISCARD_OLDEST
+				? new DiscardOldestPolicy(handle)
+				: option.getPolicy();
 		return pushStreams.buildStream(source)
-				.withBuffer(new ArrayBlockingQueue<>(config.bufferSize()))
-				.withQueuePolicy(QueuePolicyOption.valueOf(config.queuePolicy(defaultQueuePolicy())))
+				.withBuffer(new ArrayBlockingQueue<PushEvent<? extends Message>>(config.bufferSize()))
+				.withQueuePolicy(policy)
 				.withPushbackPolicy(PushbackPolicyOption.FIXED, 0)
 				.withExecutor(workers)
 				.withScheduler(scheduler)
@@ -724,7 +732,8 @@ public abstract class AbstractMessagingInstance {
 		return subscribe(new SimpleMessageContextBuilder().channel(requireNonNull(channel, "channel")).buildContext());
 	}
 
-	private AutoCloseable open(SimpleMessageContext ctx, PushEventConsumer<? super Message> consumer) throws Exception {
+	private AutoCloseable open(SimpleMessageContext ctx, PushEventConsumer<? super Message> consumer,
+			AtomicReference<SubscriptionHandle> handle) throws Exception {
 		SubscriptionHandle.Sink sink = new SubscriptionHandle.Sink() {
 			@Override
 			public long accept(Message message) throws Exception {
@@ -741,6 +750,7 @@ public abstract class AbstractMessagingInstance {
 			}
 		};
 		SubscriptionHandle h = addSubscription(ctx, sink, false);
+		handle.set(h);
 		return () -> closeSubscription(h, null);
 	}
 
