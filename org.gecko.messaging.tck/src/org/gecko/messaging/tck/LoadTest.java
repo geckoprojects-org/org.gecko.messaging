@@ -26,11 +26,14 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.UnaryOperator;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
+import org.gecko.messaging.api.MessageContextBuilder;
+import org.gecko.messaging.api.dto.SubscriptionDTO;
 import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -163,6 +166,32 @@ public class LoadTest extends AbstractMessagingTest {
 		run.assertComplete(count);
 	}
 
+	/**
+	 * A subscriber slower than the sender at QoS 0, with a small latest-wins buffer (#16): no
+	 * broker flow control, so the buffer discards — every message either arrives or is counted as
+	 * dropped, the newest arrives, and neither the connection nor the publisher suffers.
+	 */
+	@Test
+	void aSlowSubscriberAtQos0KeepsTheLatest() throws Exception {
+		int rate = 400;
+		int count = (int) (rate * 5 * scale);
+		Object qos = tck.has(FEATURE_QOS) ? QOS_AT_MOST_ONCE : null;
+		Run run = new Run("latest", 10_000_000L, b -> b.extensionEntry(EXTENSION_QOS, qos).extensionEntry(EXTENSION_BUFFER_SIZE, 16)
+				.extensionEntry(EXTENSION_QUEUE_POLICY, "DISCARD_OLDEST"));
+		long published = run.publish(count, rate);
+		tck.await("received or dropped", () -> run.received.size() + run.dropped() >= count);
+		run.report(count, published);
+		assertThat(run.received.size() + run.dropped()).as("every message received or counted as dropped").isEqualTo(count);
+		assertThat(run.dropped()).as("a subscriber at 100/s drops at 400/s").isPositive();
+		assertThat(run.reconnects() - run.reconnectsBefore).isZero();
+		run.assertPublisherKeptItsRate(count, rate, published);
+		tck.await("the newest message", () -> {
+			synchronized (run.received) {
+				return !run.received.isEmpty() && run.received.get(run.received.size() - 1)[0] == count - 1;
+			}
+		});
+	}
+
 	/** One profile run: a subscription with a given processing time per message. */
 	private final class Run {
 
@@ -177,9 +206,12 @@ public class LoadTest extends AbstractMessagingTest {
 		private volatile long stallNanos;
 
 		Run(String name, long processingNanos) throws Exception {
+			this(name, processingNanos, b -> b.extensionEntry(EXTENSION_QOS, tck.has(FEATURE_QOS) ? QOS_AT_LEAST_ONCE : null));
+		}
+
+		Run(String name, long processingNanos, UnaryOperator<MessageContextBuilder> options) throws Exception {
 			this.channel = tck.channel("load", name);
-			Object qos = tck.has(FEATURE_QOS) ? QOS_AT_LEAST_ONCE : null;
-			this.context = builder().channel(channel).extensionEntry(EXTENSION_QOS, qos).buildContext();
+			this.context = options.apply(builder().channel(channel)).buildContext();
 			this.reconnectsBefore = reconnects();
 			track(subscription.subscribe(context)).forEach(m -> {
 				ByteBuffer b = m.payload();
@@ -285,6 +317,16 @@ public class LoadTest extends AbstractMessagingTest {
 					throw new AssertionError("out of order or missing at " + i + ": " + seqs.get(i));
 				}
 			}
+		}
+
+		/** @return the messages the subscription's buffer dropped */
+		long dropped() {
+			for (SubscriptionDTO s : tck.service(MessageServiceRuntime.class).getRuntimeDTO().subscriptions) {
+				if (channel.equals(s.channel.name)) {
+					return s.droppedMessages;
+				}
+			}
+			return 0;
 		}
 
 		private long reconnects() {

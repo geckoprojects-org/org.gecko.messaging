@@ -175,6 +175,36 @@ public final class MessagingConstants {
 	 */
 	public static final String EXTENSION_REPLY_TIMEOUT = "osgi.messaging.replyTo.timeout";
 
+	/**
+	 * Extension of a subscription: the messages its buffer holds at most. Type {@code Integer}, at
+	 * most the instance's {@code bufferSize}, which applies without it.
+	 */
+	public static final String EXTENSION_BUFFER_SIZE = "osgi.messaging.bufferSize";
+
+	/**
+	 * Extension of a subscription: the payload bytes its buffer holds at most; a single larger
+	 * message is taken into an empty buffer. Type {@code Long}, at most the instance's
+	 * {@code bufferBytes}, which applies without it.
+	 */
+	public static final String EXTENSION_BUFFER_BYTES = "osgi.messaging.bufferBytes";
+
+	/**
+	 * Extension of a subscription: what happens when its buffer is full — {@code BLOCK} (wait),
+	 * {@code DISCARD_OLDEST} (latest wins, discarded messages are counted) or {@code FAIL} (the
+	 * subscription ends with an error). Type {@code String}. Without it the instance's
+	 * {@code queuePolicy} applies.
+	 */
+	public static final String EXTENSION_QUEUE_POLICY = "osgi.messaging.queuePolicy";
+
+	/**
+	 * Extension of a subscription: the header that marks the first message of a group, such as a
+	 * key frame of a video stream. {@code DISCARD_OLDEST} then discards whole groups — the oldest
+	 * message and every following one up to the next group start — so that what stays can be
+	 * used. Type {@code String}, the header name; a message starts a group if the header is
+	 * {@code true}.
+	 */
+	public static final String EXTENSION_GROUP_HEADER = "osgi.messaging.groupHeader";
+
 	/*
 	 * Standard headers.
 	 */

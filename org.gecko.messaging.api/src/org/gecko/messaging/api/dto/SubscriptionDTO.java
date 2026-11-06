@@ -29,9 +29,27 @@ public class SubscriptionDTO extends DTO {
 	public long receivedMessages;
 
 	/**
-	 * The number of received messages dropped: undecodable, or not a CloudEvent on an instance
-	 * that takes CloudEvents only.
+	 * The number of received messages dropped: undecodable, not a CloudEvent on an instance that
+	 * takes CloudEvents only, or discarded by a full buffer ({@code DISCARD_OLDEST}).
 	 */
 	public long droppedMessages;
+
+	/** The messages the buffer of the subscription holds at most. */
+	public int bufferSize;
+
+	/** The payload bytes the buffer of the subscription holds at most. */
+	public long bufferBytes;
+
+	/** The messages in the buffer now: received, not yet taken by the stream. */
+	public int bufferedMessages;
+
+	/** The payload bytes in the buffer now. */
+	public long bufferedBytes;
+
+	/**
+	 * The time a full buffer held back delivery so far, in milliseconds ({@code BLOCK}); without
+	 * broker flow control this time is spent on a thread of the protocol.
+	 */
+	public long blockedMillis;
 
 }

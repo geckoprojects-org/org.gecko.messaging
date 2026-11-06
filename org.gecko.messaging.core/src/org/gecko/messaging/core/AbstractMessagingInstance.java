@@ -24,8 +24,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -36,7 +34,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -63,8 +60,6 @@ import org.osgi.util.pushstream.PushEventSource;
 import org.osgi.util.pushstream.PushStream;
 import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.PushbackPolicyOption;
-import org.osgi.util.pushstream.QueuePolicy;
-import org.osgi.util.pushstream.QueuePolicyOption;
 
 /**
  * The protocol-neutral part of a messaging instance: one connection, owned and reconnected by the
@@ -754,20 +749,16 @@ public abstract class AbstractMessagingInstance {
 		features.checkSubscribe(ctx);
 		checkProtocol(ctx, false);
 		SimpleMessageContext simple = SimpleMessageContextBuilder.toSimple(ctx);
-		AtomicReference<SubscriptionHandle> handle = new AtomicReference<>();
-		PushEventSource<Message> source = consumer -> open(simple, consumer, handle);
-		QueuePolicyOption option = QueuePolicyOption.valueOf(config.queuePolicy(defaultQueuePolicy()));
-		QueuePolicy<Message, BlockingQueue<PushEvent<? extends Message>>> policy = option == QueuePolicyOption.DISCARD_OLDEST
-				? new DiscardOldestPolicy(handle)
-				: option.getPolicy();
+		SubscriptionBuffer buffer = SubscriptionBuffer.of(config, defaultQueuePolicy(), simple);
+		PushEventSource<Message> source = consumer -> open(simple, consumer, buffer);
 		return pushStreams.buildStream(source)
-				.withBuffer(new ArrayBlockingQueue<PushEvent<? extends Message>>(config.bufferSize()))
-				.withQueuePolicy(policy)
+				.withBuffer(buffer.newQueue())
+				.withQueuePolicy(buffer)
 				.withPushbackPolicy(PushbackPolicyOption.FIXED, 0)
 				.withExecutor(workers)
 				.withScheduler(scheduler)
 				.build()
-				.map(AbstractMessagingInstance::taken);
+				.map(buffer::taken);
 	}
 
 	/**
@@ -781,7 +772,7 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	private AutoCloseable open(SimpleMessageContext ctx, PushEventConsumer<? super Message> consumer,
-			AtomicReference<SubscriptionHandle> handle) throws Exception {
+			SubscriptionBuffer buffer) throws Exception {
 		SubscriptionHandle.Sink sink = new SubscriptionHandle.Sink() {
 			@Override
 			public long accept(Message message) throws Exception {
@@ -798,12 +789,12 @@ public abstract class AbstractMessagingInstance {
 			}
 
 			@Override
-			public boolean buffers() {
-				return true;
+			public SubscriptionBuffer buffer() {
+				return buffer;
 			}
 		};
 		SubscriptionHandle h = addSubscription(ctx, sink, false);
-		handle.set(h);
+		buffer.attach(h);
 		return () -> closeSubscription(h, null);
 	}
 
@@ -891,7 +882,7 @@ public abstract class AbstractMessagingInstance {
 			synchronized (h) {
 				r = h.sink().accept(message);
 			}
-			if (!h.sink().buffers()) {
+			if (h.sink().buffer() == null) {
 				AcknowledgeSupport ack = AcknowledgeSupport.of(message);
 				if (ack != null) {
 					ack.taken();
@@ -903,15 +894,6 @@ public abstract class AbstractMessagingInstance {
 		} catch (Exception e) {
 			closeSubscription(h, e);
 		}
-	}
-
-	/** The stream took a message from the subscription buffer: the broker may send the next. */
-	private static Message taken(Message message) {
-		AcknowledgeSupport ack = AcknowledgeSupport.of(message);
-		if (ack != null) {
-			ack.taken();
-		}
-		return message;
 	}
 
 	// ------------------------------------------------------------------ runtime

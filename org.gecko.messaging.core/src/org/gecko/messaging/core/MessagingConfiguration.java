@@ -51,7 +51,8 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * no CloudEvent, unchanged as plain messages; default {@code false}: an instance with
  * CloudEvents takes CloudEvents only and drops (and counts) the rest</li>
  * <li>{@code workerThreads} — threads delivering messages, default 4</li>
- * <li>{@code bufferSize} — buffer per subscription, default 1024</li>
+ * <li>{@code bufferSize} — buffer per subscription, default 1024 messages</li>
+ * <li>{@code bufferBytes} — payload bytes per subscription buffer, default 16 MiB</li>
  * <li>{@code queuePolicy} — when a buffer is full: {@code BLOCK}, {@code DISCARD_OLDEST},
  * {@code FAIL}; default {@code BLOCK}, which holds back the protocol thread (back-pressure)</li>
  * <li>{@code context.channel}, {@code context.channelExtension}, {@code context.contentType},
@@ -270,6 +271,11 @@ public final class MessagingConfiguration {
 	/** @return the buffer size per subscription */
 	public int bufferSize() {
 		return (int) Math.max(1, number("bufferSize", 1024));
+	}
+
+	/** @return the payload bytes the buffer of a subscription holds at most, default 16 MiB */
+	public long bufferBytes() {
+		return Math.max(1, number("bufferBytes", 16L << 20));
 	}
 
 	/**

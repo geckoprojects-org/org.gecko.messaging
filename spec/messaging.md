@@ -135,7 +135,9 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `cloudEvents.type` | String | `org.gecko.messaging.message` | `type` of plain messages sent as CloudEvents. |
 | `workerThreads` | int | `4` (min 1) | Delivery and handler threads. |
 | `bufferSize` | int | `1024` (min 1) | Buffer of each subscription stream; in-flight limit of each reply-to handler. |
+| `bufferBytes` | long | `16777216` (16 MiB) | Payload bytes of each subscription buffer. |
 | `queuePolicy` | String | `BLOCK` (all bindings) | Policy of a full subscription buffer: `BLOCK`, `DISCARD_OLDEST`, `FAIL`. |
+| `publishWindow` | int | `20` | Messages a stream publish has outstanding at once (§6.1). |
 | `context.channel` | String | — | Default channel for `subscribe(null)` and publishing without channel. |
 | `context.channelExtension` | String | — | Default channel extension (with `context.channel`). |
 | `context.contentType` | String | — | Default content type of the default context. |
@@ -450,14 +452,27 @@ Rules:
 - A message the instance cannot decode (e.g. an invalid CloudEvent) is dropped, rejected without
   re-queue and logged without stack trace.
 
-**Buffers and back-pressure**: each stream is built with an `ArrayBlockingQueue` of `bufferSize`,
-the queue policy `queuePolicy` and a fixed push-back of 0, on the worker threads of the instance.
+**Buffers and back-pressure**: each stream has a buffer, bounded in messages and in payload
+bytes (a single larger message is taken into an empty buffer), with a queue policy and a fixed
+push-back of 0, drained on the worker threads of the instance. Its memory is taken as it fills.
+A subscription sets its own buffer with extensions, bounded by the instance (a larger value or an
+unknown policy fails the subscribe with `MessagingException`):
 
-| `queuePolicy` | Full buffer |
+| Extension | Default (instance) | |
+|---|---|---|
+| `osgi.messaging.bufferSize` | `bufferSize` | messages, at most the instance's |
+| `osgi.messaging.bufferBytes` | `bufferBytes` | payload bytes, at most the instance's |
+| `osgi.messaging.queuePolicy` | `queuePolicy` | `BLOCK`, `DISCARD_OLDEST`, `FAIL` |
+| `osgi.messaging.groupHeader` | — | header marking the first message of a group (`true`), see below |
+
+| Queue policy | Full buffer |
 |---|---|
-| `BLOCK` (default) | the delivering protocol thread blocks; the broker's flow control (MQTT `receiveMaximum`, AMQP `prefetch`, TCP) holds back further messages |
-| `DISCARD_OLDEST` | the oldest buffered message is dropped |
+| `BLOCK` (default) | delivery waits for room. With broker flow control (§8, acknowledged when taken) the buffer of at least the broker window never fills; without it (QoS 0, WebSocket) the delivering thread waits — counted in `SubscriptionDTO.blockedMillis` |
+| `DISCARD_OLDEST` | latest wins: the oldest buffered message is discarded, counted in `droppedMessages` and rejected without re-queue. With `groupHeader` whole groups are discarded — the oldest message and every following one up to the next group start — so that what stays begins with a group start, e.g. a key frame of a video stream |
 | `FAIL` | the stream fails |
+
+A video stream next to commands on one instance: the video subscription with a small buffer,
+`DISCARD_OLDEST` and `groupHeader`, the command subscription with the instance defaults.
 
 ---
 
@@ -741,7 +756,10 @@ state.
 | `replyToSubscriptions` | `ReplyToSubscriptionDTO[]` of bound handlers |
 
 `SubscriptionDTO`: `channel` (`ChannelDTO`), `receivedMessages`, `droppedMessages` (undecodable,
-or no CloudEvent on an instance that takes CloudEvents only).
+no CloudEvent on an instance that takes CloudEvents only, or discarded by a full buffer),
+`bufferSize`, `bufferBytes` (limits), `bufferedMessages`, `bufferedBytes` (in the buffer now) and
+`blockedMillis` (time a full `BLOCK` buffer held back delivery): a slow subscriber and a
+throttling broker are visible.
 `ChannelDTO`: `name`, `extension`, `connected` (subscribed on the broker right now).
 `ReplyToSubscriptionDTO`: `handlerService`, `requestChannel`, `replyChannel` (or `null`), `many`,
 `handledRequests`, `refusedRequests`.
@@ -967,7 +985,7 @@ An instance with CloudEvents takes CloudEvents only unless `cloudEvents.acceptPl
 | Resource | Bound |
 |---|---|
 | Threads | 1 scheduler + `workerThreads` per instance; WebSocket client `maxThreads` |
-| Subscription buffers | `bufferSize` with `queuePolicy` (§7) |
+| Subscription buffers | `bufferSize` messages and `bufferBytes` payload bytes with `queuePolicy`; per subscription only lower (§7) |
 | Unacknowledged messages | MQTT `receiveMaximum`/`maxInflight`, AMQP `prefetch` |
 | Reply-to handlers | at most `bufferSize` requests in flight per handler, then caller runs |
 | Payload size | `maxMessageSize` (MQTT, MQTT 3.1.1, AMQP, WebSocket; default 1 MiB), checked before sending and on receipt |
@@ -1083,6 +1101,7 @@ buffer of 256: a protocol thread held up by a full buffer then shows as a reconn
 | `sustainedLoadAboveTheSubscriberIsThrottled` (QoS) | 200/s for 6 s, subscriber 125/s | all, in order; no reconnect; the publisher keeps its rate |
 | `aStalledSubscriberDoesNotBlockTheConnection` (QoS) | 100/s for 8 s, the subscriber stalls 10 s once | all, in order; no reconnect; the publisher keeps its rate |
 | `aStreamPublishedAtFullSpeedStaysWithinTheWindow` | 3000 messages as one stream at full speed | all, in order; no failed publish; no reconnect |
+| `aSlowSubscriberAtQos0KeepsTheLatest` | 400/s for 5 s at QoS 0, subscriber 100/s, buffer 16 `DISCARD_OLDEST` | every message received or counted as dropped; the newest arrives; no reconnect; the publisher keeps its rate |
 
 Throughput and latency (p50, p99, max) are reported as JUnit report entries, not asserted.
 `LOAD_SCALE` in the environment scales counts and durations (CI: 1). Without broker flow

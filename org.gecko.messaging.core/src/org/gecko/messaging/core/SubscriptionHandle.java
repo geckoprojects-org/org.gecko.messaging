@@ -51,14 +51,14 @@ public final class SubscriptionHandle {
 		void closed(Throwable failure);
 
 		/**
-		 * Returns whether the sink buffers: then the stream reports when it takes a message
-		 * ({@link AcknowledgeSupport#taken()}), otherwise a message counts as taken once
+		 * Returns the buffer of the sink: the stream reports when it takes a message from it
+		 * ({@link AcknowledgeSupport#taken()}). Without one a message counts as taken once
 		 * accepted.
 		 *
-		 * @return {@code true} for a buffered stream
+		 * @return the buffer of a subscription stream, {@code null} for an internal sink
 		 */
-		default boolean buffers() {
-			return false;
+		default SubscriptionBuffer buffer() {
+			return null;
 		}
 
 	}
@@ -202,6 +202,10 @@ public final class SubscriptionHandle {
 		dto.channel = channelDTO(channel(), channelExtension(), connected);
 		dto.receivedMessages = received.get();
 		dto.droppedMessages = dropped.get();
+		SubscriptionBuffer buffer = sink.buffer();
+		if (buffer != null) {
+			buffer.fill(dto);
+		}
 		return dto;
 	}
 

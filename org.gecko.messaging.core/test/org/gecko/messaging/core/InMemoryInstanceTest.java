@@ -543,4 +543,89 @@ class InMemoryInstanceTest {
 		assertThat(handled).as("the newest is kept").contains("m5");
 	}
 
+	/** A subscriber blocked until released, recording what it handles. */
+	private static final class Gate {
+		final CountDownLatch release = new CountDownLatch(1);
+		final List<String> handled = new CopyOnWriteArrayList<>();
+
+		void handle(Message m) {
+			try {
+				release.await(5, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+			handled.add(text(m));
+		}
+	}
+
+	@Test
+	void aSubscriptionHasItsOwnBufferAndQueuePolicy() throws Exception {
+		// the instance blocks; this subscription keeps the latest two and counts the rest
+		InMemoryInstance i = start(Map.of("bufferSize", 64L));
+		MessageContext ctx = i.newBuilder().channel("own").extensionEntry(EXTENSION_BUFFER_SIZE, 2)
+				.extensionEntry(EXTENSION_QUEUE_POLICY, "discard_oldest").buildContext();
+		Gate gate = new Gate();
+		i.subscribe(ctx).forEach(gate::handle);
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		for (int n = 0; n < 10; n++) {
+			i.publish(text(i, "own", "m" + n), null).getValue();
+		}
+		await(() -> i.getRuntimeDTO().subscriptions[0].droppedMessages >= 7);
+		var dto = i.getRuntimeDTO().subscriptions[0];
+		assertThat(dto.bufferSize).isEqualTo(2);
+		assertThat(dto.bufferedMessages).isLessThanOrEqualTo(2);
+		gate.release.countDown();
+		await(() -> gate.handled.contains("m9"));
+	}
+
+	@Test
+	void theBufferIsBoundedInBytes() throws Exception {
+		InMemoryInstance i = start(Map.of("queuePolicy", "DISCARD_OLDEST"));
+		MessageContext ctx = i.newBuilder().channel("bytes").extensionEntry(EXTENSION_BUFFER_BYTES, 3000L).buildContext();
+		Gate gate = new Gate();
+		i.subscribe(ctx).forEach(gate::handle);
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		for (int n = 0; n < 10; n++) {
+			byte[] payload = new byte[1000];
+			payload[0] = (byte) n;
+			i.publish(i.newBuilder().channel("bytes").content(ByteBuffer.wrap(payload)).buildMessage(), null).getValue();
+		}
+		// one in the handler, at most three of 1000 bytes in the buffer
+		await(() -> i.getRuntimeDTO().subscriptions[0].droppedMessages >= 6);
+		var dto = i.getRuntimeDTO().subscriptions[0];
+		assertThat(dto.bufferBytes).isEqualTo(3000);
+		assertThat(dto.bufferedBytes).isLessThanOrEqualTo(3000);
+		gate.release.countDown();
+	}
+
+	@Test
+	void discardOldestDiscardsWholeGroups() throws Exception {
+		InMemoryInstance i = start(Map.of("queuePolicy", "DISCARD_OLDEST"));
+		MessageContext ctx = i.newBuilder().channel("video").extensionEntry(EXTENSION_BUFFER_SIZE, 4)
+				.extensionEntry(EXTENSION_GROUP_HEADER, "keyframe").buildContext();
+		Gate gate = new Gate();
+		i.subscribe(ctx).forEach(gate::handle);
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		// frames: K0 P1 P2 | K3 P4 P5 | K6 P7 ...; the first one waits in the handler
+		for (int n = 0; n < 9; n++) {
+			boolean key = n % 3 == 0;
+			i.publish(i.newBuilder().channel("video").header("keyframe", key).content(ByteBuffer.wrap(((key ? "K" : "P") + n).getBytes(UTF_8)))
+					.buildMessage(), null).getValue();
+		}
+		await(() -> i.getRuntimeDTO().subscriptions[0].droppedMessages >= 3);
+		gate.release.countDown();
+		await(() -> gate.handled.contains("P8"));
+		List<String> after = gate.handled.subList(1, gate.handled.size());
+		assertThat(after.get(0)).as("what stays starts with a key frame: %s", gate.handled).startsWith("K");
+	}
+
+	@Test
+	void subscriptionSettingsAboveTheInstanceAreRefused() throws Exception {
+		InMemoryInstance i = start(Map.of("bufferSize", 8L));
+		MessageContext tooLarge = i.newBuilder().channel("x").extensionEntry(EXTENSION_BUFFER_SIZE, 9).buildContext();
+		assertThatThrownBy(() -> i.subscribe(tooLarge)).isInstanceOf(MessagingException.class);
+		MessageContext unknown = i.newBuilder().channel("x").extensionEntry(EXTENSION_QUEUE_POLICY, "LATEST").buildContext();
+		assertThatThrownBy(() -> i.subscribe(unknown)).isInstanceOf(MessagingException.class);
+	}
+
 }
