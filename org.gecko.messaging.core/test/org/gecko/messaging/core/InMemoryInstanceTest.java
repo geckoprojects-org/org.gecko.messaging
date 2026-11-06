@@ -615,8 +615,15 @@ class InMemoryInstanceTest {
 		await(() -> i.getRuntimeDTO().subscriptions[0].droppedMessages >= 3);
 		gate.release.countDown();
 		await(() -> gate.handled.contains("P8"));
-		List<String> after = gate.handled.subList(1, gate.handled.size());
-		assertThat(after.get(0)).as("what stays starts with a key frame: %s", gate.handled).startsWith("K");
+		// every gap in what arrives ends at a key frame: no frame without its group start
+		List<String> handled = gate.handled;
+		for (int n = 1; n < handled.size(); n++) {
+			int previous = Integer.parseInt(handled.get(n - 1).substring(1));
+			int current = Integer.parseInt(handled.get(n).substring(1));
+			if (current != previous + 1) {
+				assertThat(handled.get(n)).as("after a gap: %s", handled).startsWith("K");
+			}
+		}
 	}
 
 	@Test
