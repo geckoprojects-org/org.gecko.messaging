@@ -34,6 +34,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -151,6 +152,10 @@ public abstract class AbstractMessagingInstance {
 		if (CloudEventConstants.MODE_STRUCTURED.equals(config.cloudEventsMode())) {
 			// the envelope carries these whatever the protocol has itself
 			f.addAll(STRUCTURED_ENVELOPE_FEATURES);
+		}
+		if (f.containsAll(List.of(FEATURE_REPLY_TO, FEATURE_REPLY_TO_SUBSCRIPTION, FEATURE_HEADERS, FEATURE_GENERATE_REPLY_CHANNEL))) {
+			// sessions are built of these: generated channels, correlation and control headers
+			f.add(FEATURE_REPLY_TO_SESSION);
 		}
 		this.features = new Features(f);
 		String name = config.name();
@@ -748,9 +753,54 @@ public abstract class AbstractMessagingInstance {
 		}
 		features.checkSubscribe(ctx);
 		checkProtocol(ctx, false);
-		SimpleMessageContext simple = SimpleMessageContextBuilder.toSimple(ctx);
+		return subscribe(SimpleMessageContextBuilder.toSimple(ctx), null, null);
+	}
+
+	/**
+	 * Builds a buffered stream of a source of the instance, with the buffer settings of a context.
+	 *
+	 * @param source the source
+	 * @param context the context with buffer extensions
+	 * @return the stream
+	 */
+	PushStream<Message> stream(PushEventSource<Message> source, MessageContext context) {
+		SubscriptionBuffer buffer = SubscriptionBuffer.of(config, defaultQueuePolicy(), context);
+		return pushStreams.buildStream(source)
+				.withBuffer(buffer.newQueue())
+				.withQueuePolicy(buffer)
+				.withPushbackPolicy(PushbackPolicyOption.FIXED, 0)
+				.withExecutor(workers)
+				.withScheduler(scheduler)
+				.build()
+				.map(buffer::taken);
+	}
+
+	/**
+	 * Takes a message before it enters the buffer of a subscription stream.
+	 */
+	@FunctionalInterface
+	interface Intercept {
+
+		/**
+		 * @param message the message
+		 * @param handle the subscription
+		 * @return {@code true} to deliver it to the stream, {@code false} if it is consumed
+		 */
+		boolean deliver(Message message, SubscriptionHandle handle);
+
+	}
+
+	/**
+	 * Subscribes a stream, features checked.
+	 *
+	 * @param simple the context
+	 * @param intercept takes messages before the buffer, {@code null} for none
+	 * @param opened told the subscription once it is made, {@code null} for none
+	 * @return the stream
+	 */
+	PushStream<Message> subscribe(SimpleMessageContext simple, Intercept intercept, Consumer<SubscriptionHandle> opened) {
 		SubscriptionBuffer buffer = SubscriptionBuffer.of(config, defaultQueuePolicy(), simple);
-		PushEventSource<Message> source = consumer -> open(simple, consumer, buffer);
+		PushEventSource<Message> source = consumer -> open(simple, consumer, buffer, intercept, opened);
 		return pushStreams.buildStream(source)
 				.withBuffer(buffer.newQueue())
 				.withQueuePolicy(buffer)
@@ -772,10 +822,19 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	private AutoCloseable open(SimpleMessageContext ctx, PushEventConsumer<? super Message> consumer,
-			SubscriptionBuffer buffer) throws Exception {
+			SubscriptionBuffer buffer, Intercept intercept, Consumer<SubscriptionHandle> opened) throws Exception {
+		SubscriptionHandle[] self = new SubscriptionHandle[1];
 		SubscriptionHandle.Sink sink = new SubscriptionHandle.Sink() {
 			@Override
 			public long accept(Message message) throws Exception {
+				if (intercept != null && !intercept.deliver(message, self[0])) {
+					// consumed before the buffer: taken as far as the broker is concerned
+					AcknowledgeSupport ack = AcknowledgeSupport.of(message);
+					if (ack != null) {
+						ack.taken();
+					}
+					return 0;
+				}
 				return consumer.accept(PushEvent.data(message));
 			}
 
@@ -794,7 +853,11 @@ public abstract class AbstractMessagingInstance {
 			}
 		};
 		SubscriptionHandle h = addSubscription(ctx, sink, false);
+		self[0] = h;
 		buffer.attach(h);
+		if (opened != null) {
+			opened.accept(h);
+		}
 		return () -> closeSubscription(h, null);
 	}
 

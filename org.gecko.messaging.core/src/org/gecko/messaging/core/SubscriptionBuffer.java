@@ -55,6 +55,11 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 	private long bytes;
 	/** Guarded by this. */
 	private long blockedNanos;
+	/**
+	 * A group lost messages: the rest of it is discarded as it arrives, up to the next group
+	 * start. Guarded by this.
+	 */
+	private boolean skipping;
 
 	private SubscriptionBuffer(int size, long maxBytes, Policy policy, String groupHeader) {
 		this.size = size;
@@ -120,6 +125,14 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 		}
 		long n = bytes(event.getData());
 		synchronized (this) {
+			if (groupHeader != null) {
+				if (startsGroup(event)) {
+					skipping = false;
+				} else if (skipping) {
+					dropped(event.getData());
+					return;
+				}
+			}
 			while (!fits(n) || !queue.offer(event)) {
 				switch (policy) {
 					case FAIL:
@@ -127,6 +140,13 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 								+ " bytes)");
 					case DISCARD_OLDEST:
 						discardOldest(queue);
+						if (groupHeader != null && queue.isEmpty() && !startsGroup(event)) {
+							// the whole group up to here is gone: this message and the rest of
+							// its group are of no use
+							skipping = true;
+							dropped(event.getData());
+							return;
+						}
 						break;
 					default:
 						long start = System.nanoTime();
@@ -174,6 +194,11 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 		Message message = event.getData();
 		messages--;
 		bytes -= bytes(message);
+		dropped(message);
+	}
+
+	/** Counts and settles a message that does not reach the stream. */
+	private void dropped(Message message) {
 		SubscriptionHandle h = handle.get();
 		if (h != null) {
 			h.dropped();

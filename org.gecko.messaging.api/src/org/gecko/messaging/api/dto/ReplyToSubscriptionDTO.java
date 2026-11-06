@@ -35,6 +35,12 @@ public class ReplyToSubscriptionDTO extends DTO {
 	/** {@code true} for a handler of streamed responses. */
 	public boolean many;
 
+	/** {@code true} for a handler of duplex sessions. */
+	public boolean session;
+
+	/** The sessions of a session handler open now. */
+	public int openSessions;
+
 	/** The number of requests handled. */
 	public long handledRequests;
 

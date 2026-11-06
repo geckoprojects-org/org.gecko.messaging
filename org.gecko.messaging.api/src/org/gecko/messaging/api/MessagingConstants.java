@@ -117,6 +117,12 @@ public final class MessagingConstants {
 	/** Feature: the reply-to whiteboard for request handlers. */
 	public static final String FEATURE_REPLY_TO_SUBSCRIPTION = "replyToSubscription";
 
+	/**
+	 * Feature: duplex sessions, {@code ReplyToPublisher.openSession} and the
+	 * {@code ReplyToSessionHandler} whiteboard.
+	 */
+	public static final String FEATURE_REPLY_TO_SESSION = "replyToSession";
+
 	/** Feature: a missing correlation id of a reply-to request is generated. */
 	public static final String FEATURE_GENERATE_CORRELATION_ID = "generateCorrelationId";
 
@@ -176,6 +182,14 @@ public final class MessagingConstants {
 	public static final String EXTENSION_REPLY_TIMEOUT = "osgi.messaging.replyTo.timeout";
 
 	/**
+	 * Extension of a session request: the lease the requester asks for, in milliseconds — the
+	 * time either side may stay silent before the session ends. Type {@code Long}. The responder
+	 * keeps it within its {@code minSessionLease} and {@code maxSessionLease}; without it the
+	 * instance's {@code sessionLease} applies.
+	 */
+	public static final String EXTENSION_SESSION_LEASE = "osgi.messaging.replyTo.sessionLease";
+
+	/**
 	 * Extension of a subscription: the messages its buffer holds at most. Type {@code Integer}, at
 	 * most the instance's {@code bufferSize}, which applies without it.
 	 */
@@ -225,6 +239,19 @@ public final class MessagingConstants {
 	 * The name is a valid CloudEvents extension name.
 	 */
 	public static final String HEADER_REPLY_ERROR = "replyerror";
+
+	/**
+	 * Header of the control messages of a duplex session: {@code open}, {@code accept},
+	 * {@code ready}, {@code ping} or {@code close}. Messages with it are not delivered to the
+	 * application.
+	 */
+	public static final String HEADER_SESSION = "replysession";
+
+	/** Header of an {@code accept}: the channel the requester sends the session's messages to. */
+	public static final String HEADER_SESSION_CHANNEL = "replysessionchannel";
+
+	/** Header of an {@code open} and an {@code accept}: the lease in milliseconds. */
+	public static final String HEADER_SESSION_LEASE = "replysessionlease";
 
 	/**
 	 * The start of generated reply channels, followed by the client id and a random part. A

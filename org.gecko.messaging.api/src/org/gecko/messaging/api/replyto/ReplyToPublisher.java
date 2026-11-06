@@ -83,4 +83,27 @@ public interface ReplyToPublisher {
 	 */
 	PushStream<Message> publishWithReplyMany(Message requestMessage, MessageContext context);
 
+	/**
+	 * Opens a duplex session with the responder of the request's channel, a
+	 * {@link ReplyToSessionHandler}. Requires the feature
+	 * {@link org.gecko.messaging.api.MessagingConstants#FEATURE_REPLY_TO_SESSION}.
+	 *
+	 * @param openRequest the request, with the channel of the responder in its context; its payload
+	 *            and headers reach the handler
+	 * @return a promise resolved with the session once the responder accepted it; failed when it
+	 *         refused it, failed or did not answer within the reply timeout
+	 */
+	Promise<MessagingSession> openSession(Message openRequest);
+
+	/**
+	 * Opens a duplex session with the given context, see {@link #openSession(Message)}. The
+	 * extension {@link org.gecko.messaging.api.MessagingConstants#EXTENSION_SESSION_LEASE} asks for
+	 * a lease; the buffer extensions apply to {@link MessagingSession#receive()}.
+	 *
+	 * @param openRequest the request, only its payload and headers are used
+	 * @param context the context, with the channel of the responder
+	 * @return a promise resolved with the session once the responder accepted it
+	 */
+	Promise<MessagingSession> openSession(Message openRequest, MessageContext context);
+
 }

@@ -15,13 +15,16 @@ package org.gecko.messaging.tck;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.gecko.messaging.api.MessagingConstants.*;
+import static org.gecko.messaging.api.replyto.ReplyToSubscriptionConstants.REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -34,6 +37,9 @@ import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.dto.SubscriptionDTO;
+import org.gecko.messaging.api.replyto.MessagingSession;
+import org.gecko.messaging.api.replyto.ReplyToPublisher;
+import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
 import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -190,6 +196,90 @@ public class LoadTest extends AbstractMessagingTest {
 				return !run.received.isEmpty() && run.received.get(run.received.size() - 1)[0] == count - 1;
 			}
 		});
+	}
+
+	/**
+	 * The video case of duplex sessions (#19): large frames at QoS 0 to a viewer slower than the
+	 * camera, with a small latest-wins buffer that discards whole groups, while the viewer sends
+	 * commands at QoS 1. No command is lost or held up behind the frames, frames are discarded
+	 * only in whole groups, the connection stays up.
+	 */
+	@Test
+	void aVideoStreamWithCommands() throws Exception {
+		assumeTrue(tck.has(FEATURE_REPLY_TO_SESSION), "needs duplex sessions");
+		int frames = (int) (250 * scale);
+		int commands = (int) (100 * scale);
+		String channel = tck.channel("load", "camera");
+		List<long[]> commandLatency = new CopyOnWriteArrayList<>();
+		Object frameQos = tck.has(FEATURE_QOS) ? QOS_AT_MOST_ONCE : null;
+		Object commandQos = tck.has(FEATURE_QOS) ? QOS_AT_LEAST_ONCE : null;
+		Hashtable<String, Object> props = new Hashtable<>();
+		props.put(MESSAGING_TARGET_PROPERTY, tck.filter());
+		props.put(REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY, channel);
+		register(ReplyToSessionHandler.class, (request, in, builders) -> {
+			in.forEach(c -> {
+				ByteBuffer b = c.payload();
+				commandLatency.add(new long[] { b.getLong(0), System.nanoTime() - b.getLong(8) });
+			});
+			// 50 frames per second, a key frame every ten
+			return new PushStreamProvider().streamOf(IntStream.range(0, frames).mapToObj(i -> {
+				LockSupport.parkNanos(20_000_000L);
+				ByteBuffer frame = ByteBuffer.allocate(32 * 1024);
+				frame.putLong(0, i);
+				return builders.get().header("keyframe", i % 10 == 0).extensionEntry(EXTENSION_QOS, frameQos).content(frame)
+						.buildMessage();
+			}));
+		}, props);
+		tck.settle();
+		long reconnectsBefore = tck.service(MessageServiceRuntime.class).getRuntimeDTO().reconnects;
+		ReplyToPublisher replyTo = tck.service(ReplyToPublisher.class);
+		MessagingSession session = replyTo.openSession(builder().content(Tck.bytes("open")).buildMessage(),
+				builder().channel(channel).extensionEntry(EXTENSION_BUFFER_SIZE, 4).extensionEntry(EXTENSION_QUEUE_POLICY, "DISCARD_OLDEST")
+						.extensionEntry(EXTENSION_GROUP_HEADER, "keyframe").extensionEntry(EXTENSION_QOS, frameQos).buildContext())
+				.getValue();
+		try {
+			List<Long> received = new CopyOnWriteArrayList<>();
+			CountDownLatch ended = new CountDownLatch(1);
+			// the viewer shows 25 frames per second
+			track(session.receive()).onClose(ended::countDown).forEach(m -> {
+				received.add(m.payload().getLong(0));
+				LockSupport.parkNanos(40_000_000L);
+			});
+			// the commands end well before the camera does: its end ends the session
+			Stream<Message> sent = IntStream.range(0, commands).mapToObj(i -> {
+				LockSupport.parkNanos(20_000_000L);
+				ByteBuffer c = ByteBuffer.allocate(64);
+				c.putLong(0, i);
+				c.putLong(8, System.nanoTime());
+				return builder().extensionEntry(EXTENSION_QOS, commandQos).content(c).buildMessage();
+			});
+			assertThat(session.send(new PushStreamProvider().streamOf(sent)).getValue()).isEqualTo(commands);
+			tck.await("every command at the camera", () -> commandLatency.size() >= commands);
+			assertThat(ended.await(frames * 60L + 10_000, TimeUnit.MILLISECONDS)).as("the stream of frames ends").isTrue();
+			List<Long> latencies = new ArrayList<>();
+			for (int i = 0; i < commandLatency.size(); i++) {
+				assertThat(commandLatency.get(i)[0]).as("commands in order").isEqualTo(i);
+				latencies.add(commandLatency.get(i)[1]);
+			}
+			Collections.sort(latencies);
+			for (int n = 1; n < received.size(); n++) {
+				if (received.get(n) != received.get(n - 1) + 1) {
+					assertThat(received.get(n) % 10).as("a gap ends at a key frame: %s", received).isZero();
+				}
+			}
+			String line = String.format("%s %s: %d/%d frames shown, %d commands, command latency p50 %d ms, p99 %d ms, max %d ms",
+					tck.filter(), profile, received.size(), frames, commandLatency.size(), ms(percentile(latencies, 50)),
+					ms(percentile(latencies, 99)), ms(latencies.get(latencies.size() - 1)));
+			System.out.println("LOAD " + line);
+			reporter.publishEntry("load", line);
+			assertThat(received.size()).as("the viewer is slower: frames are discarded").isLessThan(frames);
+			assertThat(received.get(received.size() - 1)).as("the viewer keeps up with the newest group: %s", received)
+					.isGreaterThanOrEqualTo((frames - 1) / 10 * 10L);
+			assertThat(ms(percentile(latencies, 99))).as("commands are not held up behind the frames (ms)").isLessThan(2000);
+			assertThat(tck.service(MessageServiceRuntime.class).getRuntimeDTO().reconnects - reconnectsBefore).isZero();
+		} finally {
+			session.close();
+		}
 	}
 
 	/** One profile run: a subscription with a given processing time per message. */

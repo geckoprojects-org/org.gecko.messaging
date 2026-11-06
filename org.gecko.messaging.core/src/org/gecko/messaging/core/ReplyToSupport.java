@@ -28,6 +28,7 @@ import java.util.logging.Logger;
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessagingException;
+import org.gecko.messaging.api.replyto.MessagingSession;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
 import org.gecko.messaging.api.runtime.ConnectionState;
 import org.gecko.messaging.core.cloudevents.CloudEventCodec;
@@ -134,6 +135,16 @@ final class ReplyToSupport implements ReplyToPublisher {
 		Request r = prepare(requestMessage, context);
 		PushEventSource<Message> source = consumer -> openMany(r, consumer);
 		return pushStreams.buildStream(source).withExecutor(instance.workers()).withScheduler(instance.scheduler()).build();
+	}
+
+	@Override
+	public Promise<MessagingSession> openSession(Message openRequest) {
+		return openSession(openRequest, null);
+	}
+
+	@Override
+	public Promise<MessagingSession> openSession(Message openRequest, MessageContext context) {
+		return SessionClient.open(instance, openRequest, context);
 	}
 
 	private AutoCloseable openMany(Request r, PushEventConsumer<? super Message> consumer) throws Exception {

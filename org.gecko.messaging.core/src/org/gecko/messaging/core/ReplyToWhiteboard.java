@@ -15,12 +15,15 @@ package org.gecko.messaging.core;
 
 import static org.gecko.messaging.api.MessagingConstants.EXTENSION_CHANNEL_TYPE;
 import static org.gecko.messaging.api.MessagingConstants.FEATURE_REPLY_TO_MANY;
+import static org.gecko.messaging.api.MessagingConstants.FEATURE_REPLY_TO_SESSION;
 import static org.gecko.messaging.api.MessagingConstants.HEADER_REPLY_COMPLETE;
 import static org.gecko.messaging.api.MessagingConstants.HEADER_REPLY_ERROR;
 import static org.gecko.messaging.api.MessagingConstants.MESSAGING_TARGET_PROPERTY;
 import static org.gecko.messaging.api.replyto.ReplyToSubscriptionConstants.*;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -31,6 +34,7 @@ import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.dto.ReplyToSubscriptionDTO;
 import org.gecko.messaging.api.replyto.ReplyToManySubscriptionHandler;
+import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
 import org.gecko.messaging.api.replyto.ReplyToSingleSubscriptionHandler;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Constants;
@@ -67,6 +71,9 @@ final class ReplyToWhiteboard {
 		final String channelExtension;
 		final String replyChannel;
 		final boolean many;
+		final boolean session;
+		/** The open sessions of a session handler. */
+		final Set<SessionResponder> sessions = ConcurrentHashMap.newKeySet();
 		final AtomicLong handled = new AtomicLong();
 		final AtomicLong refused = new AtomicLong();
 		/** Requests accepted and not handled yet. */
@@ -80,6 +87,7 @@ final class ReplyToWhiteboard {
 			this.channelExtension = channelExtension;
 			this.replyChannel = replyChannel;
 			this.many = handler instanceof ReplyToManySubscriptionHandler;
+			this.session = handler instanceof ReplyToSessionHandler;
 		}
 
 	}
@@ -90,7 +98,8 @@ final class ReplyToWhiteboard {
 		Filter filter;
 		try {
 			filter = FrameworkUtil.createFilter("(&(|(" + Constants.OBJECTCLASS + "=" + ReplyToSingleSubscriptionHandler.class.getName()
-					+ ")(" + Constants.OBJECTCLASS + "=" + ReplyToManySubscriptionHandler.class.getName() + "))("
+					+ ")(" + Constants.OBJECTCLASS + "=" + ReplyToManySubscriptionHandler.class.getName() + ")(" + Constants.OBJECTCLASS
+					+ "=" + ReplyToSessionHandler.class.getName() + "))("
 					+ REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY + "=*)(" + MESSAGING_TARGET_PROPERTY + "=*))");
 		} catch (InvalidSyntaxException e) {
 			throw new IllegalStateException(e);
@@ -145,6 +154,10 @@ final class ReplyToWhiteboard {
 			LOG.warning(() -> "Messaging instance " + instance.getName() + " cannot stream responses; handler " + reference + " not bound");
 			return null;
 		}
+		if (b.session && !instance.getFeatures().has(FEATURE_REPLY_TO_SESSION)) {
+			LOG.warning(() -> "Messaging instance " + instance.getName() + " has no duplex sessions; handler " + reference + " not bound");
+			return null;
+		}
 		SimpleMessageContextBuilder ctx = new SimpleMessageContextBuilder().channel(channel, b.channelExtension);
 		String type = string(reference, REPLY_TO_SUBSCRIPTION_CHANNEL_TYPE_PROPERTY);
 		if (type != null) {
@@ -194,6 +207,9 @@ final class ReplyToWhiteboard {
 
 	private void unbind(Binding b) {
 		bindings.remove(b.reference);
+		for (SessionResponder s : List.copyOf(b.sessions)) {
+			s.end(null, true);
+		}
 		SubscriptionHandle h = b.handle;
 		if (h != null) {
 			instance.closeSubscription(h, null);
@@ -211,6 +227,12 @@ final class ReplyToWhiteboard {
 		String reply = requested != null ? requested : b.replyChannel;
 		b.handled.incrementAndGet();
 		try {
+			if (b.session) {
+				SessionResponder.open(instance, (ReplyToSessionHandler) b.handler, request, b.sessions,
+						() -> responseBuilder(request, reply), () -> instance.publish(
+								responseBuilder(request, reply).header(HEADER_REPLY_ERROR, RESPONDER_FAILED).buildMessage(), null));
+				return;
+			}
 			if (b.many) {
 				PushStream<Message> responses = ((ReplyToManySubscriptionHandler) b.handler).handleResponses(request,
 						() -> responseBuilder(request, reply));
@@ -273,6 +295,8 @@ final class ReplyToWhiteboard {
 			dto.requestChannel = SubscriptionHandle.channelDTO(b.channel, b.channelExtension, h != null && !h.isClosed());
 			dto.replyChannel = b.replyChannel == null ? null : SubscriptionHandle.channelDTO(b.replyChannel, null, false);
 			dto.many = b.many;
+			dto.session = b.session;
+			dto.openSessions = b.sessions.size();
 			dto.handledRequests = b.handled.get();
 			dto.refusedRequests = b.refused.get();
 			return dto;

@@ -215,6 +215,7 @@ or subscribed. `publish` and `publishWithReply` report it as failed promise; `su
 | `FEATURE_REPLY_TO` | `replyTo` | Reply-to with a single response; correlation id and reply-to travel. | `correlationId` or `replyTo` set on publish; `ReplyToPublisher` registered |
 | `FEATURE_REPLY_TO_MANY` | `replyToMany` | Reply-to with a stream of responses. | `publishWithReplyMany`; binding of a `ReplyToManySubscriptionHandler` |
 | `FEATURE_REPLY_TO_SUBSCRIPTION` | `replyToSubscription` | The reply-to whiteboard. | whiteboard opened |
+| `FEATURE_REPLY_TO_SESSION` | `replyToSession` | Duplex sessions (§9.7); announced with `replyTo`, `replyToSubscription`, `headers` and `generateReplyChannel`. | `openSession`; binding of a `ReplyToSessionHandler` |
 | `FEATURE_GENERATE_CORRELATION_ID` | `generateCorrelationId` | Missing correlation id of a request is generated. | request without correlation id |
 | `FEATURE_GENERATE_REPLY_CHANNEL` | `generateReplyChannel` | Missing reply channel of a request is generated. | request without reply-to |
 | `FEATURE_CLOUD_EVENTS` | `cloudEvents` | Messages are CloudEvents. | a `CloudEventMessageContext` on publish; `adapt(CloudEventMessageContextBuilder.class)` |
@@ -468,7 +469,7 @@ unknown policy fails the subscribe with `MessagingException`):
 | Queue policy | Full buffer |
 |---|---|
 | `BLOCK` (default) | delivery waits for room. With broker flow control (§8, acknowledged when taken) the buffer of at least the broker window never fills; without it (QoS 0, WebSocket) the delivering thread waits — counted in `SubscriptionDTO.blockedMillis` |
-| `DISCARD_OLDEST` | latest wins: the oldest buffered message is discarded, counted in `droppedMessages` and rejected without re-queue. With `groupHeader` whole groups are discarded — the oldest message and every following one up to the next group start — so that what stays begins with a group start, e.g. a key frame of a video stream |
+| `DISCARD_OLDEST` | latest wins: the oldest buffered message is discarded, counted in `droppedMessages` and rejected without re-queue. With `groupHeader` whole groups are discarded — the oldest message and every following one up to the next group start, and when that empties the buffer, also what arrives of that group later — so that nothing reaches the stream without its group start, e.g. a key frame of a video stream |
 | `FAIL` | the stream fails |
 
 A video stream next to commands on one instance: the video subscription with a small buffer,
@@ -629,6 +630,52 @@ prefixes match as given. A refused
 request is not handled at all (no handler side effects) and counted in
 `ReplyToSubscriptionDTO.refusedRequests`. The handler's own `replyChannel` (configured, not chosen
 by the sender) is not subject to this check.
+
+### 9.7 Duplex Sessions
+
+A session joins a stream from a responder and messages to it for as long as it lives — the case
+of a camera streaming video to a viewer that steers it with commands. Requires
+`replyToSession`.
+
+| Side | API |
+|---|---|
+| Requester | `ReplyToPublisher.openSession(Message[, MessageContext])` → `Promise<MessagingSession>`: `receive()` (`PushStream<Message>`, the same on every call), `send(Message)`, `send(PushStream)` (streaming publish, §6.1), `closed()`, `close()`, `getSessionId()` |
+| Responder | whiteboard service `ReplyToSessionHandler.handleSession(openRequest, messages, responseBuilders)` → `PushStream<Message>`, bound like the other handlers (§9.3) |
+
+**Wire protocol.** All messages of a session carry its id as correlation id. Control messages
+carry the header `replysession` and are not delivered to the application:
+
+1. The requester subscribes a generated reply channel R and publishes `open` (with
+   `replysessionlease`, its payload and headers reach the handler) to the handler's request
+   channel, reply-to R.
+2. The responder checks the reply-to channel (§9.6) and `maxSessions` (refused: `replyerror`
+   on R), generates a channel C, calls the handler and answers `accept` with
+   `replysessionchannel=C` and the granted lease. Messages to the handler arrive on C; those
+   before the handler connects its stream are held (at most `bufferSize`, the oldest first out).
+3. When the requester connects `receive()`, it sends `ready` on C; only then the responder
+   publishes the handler's stream to R — from a worker, never a protocol thread. Nothing is
+   sent before the requester listens.
+4. Either side sends `ping` when it has sent nothing for a third of the lease, and ends the
+   session when it heard nothing from the other side for the lease (`TimeoutException`).
+5. `close` from either side ends the session: on the requester after the messages already in the
+   buffer of `receive()`; on the responder the handler's message stream ends and its returned
+   stream is closed. The end of the handler's stream ends the session (`close` to the
+   requester); its failure as well, with `replyerror`.
+
+**Receive buffer.** `receive()` is a subscription stream of R with the buffer extensions of the
+`openSession` context (§7): a video viewer asks for a small `DISCARD_OLDEST` buffer with
+`groupHeader` (key frames), so that a slower viewer skips whole groups and always shows the
+newest. A group that lost a message is discarded up to its end, also what arrives later, so that
+nothing is shown without its group start.
+
+| Instance key | Default | |
+|---|---|---|
+| `sessionLease` | `10000` ms | requested lease (extension `osgi.messaging.replyTo.sessionLease`) |
+| `minSessionLease` / `maxSessionLease` | `1000` / `300000` ms | the responder keeps a lease within |
+| `maxSessions` | `16` | open sessions per handler |
+
+`ReplyToSubscriptionDTO.session` and `openSessions` show a handler's sessions. TCK:
+`SessionTest`; load profile `aVideoStreamWithCommands` (§15.6).
 
 ---
 
@@ -1101,6 +1148,7 @@ buffer of 256: a protocol thread held up by a full buffer then shows as a reconn
 | `sustainedLoadAboveTheSubscriberIsThrottled` (QoS) | 200/s for 6 s, subscriber 125/s | all, in order; no reconnect; the publisher keeps its rate |
 | `aStalledSubscriberDoesNotBlockTheConnection` (QoS) | 100/s for 8 s, the subscriber stalls 10 s once | all, in order; no reconnect; the publisher keeps its rate |
 | `aStreamPublishedAtFullSpeedStaysWithinTheWindow` | 3000 messages as one stream at full speed | all, in order; no failed publish; no reconnect |
+| `aVideoStreamWithCommands` (sessions) | 32 KiB frames at 50/s, QoS 0, viewer 25/s with a 4-frame `DISCARD_OLDEST` buffer by key frame; 100 commands at QoS 1 | every command, in order, p99 latency below 2 s; gaps end at key frames; no reconnect |
 | `aSlowSubscriberAtQos0KeepsTheLatest` | 400/s for 5 s at QoS 0, subscriber 100/s, buffer 16 `DISCARD_OLDEST` | every message received or counted as dropped; the newest arrives; no reconnect; the publisher keeps its rate |
 
 Throughput and latency (p50, p99, max) are reported as JUnit report entries, not asserted.
