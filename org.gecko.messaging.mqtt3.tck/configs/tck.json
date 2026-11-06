@@ -14,5 +14,14 @@
 		"reconnectMaxDelay:Long": 200,
 		"connectTimeout:Long": 3000,
 		"cloudEvents": "structured"
+	},
+	"org.gecko.messaging.mqtt3~tckload": {
+		"osgi.messaging.name": "tck-load",
+		"uri": "tcp://localhost:11886",
+		"connectTimeout:Long": 3000,
+		"keepAliveInterval:Long": 2,
+		"bufferSize:Long": 256,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200
 	}
 }

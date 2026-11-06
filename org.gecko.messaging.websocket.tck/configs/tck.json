@@ -17,5 +17,14 @@
 		"reconnectMaxDelay:Long": 200,
 		"connectTimeout:Long": 3000,
 		"cloudEvents": "structured"
+	},
+	"org.gecko.messaging.websocket~tckload": {
+		"osgi.messaging.name": "tck-load",
+		"uri": "ws://localhost:18091/messaging",
+		"connectTimeout:Long": 3000,
+		"keepAliveInterval:Long": 2,
+		"bufferSize:Long": 256,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200
 	}
 }

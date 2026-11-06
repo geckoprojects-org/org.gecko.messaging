@@ -15,5 +15,12 @@
 		"osgi.messaging.name": "tck-ce-binary",
 		"uri": "memory://tck-ce-binary",
 		"cloudEvents": "binary"
+	},
+	"org.gecko.messaging.memory~tckload": {
+		"osgi.messaging.name": "tck-load",
+		"uri": "memory://tck-load",
+		"bufferSize:Long": 256,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200
 	}
 }

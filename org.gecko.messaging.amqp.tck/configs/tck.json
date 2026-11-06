@@ -28,5 +28,16 @@
 		"reconnectMaxDelay:Long": 200,
 		"connectTimeout:Long": 3000,
 		"cloudEvents": "binary"
+	},
+	"org.gecko.messaging.amqp~tckload": {
+		"osgi.messaging.name": "tck-load",
+		"uri": "amqp://localhost:15676",
+		"username": "tck",
+		".password": "tck",
+		"connectTimeout:Long": 3000,
+		"heartbeat:Long": 2,
+		"bufferSize:Long": 256,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200
 	}
 }

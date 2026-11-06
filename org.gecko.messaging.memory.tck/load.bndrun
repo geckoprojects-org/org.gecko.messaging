@@ -1,0 +1,18 @@
+# Load profiles (LoadTest, #17) against an instance with a short keep-alive. LOAD_SCALE=10 in the
+# environment runs the long profile.
+
+-library: enableOSGi-Test
+-include: ${workspace}/cnf/ext/tck-run.bnd
+
+-runrequires: \
+	bnd.identity;id='org.gecko.messaging.tck',\
+	bnd.identity;id='org.gecko.messaging.memory',\
+	bnd.identity;id='org.gecko.messaging.memory.tck',\
+	${tck.runrequires}
+
+-runproperties.load: \
+	tester.names=org.gecko.messaging.tck.LoadTest,\
+	org.gecko.messaging.tck.load=short,\
+	org.gecko.messaging.tck.load.scale=${env;LOAD_SCALE;1},\
+	org.gecko.messaging.tck.filter='(osgi.messaging.name=tck-load)',\
+	org.gecko.messaging.memory.tck.broker=tck-load

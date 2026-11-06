@@ -1037,7 +1037,25 @@ Example (`org.gecko.messaging.mqtt.tck/configs/tck.json`):
 Runs 11–13 use the CloudEvents binary mode, where the protocol has headers; the other
 `tck-cloudevents` runs the structured mode.
 
-### 15.6 Test Classes
+### 15.6 Load Profiles
+
+Every run project also has a `load.bndrun` (`LoadTest`, only with the framework property
+`org.gecko.messaging.tck.load`) against an instance `tck-load` with a keep-alive of 2 s and a
+buffer of 256: a protocol thread held up by a full buffer then shows as a reconnect.
+
+| Profile | Load | Asserted |
+|---|---|---|
+| `burstIsAbsorbed` | 500 messages at full speed, subscriber 2 ms per message | all, in order; no reconnect; the publisher is done before the subscriber |
+| `sustainedLoadTheSubscriberKeepsUpWith` | 500/s for 5 s | all, in order; no reconnect |
+| `sustainedLoadAboveTheSubscriberIsThrottled` (QoS) | 200/s for 6 s, subscriber 125/s | all, in order; no reconnect; the publisher keeps its rate |
+| `aStalledSubscriberDoesNotBlockTheConnection` (QoS) | 100/s for 8 s, the subscriber stalls 10 s once | all, in order; no reconnect; the publisher keeps its rate |
+
+Throughput and latency (p50, p99, max) are reported as JUnit report entries, not asserted.
+`LOAD_SCALE` in the environment scales counts and durations (CI: 1). Without broker flow
+control (no `qos` feature, WebSocket) the throttling profiles are skipped: a subscriber that stays
+slower than the sender loses messages there.
+
+### 15.7 Test Classes
 
 | Class | Tests |
 |---|---|
