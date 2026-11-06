@@ -50,6 +50,17 @@ public final class SubscriptionHandle {
 		 */
 		void closed(Throwable failure);
 
+		/**
+		 * Returns whether the sink buffers: then the stream reports when it takes a message
+		 * ({@link AcknowledgeSupport#taken()}), otherwise a message counts as taken once
+		 * accepted.
+		 *
+		 * @return {@code true} for a buffered stream
+		 */
+		default boolean buffers() {
+			return false;
+		}
+
 	}
 
 	private static final AtomicLong IDS = new AtomicLong();
@@ -61,6 +72,7 @@ public final class SubscriptionHandle {
 	private final boolean internal;
 	private final AtomicLong received = new AtomicLong();
 	private final AtomicLong dropped = new AtomicLong();
+	/** Messages undecided, or accepted while still in the buffer: settled when the subscription ends. */
 	final Set<AcknowledgeSupport> openAcknowledgements = ConcurrentHashMap.newKeySet();
 	private volatile boolean connected;
 	private volatile boolean closed;

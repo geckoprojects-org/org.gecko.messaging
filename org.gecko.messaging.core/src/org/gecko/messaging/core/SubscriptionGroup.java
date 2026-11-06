@@ -24,7 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * channel once however often it is subscribed locally (MQTT, WebSocket).
  * <p>
  * A message goes to every local subscription of a topic, and to one of a queue, in turn. It is
- * completed on the broker once every receiver has decided. The group also keeps the quality of
+ * completed on the broker once every receiver has taken it from its buffer and decided, so that
+ * slow receivers throttle the broker through its flow control. The group also keeps the quality of
  * service of the broker subscription: when a local subscription needs more than the broker
  * subscription has, {@link #add} says so, and the protocol subscribes again with it. The quality
  * of service is not lowered when such a subscription ends: receiving more than asked is allowed.
@@ -121,25 +122,22 @@ public final class SubscriptionGroup {
 		for (int i = 0; i < targets.size(); i++) {
 			SubscriptionHandle h = targets.get(i);
 			byte[] own = i == targets.size() - 1 ? payload : payload.clone();
-			if (h.needsAcknowledger()) {
-				h.deliver(context, own, new Acknowledger() {
-					@Override
-					public void acknowledge() {
-						done.run();
-					}
+			// completed when every receiver has taken it from its buffer and accepted it: until
+			// then the message holds a place of the broker's flow control
+			h.deliver(context, own, new Acknowledger() {
+				@Override
+				public void acknowledge() {
+					done.run();
+				}
 
-					@Override
-					public void reject(boolean requeue) {
-						if (requeue) {
-							broker.requeue();
-						}
-						done.run();
+				@Override
+				public void reject(boolean requeue) {
+					if (requeue) {
+						broker.requeue();
 					}
-				});
-			} else {
-				h.deliver(context, own, null);
-				done.run();
-			}
+					done.run();
+				}
+			});
 		}
 	}
 

@@ -441,23 +441,20 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 				handle.deliver(ctx, body, null);
 				return;
 			}
-			if (handle.needsAcknowledger()) {
-				handle.deliver(ctx, body, new Acknowledger() {
-					@Override
-					public void acknowledge() {
-						ack(tag);
-					}
+			// acknowledged once the subscription has taken it from its buffer and accepted it: until
+			// then it counts against the prefetch, so a slow subscriber throttles the broker
+			handle.deliver(ctx, body, new Acknowledger() {
+				@Override
+				public void acknowledge() {
+					ack(tag);
+				}
 
-					@Override
-					public void reject(boolean requeue) {
-						// the broker flags a message it delivers again: re-queued once, it is dropped
-						nack(tag, requeue && !envelope.isRedeliver());
-					}
-				});
-			} else {
-				handle.deliver(ctx, body, null);
-				ack(tag);
-			}
+				@Override
+				public void reject(boolean requeue) {
+					// the broker flags a message it delivers again: re-queued once, it is dropped
+					nack(tag, requeue && !envelope.isRedeliver());
+				}
+			});
 		}
 
 		private void ack(long tag) {

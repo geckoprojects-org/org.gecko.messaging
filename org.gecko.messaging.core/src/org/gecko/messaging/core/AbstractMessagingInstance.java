@@ -719,7 +719,8 @@ public abstract class AbstractMessagingInstance {
 				.withPushbackPolicy(PushbackPolicyOption.FIXED, 0)
 				.withExecutor(workers)
 				.withScheduler(scheduler)
-				.build();
+				.build()
+				.map(AbstractMessagingInstance::taken);
 	}
 
 	/**
@@ -747,6 +748,11 @@ public abstract class AbstractMessagingInstance {
 				} catch (Exception e) {
 					LOG.log(Level.FINE, "Closing a stream failed", e);
 				}
+			}
+
+			@Override
+			public boolean buffers() {
+				return true;
 			}
 		};
 		SubscriptionHandle h = addSubscription(ctx, sink, false);
@@ -801,7 +807,7 @@ public abstract class AbstractMessagingInstance {
 			}
 		}
 		for (AcknowledgeSupport open : new ArrayList<>(h.openAcknowledgements)) {
-			open.reject();
+			open.abandoned();
 		}
 		h.sink().closed(failure);
 	}
@@ -838,12 +844,27 @@ public abstract class AbstractMessagingInstance {
 			synchronized (h) {
 				r = h.sink().accept(message);
 			}
+			if (!h.sink().buffers()) {
+				AcknowledgeSupport ack = AcknowledgeSupport.of(message);
+				if (ack != null) {
+					ack.taken();
+				}
+			}
 			if (r < 0) {
 				closeSubscription(h, null);
 			}
 		} catch (Exception e) {
 			closeSubscription(h, e);
 		}
+	}
+
+	/** The stream took a message from the subscription buffer: the broker may send the next. */
+	private static Message taken(Message message) {
+		AcknowledgeSupport ack = AcknowledgeSupport.of(message);
+		if (ack != null) {
+			ack.taken();
+		}
+		return message;
 	}
 
 	// ------------------------------------------------------------------ runtime

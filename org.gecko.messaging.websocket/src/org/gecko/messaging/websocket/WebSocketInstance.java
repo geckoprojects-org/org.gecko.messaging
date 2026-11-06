@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -84,6 +85,8 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 
 	private final URI base;
 	private final long keepAliveMillis;
+	/** Messages of a channel session read ahead of the slowest subscription: the buffer size. */
+	private final int window;
 	private WebSocketClient client;
 	/** The session on the base URI: the hub is reachable while it is open. */
 	private volatile ChannelSession control;
@@ -91,19 +94,6 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 	private final Map<String, ChannelSession> sessions = new ConcurrentHashMap<>();
 	/** Local subscriptions by channel. */
 	private final Map<String, SubscriptionGroup> subscriptions = new ConcurrentHashMap<>();
-
-	/** WebSocket has nothing to complete or re-queue: no acknowledgement. */
-	private static final SubscriptionGroup.Broker NO_BROKER = new SubscriptionGroup.Broker() {
-		@Override
-		public void complete() {
-			// nothing to complete
-		}
-
-		@Override
-		public void requeue() {
-			// no queues
-		}
-	};
 	/** Channels with a session but no subscription, least recently published to first; under sessions. */
 	private final Map<String, Boolean> publishOnly = new LinkedHashMap<>(16, 0.75f, true);
 	private final int maxPublishSessions;
@@ -124,6 +114,7 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 		String u = config.uri();
 		this.base = URI.create(u.endsWith("/") ? u.substring(0, u.length() - 1) : u);
 		this.keepAliveMillis = TimeUnit.SECONDS.toMillis(config.number("keepAliveInterval", 30));
+		this.window = config.bufferSize();
 		this.maxPublishSessions = (int) Math.max(1, config.number("maxPublishSessions", 16));
 		this.maxMessageSize = config.number("maxMessageSize", 1 << 20);
 	}
@@ -327,23 +318,43 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 		return subscriptions.remove(handle.channel(), group);
 	}
 
-	private void dispatch(String channel, byte[] payload) {
+	private void dispatch(String channel, byte[] payload, SubscriptionGroup.Broker broker) {
 		SubscriptionGroup group = subscriptions.get(channel);
-		if (group != null) {
-			group.dispatch(new SimpleMessageContextBuilder().channel(channel).buildSimple(), payload,
-					NO_BROKER);
+		if (group == null) {
+			broker.complete();
+			return;
 		}
+		group.dispatch(new SimpleMessageContextBuilder().channel(channel).buildSimple(), payload, broker);
 	}
 
 	/**
 	 * A WebSocket session of a channel, or of the base URI ({@code channel == null}). Public, as
 	 * Jetty calls the listener methods through method handles.
 	 */
-	public final class ChannelSession implements Session.Listener.AutoDemanding {
+	public final class ChannelSession implements Session.Listener {
 
 		private final String channel;
 		private volatile Session session;
 		private volatile boolean closing;
+		/**
+		 * Messages received and not yet taken by every subscription: the next frame is read only
+		 * while fewer than {@link #window} are, so that a slow subscriber throttles the sender
+		 * through TCP instead of blocking a Jetty thread.
+		 */
+		private final AtomicInteger inFlight = new AtomicInteger();
+		private final SubscriptionGroup.Broker taken = new SubscriptionGroup.Broker() {
+			@Override
+			public void complete() {
+				if (inFlight.getAndDecrement() == window) {
+					demand(); // was paused at the window
+				}
+			}
+
+			@Override
+			public void requeue() {
+				// no queues
+			}
+		};
 
 		ChannelSession(String channel) {
 			this.channel = channel;
@@ -381,6 +392,36 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 		@Override
 		public void onWebSocketOpen(Session s) {
 			session = s;
+			s.demand();
+		}
+
+		private void demand() {
+			Session s = session;
+			if (s != null && s.isOpen()) {
+				s.demand();
+			}
+		}
+
+		private void received(byte[] bytes) {
+			if (channel == null) {
+				demand();
+				return;
+			}
+			int n = inFlight.incrementAndGet();
+			dispatch(channel, bytes, taken);
+			if (n < window) {
+				demand();
+			}
+		}
+
+		@Override
+		public void onWebSocketPing(ByteBuffer payload) {
+			demand();
+		}
+
+		@Override
+		public void onWebSocketPong(ByteBuffer payload) {
+			demand();
 		}
 
 		@Override
@@ -388,16 +429,12 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 			byte[] bytes = new byte[payload.remaining()];
 			payload.get(bytes);
 			callback.succeed();
-			if (channel != null) {
-				dispatch(channel, bytes);
-			}
+			received(bytes);
 		}
 
 		@Override
 		public void onWebSocketText(String text) {
-			if (channel != null) {
-				dispatch(channel, text.getBytes(UTF_8));
-			}
+			received(text.getBytes(UTF_8));
 		}
 
 		@Override

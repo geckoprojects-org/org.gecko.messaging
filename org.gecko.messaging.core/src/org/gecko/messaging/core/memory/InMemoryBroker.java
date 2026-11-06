@@ -218,24 +218,22 @@ public final class InMemoryBroker {
 	}
 
 	private void deliver(SubscriptionHandle h, Envelope e, int redelivery) {
-		SimpleMessageContext ctx = (SimpleMessageContext) new SimpleMessageContextBuilder().withContext(e.context())
-				.extensionEntry(MessagingConstants.EXTENSION_RETAIN, null).buildContext();
-		Acknowledger ack = null;
-		if (h.needsAcknowledger()) {
-			ack = new Acknowledger() {
-				@Override
-				public void acknowledge() {
-					// nothing to forget
-				}
+		SimpleMessageContext ctx = new SimpleMessageContextBuilder().withContext(e.context())
+				.extensionEntry(MessagingConstants.EXTENSION_RETAIN, null).buildSimple();
+		// always, so that a message still in the buffer when the subscription ends goes back to a queue
+		Acknowledger ack = new Acknowledger() {
+			@Override
+			public void acknowledge() {
+				// nothing to forget
+			}
 
-				@Override
-				public void reject(boolean requeue) {
-					if (requeue && redelivery < Acknowledger.MAX_REQUEUES) {
-						delivery.execute(() -> route(e, redelivery + 1));
-					}
+			@Override
+			public void reject(boolean requeue) {
+				if (requeue && redelivery < Acknowledger.MAX_REQUEUES) {
+					delivery.execute(() -> route(e, redelivery + 1));
 				}
-			};
-		}
+			}
+		};
 		h.deliver(ctx, e.payload().clone(), ack);
 	}
 

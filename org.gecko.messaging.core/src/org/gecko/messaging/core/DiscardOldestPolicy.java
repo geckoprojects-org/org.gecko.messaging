@@ -17,8 +17,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.gecko.messaging.api.Message;
-import org.gecko.messaging.api.acknowledge.AcknowledgeHandler;
-import org.gecko.messaging.api.acknowledge.AcknowledgeMessageContext;
 import org.osgi.util.pushstream.PushEvent;
 import org.osgi.util.pushstream.PushEvent.EventType;
 import org.osgi.util.pushstream.QueuePolicy;
@@ -55,14 +53,10 @@ final class DiscardOldestPolicy implements QueuePolicy<Message, BlockingQueue<Pu
 		if (h != null) {
 			h.dropped();
 		}
-		if (message.getContext() instanceof AcknowledgeMessageContext ac) {
-			AcknowledgeHandler ack = ac.getAcknowledgeHandler();
-			if (ack instanceof AcknowledgeSupport support) {
-				// an overload is no reason to hand the message to another receiver
-				support.rejectFailed();
-			} else if (ack != null) {
-				ack.reject();
-			}
+		AcknowledgeSupport ack = AcknowledgeSupport.of(message);
+		if (ack != null) {
+			// an overload is no reason to hand the message to another receiver
+			ack.discarded();
 		}
 	}
 

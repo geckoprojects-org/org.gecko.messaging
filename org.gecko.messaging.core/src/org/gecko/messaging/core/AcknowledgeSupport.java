@@ -20,11 +20,19 @@ import java.util.logging.Logger;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.acknowledge.AcknowledgeHandler;
+import org.gecko.messaging.api.acknowledge.AcknowledgeMessageContext;
 import org.gecko.messaging.api.acknowledge.AcknowledgeType;
 
 /**
  * The {@link AcknowledgeHandler} of one received message: decides once, then tells the protocol
  * and the post consumers.
+ * <p>
+ * The protocol hears of an acceptance only once the message has left the subscription buffer
+ * ({@link #taken()}): until then the message holds a place of the broker's flow control
+ * ({@code receiveMaximum}, {@code prefetch}), so that a slow subscriber throttles the broker
+ * instead of blocking the protocol's threads. Without an explicit decision a message is accepted
+ * when it is taken. A message the buffer discards or that is still in the buffer when the
+ * subscription ends is settled as well ({@link #discarded()}, {@link #abandoned()}).
  */
 final class AcknowledgeSupport implements AcknowledgeHandler {
 
@@ -33,28 +41,37 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 	private final AtomicReference<AcknowledgeType> state;
 	private final Acknowledger acknowledger;
 	private final boolean requeue;
+	private final boolean queue;
 	private final Consumer<Message> postAcknowledge;
 	private final Consumer<Message> postReject;
-	private final Runnable onDecided;
+	private final SubscriptionHandle handle;
 	private volatile Message message;
+	/** Accept when taken: neither function, filter nor manual decides. */
+	private boolean acceptWhenTaken;
+	/** Guarded by this. */
+	private boolean taken;
+	/** Accepted while still in the buffer: the protocol is told when taken. Guarded by this. */
+	private boolean acceptPending;
 
-	AcknowledgeSupport(Acknowledger acknowledger, boolean requeue, Consumer<Message> postAcknowledge,
-			Consumer<Message> postReject, Runnable onDecided) {
+	private AcknowledgeSupport(SubscriptionHandle handle, Acknowledger acknowledger) {
+		SimpleMessageContext sub = handle.context();
 		this.state = new AtomicReference<>(AcknowledgeType.RECEIVED);
+		this.handle = handle;
 		this.acknowledger = acknowledger;
-		this.requeue = requeue;
-		this.postAcknowledge = postAcknowledge;
-		this.postReject = postReject;
-		this.onDecided = onDecided;
+		this.queue = handle.isQueue();
+		// on a topic a message published again would reach every subscriber, not just this one
+		this.requeue = sub.isRequeueOnReject() && queue;
+		this.postAcknowledge = sub.getPostAcknowledge();
+		this.postReject = sub.getPostReject();
 	}
 
 	/**
 	 * Makes the acknowledgement decision of a received message as its subscription asks: by
-	 * function, by filter, manually in the stream, or at once.
+	 * function or filter at once, manually in the stream, or by default when the stream takes it.
 	 *
 	 * @param h the subscription
 	 * @param message the decoded message
-	 * @param acknowledger the protocol's side, {@code null} if it has none
+	 * @param acknowledger the protocol's side, {@code null} if it has acknowledged already
 	 * @return the message for the stream, carrying its handler if it has one, or {@code null} if
 	 *         it is decided not to reach the stream
 	 */
@@ -63,13 +80,10 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 		if (acknowledger == null && sub.getPostAcknowledge() == null && sub.getPostReject() == null && !h.needsAcknowledger()) {
 			return message;
 		}
-		AcknowledgeSupport[] self = new AcknowledgeSupport[1];
-		// on a topic a message published again would reach every subscriber, not just this one
-		AcknowledgeSupport ack = new AcknowledgeSupport(acknowledger, sub.isRequeueOnReject() && h.isQueue(), sub.getPostAcknowledge(),
-				sub.getPostReject(), () -> h.openAcknowledgements.remove(self[0]));
-		self[0] = ack;
+		AcknowledgeSupport ack = new AcknowledgeSupport(h, acknowledger);
 		SimpleMessage m = message.withContext(((SimpleMessageContext) message.getContext()).withAcknowledgeHandler(ack));
-		ack.setMessage(m);
+		ack.message = m;
+		h.openAcknowledgements.add(ack);
 		try {
 			if (sub.getAcknowledgeFunction() != null) {
 				sub.getAcknowledgeFunction().accept(m);
@@ -84,11 +98,7 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 				ack.reject();
 				return null;
 			}
-			if (sub.isManualAcknowledge()) {
-				h.openAcknowledgements.add(ack);
-			} else {
-				ack.acknowledge();
-			}
+			ack.acceptWhenTaken = !sub.isManualAcknowledge();
 			return m;
 		} catch (RuntimeException e) {
 			LOG.log(Level.WARNING, "Acknowledgement decision failed on " + h + ", rejecting without re-queue", e);
@@ -97,8 +107,58 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 		}
 	}
 
-	void setMessage(Message message) {
-		this.message = message;
+	/**
+	 * Returns the handler of a message, if it has one of this kind.
+	 *
+	 * @param message the message
+	 * @return the handler, or {@code null}
+	 */
+	static AcknowledgeSupport of(Message message) {
+		return message.getContext() instanceof AcknowledgeMessageContext ac
+				&& ac.getAcknowledgeHandler() instanceof AcknowledgeSupport s ? s : null;
+	}
+
+	/** The stream took the message from the subscription buffer. */
+	void taken() {
+		boolean accept;
+		boolean tell;
+		synchronized (this) {
+			if (taken) {
+				return;
+			}
+			taken = true;
+			accept = acceptWhenTaken;
+			tell = acceptPending;
+			acceptPending = false;
+		}
+		if (accept) {
+			acknowledge();
+		} else if (tell) {
+			tellAccepted();
+		}
+		settledIfDone();
+	}
+
+	/** The subscription buffer discarded the message: dropped, without re-queue. */
+	void discarded() {
+		if (!rejectFailed()) {
+			tellPendingAcceptance();
+		}
+	}
+
+	/**
+	 * The subscription ended with the message undecided or still in its buffer. A message the
+	 * application never saw goes back to a queue; one it rejects is treated as it asks.
+	 */
+	void abandoned() {
+		boolean seen;
+		synchronized (this) {
+			seen = taken;
+		}
+		boolean decided = seen && !acceptWhenTaken ? reject() : reject(queue);
+		if (!decided) {
+			tellPendingAcceptance();
+		}
 	}
 
 	@Override
@@ -107,8 +167,13 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 			return false;
 		}
 		try {
-			if (acknowledger != null) {
-				acknowledger.acknowledge();
+			boolean now;
+			synchronized (this) {
+				now = taken;
+				acceptPending = !taken;
+			}
+			if (now) {
+				tellAccepted();
 			}
 		} finally {
 			decided(postAcknowledge);
@@ -145,16 +210,45 @@ final class AcknowledgeSupport implements AcknowledgeHandler {
 		return true;
 	}
 
-	private void decided(Consumer<Message> post) {
-		if (onDecided != null) {
-			onDecided.run();
+	/** An acceptance the buffer still held back is told now: the decision stands. */
+	private void tellPendingAcceptance() {
+		boolean tell;
+		synchronized (this) {
+			tell = acceptPending;
+			acceptPending = false;
+			taken = true;
 		}
+		if (tell) {
+			tellAccepted();
+		}
+		settledIfDone();
+	}
+
+	private void tellAccepted() {
+		if (acknowledger != null) {
+			acknowledger.acknowledge();
+		}
+	}
+
+	private void decided(Consumer<Message> post) {
+		settledIfDone();
 		if (post != null) {
 			try {
 				post.accept(message);
 			} catch (RuntimeException e) {
 				LOG.log(Level.WARNING, "A post acknowledgement consumer failed", e);
 			}
+		}
+	}
+
+	/** Leaves the open set once decided and told: nothing is left to do on close. */
+	private void settledIfDone() {
+		boolean done;
+		synchronized (this) {
+			done = state.get() != AcknowledgeType.RECEIVED && !acceptPending;
+		}
+		if (done) {
+			handle.openAcknowledgements.remove(this);
 		}
 	}
 
