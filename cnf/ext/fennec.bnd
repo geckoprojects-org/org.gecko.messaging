@@ -22,8 +22,8 @@ javac.target: 21
 -require-bnd: "(version>=7.4.0)"
 -jpms-module-info:
 
-# Maven Central (read-only) — not provided by workspace-minimal. The snapshot URL serves the
-# Paho build of geckoprojects-org/paho (org.geckoprojects.paho, 1.3.0-SNAPSHOT).
+# Maven Central (read-only) — not provided by workspace-minimal. The snapshot URL serves
+# snapshots of org.geckoprojects artifacts; Paho (org.geckoprojects.paho) is 1.3.0 from Central.
 # High plugin index so it never collides with the base plugins (.1/.2).
 -plugin.5.Central: \
 	aQute.bnd.repository.maven.provider.MavenBndRepository; \
