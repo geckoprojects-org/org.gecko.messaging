@@ -25,6 +25,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledFuture;
@@ -104,7 +106,7 @@ public abstract class AbstractMessagingInstance {
 	protected final MessagingConfiguration config;
 	protected final Features features;
 	private final ScheduledThreadPoolExecutor scheduler;
-	private final ThreadPoolExecutor workers;
+	private final ExecutorService workers;
 	/**
 	 * Promise callbacks and connection events: one thread, started on demand, apart from the
 	 * workers, so that handlers blocking the workers never hold back what releases them.
@@ -162,9 +164,17 @@ public abstract class AbstractMessagingInstance {
 		this.scheduler = new ScheduledThreadPoolExecutor(1, threads("msg-" + name + "-scheduler"));
 		this.scheduler.setRemoveOnCancelPolicy(true);
 		this.scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
-		int n = config.workerThreads();
-		this.workers = new ThreadPoolExecutor(n, n, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), threads("msg-" + name + "-worker"));
-		this.workers.allowCoreThreadTimeOut(true);
+		if (config.virtualWorkers()) {
+			// a virtual thread per task: a handler that blocks holds back no other; the buffers and
+			// the in-flight limits of the handlers bound the tasks
+			this.workers = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("msg-" + name + "-worker-", 1).factory());
+		} else {
+			int n = config.workerThreads();
+			ThreadPoolExecutor pool = new ThreadPoolExecutor(n, n, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
+					threads("msg-" + name + "-worker"));
+			pool.allowCoreThreadTimeOut(true);
+			this.workers = pool;
+		}
 		this.callbacks = new ThreadPoolExecutor(1, 1, 30, TimeUnit.SECONDS, new LinkedBlockingQueue<>(),
 				threads("msg-" + name + "-callbacks"));
 		this.callbacks.allowCoreThreadTimeOut(true);
@@ -454,7 +464,7 @@ public abstract class AbstractMessagingInstance {
 		shutdown(callbacks);
 	}
 
-	private static void shutdown(ThreadPoolExecutor executor) {
+	private static void shutdown(ExecutorService executor) {
 		executor.shutdown();
 		try {
 			if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
@@ -651,7 +661,7 @@ public abstract class AbstractMessagingInstance {
 	}
 
 	/** @return the executor running delivery and handlers */
-	protected ThreadPoolExecutor workers() {
+	protected ExecutorService workers() {
 		return workers;
 	}
 
@@ -942,8 +952,13 @@ public abstract class AbstractMessagingInstance {
 		}
 		try {
 			long r;
-			synchronized (h) {
+			// one message at a time into a subscription; a lock, not a monitor, so that a virtual
+			// worker waiting here does not pin its carrier thread
+			h.deliveryLock.lock();
+			try {
 				r = h.sink().accept(message);
+			} finally {
+				h.deliveryLock.unlock();
 			}
 			if (h.sink().buffer() == null) {
 				AcknowledgeSupport ack = AcknowledgeSupport.of(message);

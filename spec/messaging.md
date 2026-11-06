@@ -107,9 +107,18 @@ registers a reply-to handler whose `osgi.messaging.target` selects the instance.
    waiting reply-to exchanges, closes every subscription stream (normal close event), disconnects
    and releases all threads.
 
-Threads: one scheduler thread (connect attempts, timeouts) and at most `workerThreads` delivery
-threads per instance, which time out after 30 s idle. An implementation MUST NOT run protocol
-driver reconnects in parallel to its own (§10).
+Threads: one scheduler thread (connect attempts, timeouts), at most `workerThreads` delivery
+threads, which run the subscription streams and the handlers, and one thread for promise
+callbacks and connection events, started on demand — all time out after 30 s idle. With
+`workerThreads=virtual` delivery runs on a virtual thread per task. An implementation MUST NOT
+run protocol driver reconnects in parallel to its own (§10).
+
+**Blocking handlers.** A stream handler or reply-to handler that blocks holds a worker for that
+time: with `workerThreads` platform threads, that many blocking handlers hold back every other
+subscription of the instance (never a protocol thread: §8, acknowledged when taken). Promise
+callbacks and connection events run apart from the workers, so a handler that waits for a
+promise of its own instance — a request inside a stream handler — cannot wait for itself. Slow
+or blocking handlers belong on `workerThreads=virtual` or an instance of their own.
 
 ### 2.2 Configuration
 
@@ -133,7 +142,7 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `cloudEvents.acceptPlain` | Boolean | `false` | With CloudEvents, also deliver received messages that are no CloudEvent, unchanged (§11.1). |
 | `cloudEvents.source` | String | `/osgi/messaging/<name>` | `source` of plain messages sent as CloudEvents. |
 | `cloudEvents.type` | String | `org.gecko.messaging.message` | `type` of plain messages sent as CloudEvents. |
-| `workerThreads` | int | `4` (min 1) | Delivery and handler threads. |
+| `workerThreads` | int or `virtual` | `4` (min 1) | Delivery and handler threads; `virtual` for a virtual thread per task. |
 | `bufferSize` | int | `1024` (min 1) | Buffer of each subscription stream; in-flight limit of each reply-to handler. |
 | `bufferBytes` | long | `16777216` (16 MiB) | Payload bytes of each subscription buffer. |
 | `queuePolicy` | String | `BLOCK` (all bindings) | Policy of a full subscription buffer: `BLOCK`, `DISCARD_OLDEST`, `FAIL`. |
@@ -1031,7 +1040,7 @@ An instance with CloudEvents takes CloudEvents only unless `cloudEvents.acceptPl
 
 | Resource | Bound |
 |---|---|
-| Threads | 1 scheduler + `workerThreads` per instance; WebSocket client `maxThreads` |
+| Threads | 1 scheduler + `workerThreads` + 1 callback thread per instance (idle ones end after 30 s); with `virtual`, tasks bounded by the buffers and the handlers' in-flight limits; WebSocket client `maxThreads` |
 | Subscription buffers | `bufferSize` messages and `bufferBytes` payload bytes with `queuePolicy`; per subscription only lower (§7) |
 | Unacknowledged messages | MQTT `receiveMaximum`/`maxInflight`, AMQP `prefetch` |
 | Reply-to handlers | at most `bufferSize` requests in flight per handler, then caller runs |

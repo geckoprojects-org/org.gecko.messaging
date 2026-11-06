@@ -48,6 +48,8 @@ import org.gecko.messaging.core.memory.InMemoryInstance;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.pushstream.PushStream;
 
@@ -633,6 +635,33 @@ class InMemoryInstanceTest {
 		assertThatThrownBy(() -> i.subscribe(tooLarge)).isInstanceOf(MessagingException.class);
 		MessageContext unknown = i.newBuilder().channel("x").extensionEntry(EXTENSION_QUEUE_POLICY, "LATEST").buildContext();
 		assertThatThrownBy(() -> i.subscribe(unknown)).isInstanceOf(MessagingException.class);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "1", "virtual" })
+	void aHandlerWaitingForAReplyDoesNotStarveItsInstance(String workerThreads) throws Exception {
+		InMemoryInstance requester = start(Map.of("workerThreads", workerThreads));
+		InMemoryInstance responder = start();
+		responder.subscribe("svc").forEach(request -> responder.publish(text(responder, "unused", "answer"),
+				responder.newBuilder().channel(request.getContext().getReplyToChannel())
+						.correlationId(request.getContext().getCorrelationId()).buildContext()));
+		List<String> answers = new CopyOnWriteArrayList<>();
+		// the handler blocks its worker until the reply arrives: the promise must not need a worker
+		requester.subscribe("trigger").forEach(m -> {
+			try {
+				// chained: the mapping runs as a promise callback, which needs a thread of its own
+				answers.add(requester.replyToPublisher().publishWithReply(text(requester, "svc", "question"))
+						.map(InMemoryInstanceTest::text).getValue());
+			} catch (Exception e) {
+				answers.add("failed: " + e);
+			}
+		});
+		await(() -> requester.getRuntimeDTO().subscriptions.length == 1 && responder.getRuntimeDTO().subscriptions.length == 1);
+		for (int n = 0; n < 3; n++) {
+			requester.publish(text(requester, "trigger", "t" + n), null).getValue();
+		}
+		await(() -> answers.size() == 3);
+		assertThat(answers).containsOnly("answer");
 	}
 
 }

@@ -18,6 +18,7 @@ import static org.gecko.messaging.api.MessagingConstants.EXTENSION_CHANNEL_TYPE;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.gecko.messaging.api.Message;
@@ -74,6 +75,8 @@ public final class SubscriptionHandle {
 	private final AtomicLong dropped = new AtomicLong();
 	/** Messages undecided, or accepted while still in the buffer: settled when the subscription ends. */
 	final Set<AcknowledgeSupport> openAcknowledgements = ConcurrentHashMap.newKeySet();
+	/** Delivers one message at a time into the sink. */
+	final ReentrantLock deliveryLock = new ReentrantLock();
 	private volatile boolean connected;
 	private volatile boolean closed;
 	private volatile Object attachment;

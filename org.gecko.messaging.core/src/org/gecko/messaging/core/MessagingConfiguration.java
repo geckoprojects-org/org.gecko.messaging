@@ -50,7 +50,8 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * <li>{@code cloudEvents.acceptPlain} — with CloudEvents, also deliver received messages that are
  * no CloudEvent, unchanged as plain messages; default {@code false}: an instance with
  * CloudEvents takes CloudEvents only and drops (and counts) the rest</li>
- * <li>{@code workerThreads} — threads delivering messages, default 4</li>
+ * <li>{@code workerThreads} — threads delivering messages and running handlers, default 4;
+ * {@code virtual} for a virtual thread per task</li>
  * <li>{@code bufferSize} — buffer per subscription, default 1024 messages</li>
  * <li>{@code bufferBytes} — payload bytes per subscription buffer, default 16 MiB</li>
  * <li>{@code queuePolicy} — when a buffer is full: {@code BLOCK}, {@code DISCARD_OLDEST},
@@ -265,7 +266,12 @@ public final class MessagingConfiguration {
 
 	/** @return the number of delivery threads */
 	public int workerThreads() {
-		return (int) Math.max(1, number("workerThreads", 4));
+		return virtualWorkers() ? 4 : (int) Math.max(1, number("workerThreads", 4));
+	}
+
+	/** @return whether delivery runs on virtual threads, {@code workerThreads=virtual} */
+	public boolean virtualWorkers() {
+		return "virtual".equalsIgnoreCase(string("workerThreads", "").trim());
 	}
 
 	/** @return the buffer size per subscription */
