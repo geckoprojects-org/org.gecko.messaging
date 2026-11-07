@@ -10,6 +10,7 @@ Bundle-Description: Technology compatibility kit of the messaging specification 
 	osgi.annotation;version=latest,\
 	org.gecko.messaging.api;version=snapshot,\
 	org.osgi.framework;version=latest,\
+	org.osgi.service.cm;version=latest,\
 	org.osgi.dto;version=latest,\
 	org.osgi.util.function;version=latest,\
 	org.osgi.util.promise;version=latest,\

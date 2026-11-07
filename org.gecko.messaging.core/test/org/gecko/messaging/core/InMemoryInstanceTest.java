@@ -688,4 +688,97 @@ class InMemoryInstanceTest {
 		assertThat(i.publish(stream, null).getFailure()).isInstanceOf(MessagingException.class);
 	}
 
+
+	private static InMemoryInstance disconnected(InMemoryInstance i) throws InterruptedException {
+		i.broker().setAvailable(false);
+		await(() -> i.getConnectionState() == ConnectionState.DISCONNECTED);
+		return i;
+	}
+
+	@Test
+	void aPublishWaitsForTheConnectionWhenConfigured() throws Exception {
+		InMemoryInstance i = start(Map.of("publishAwaitConnection", 5000L));
+		List<Message> received = collect(i.subscribe("wait"));
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		disconnected(i);
+		List<Promise<Void>> sent = Stream.of("a", "b", "c").map(t -> i.publish(text(i, "wait", t), null)).toList();
+		assertThat(sent).noneMatch(Promise::isDone);
+		assertThat(i.getRuntimeDTO().awaitingPublishes).isEqualTo(3);
+		i.broker().setAvailable(true);
+		for (Promise<Void> p : sent) {
+			assertThat(p.getFailure()).isNull();
+		}
+		await(() -> received.size() == 3);
+		assertThat(received).extracting(InMemoryInstanceTest::text).containsExactly("a", "b", "c");
+		assertThat(i.getRuntimeDTO().awaitingPublishes).isZero();
+	}
+
+	@Test
+	void aWaitingPublishFailsAfterItsTimeout() throws Exception {
+		InMemoryInstance i = disconnected(start(Map.of("publishAwaitConnection", 100L)));
+		Promise<Void> p = i.publish(text(i, "late", "x"), null);
+		assertThat(p.getFailure()).isInstanceOf(MessagingException.class).hasMessageContaining("did not connect");
+		assertThat(i.getRuntimeDTO().awaitingPublishes).isZero();
+	}
+
+	@Test
+	void waitingPublishesAreBoundedInMessagesAndBytes() throws Exception {
+		InMemoryInstance i = disconnected(start(Map.of("publishAwaitConnection", 5000L, "publishAwaitMessages", 2L,
+				"publishAwaitBytes", 10L)));
+		Promise<Void> first = i.publish(text(i, "bound", "1"), null);
+		assertThat(i.publish(text(i, "bound", "too many bytes"), null).getFailure()).isInstanceOf(MessagingException.class);
+		Promise<Void> second = i.publish(text(i, "bound", "2"), null);
+		assertThat(i.publish(text(i, "bound", "3"), null).getFailure()).isInstanceOf(MessagingException.class)
+				.hasMessageContaining("wait already");
+		assertThat(i.getRuntimeDTO().awaitingPublishes).isEqualTo(2);
+		i.broker().setAvailable(true);
+		assertThat(first.getFailure()).isNull();
+		assertThat(second.getFailure()).isNull();
+	}
+
+	@Test
+	void stopFailsWaitingPublishes() throws Exception {
+		InMemoryInstance i = disconnected(start(Map.of("publishAwaitConnection", 60_000L)));
+		Promise<Void> p = i.publish(text(i, "stop", "x"), null);
+		i.stop();
+		assertThat(p.getFailure()).isInstanceOf(MessagingException.class).hasMessageContaining("stopped");
+	}
+
+	@Test
+	void withoutTheOptionAPublishWhileDisconnectedFailsAtOnce() throws Exception {
+		InMemoryInstance i = disconnected(start());
+		Promise<Void> p = i.publish(text(i, "now", "x"), null);
+		assertThat(p.isDone()).isTrue();
+		assertThat(p.getFailure()).isInstanceOf(MessagingException.class).hasMessageContaining("not connected");
+	}
+
+	@Test
+	void aStreamPublishWaitsForTheConnectionWhenConfigured() throws Exception {
+		InMemoryInstance i = start(Map.of("streamPublishAwaitConnection", true));
+		List<Message> received = collect(i.subscribe("swait"));
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		disconnected(i);
+		PushStream<Message> stream = new PushStreamProvider()
+				.streamOf(IntStream.range(0, 5).mapToObj(n -> text(i, "swait", "m" + n)))
+				.buffer(); // a source of its own thread: the thread delivering the stream waits
+		Promise<Long> p = i.publish(stream, null);
+		Thread.sleep(150);
+		assertThat(p.isDone()).isFalse();
+		i.broker().setAvailable(true);
+		assertThat(p.getValue()).isEqualTo(5);
+		await(() -> received.size() == 5);
+		assertThat(received).extracting(InMemoryInstanceTest::text).containsExactly("m0", "m1", "m2", "m3", "m4");
+		assertThat(i.getRuntimeDTO().streamPublishFailures).isZero();
+	}
+
+	@Test
+	void aStreamWaitingForTheConnectionFailsOnStop() throws Exception {
+		InMemoryInstance i = disconnected(start(Map.of("streamPublishAwaitConnection", true)));
+		PushStream<Message> stream = new PushStreamProvider().streamOf(Stream.of(text(i, "sstop", "m"))).buffer();
+		Promise<Long> p = i.publish(stream, null);
+		Thread.sleep(50);
+		i.stop();
+		assertThat(p.getFailure()).isInstanceOf(MessagingException.class);
+	}
+
 }

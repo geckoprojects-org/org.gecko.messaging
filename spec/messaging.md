@@ -148,6 +148,10 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `queuePolicy` | String | `BLOCK` (all bindings) | Policy of a full subscription buffer: `BLOCK`, `DISCARD_OLDEST`, `FAIL`. |
 | `publishWindow` | int | `100` | Upper bound of the send window of the stream publishes (§6.1); the protocol's limit applies below it. |
 | `streamPublishFailures` | String | `stop` | A failed message of a stream publish ends it (`stop`) or is skipped and counted (`continue`, §6.1). |
+| `publishAwaitConnection` | long ms | `0` (off) | How long a single publish waits for the connection instead of failing at once (§6.2). |
+| `publishAwaitMessages` | int | `100` (min 1) | Messages that may wait for the connection at once (§6.2). |
+| `publishAwaitBytes` | long | `1048576` (1 MiB) | Payload bytes that may wait for the connection at once (§6.2). |
+| `streamPublishAwaitConnection` | Boolean | `false` | A stream publish waits while the instance is not connected instead of failing its messages (§6.1). |
 | `context.channel` | String | — | Default channel for `subscribe(null)` and publishing without channel. |
 | `context.channelExtension` | String | — | Default channel extension (with `context.channel`). |
 | `context.contentType` | String | — | Default content type of the default context. |
@@ -393,7 +397,8 @@ failed promise, never thrown:
 2. Feature check (§3), then the binding's `checkContext`.
 3. Size check: a payload larger than the binding limit fails with `MessagingException`.
 4. Connection check: while not `CONNECTED`, publishing MUST fail with `MessagingException`.
-   Messages are not buffered for a reconnect.
+   Messages are not buffered for a reconnect — unless the instance is configured to wait for the
+   connection (§6.2, off by default).
 5. CloudEvents encoding if configured (§11), then hand-over to the protocol.
 
 The promise MUST resolve when the message is handed over: with QoS ≥ 1 (MQTT) or publisher
@@ -441,13 +446,58 @@ of its context or with the given context.
   is skipped and counted in `MessagingRuntimeDTO.streamPublishFailures` — also every message
   while the instance is disconnected. A failure of the stream itself always fails the promise.
   Closing the stream ends the publishing.
+- **Waiting for the connection** (`streamPublishAwaitConnection=true`, default `false`). While
+  the instance is not `CONNECTED`, the thread delivering the stream waits — as for room in the
+  window — instead of failing the message; the source holds the messages, nothing is buffered
+  by the instance. The stream goes on once the instance is connected and its subscriptions are
+  restored (as for §6.2), and fails when the instance is closed. A message already handed over when the connection breaks fails as above (`stop` or
+  `continue`). A synchronous source (`PushStreamProvider.streamOf`) waits on the thread that
+  called `publish`; give it a thread of its own (`buffer()`).
 - **Passing a subscription on.** `publish(subscription.subscribe(a).map(f), contextOfB)` relays
   from one channel or broker to another, throttled end to end: with §8 the source acknowledges a
   message only once the relay has taken it.
 - **Threads.** Room in the window is made by promise callbacks, which run on a thread of their
   own, apart from the workers: a stream delivered by the workers cannot wait for itself.
 
-TCK: `StreamPublishTest`; load profile `aStreamPublishedAtFullSpeedStaysWithinTheWindow` (§15.6).
+TCK: `StreamPublishTest`; load profile `aStreamPublishedAtFullSpeedStaysWithinTheWindow` (§15.6);
+`AwaitConnectionTest.aStreamPublishWaitsForTheConnectionWhenConfigured`.
+
+### 6.2 Waiting for the Connection
+
+By default a publisher learns of a missing connection at once (§6 step 4) and decides itself. A
+publisher that would only retry — one that publishes as soon as it gets the service, while the
+instance is still `CONNECTING`, or that should ride out a short reconnect — can leave that to
+the instance (GitHub #20):
+
+- `publishAwaitConnection` (ms, default `0` = off): a single publish while the instance is not
+  `CONNECTED` waits at most that long. Its promise resolves when the message is handed over after
+  the (re)connect, as in §6, and fails with `MessagingException` when the time is up, when the
+  instance stops or when it gives up connecting.
+- **Bounded.** At most `publishAwaitMessages` (default 100) messages of together at most
+  `publishAwaitBytes` (default 1 MiB) payload bytes wait; a publish beyond the bounds fails at
+  once. The instance holds the payload until then, it does not copy it.
+- **Order.** Waiting messages go out in their order once the instance is connected, after its
+  subscriptions are restored and before the `CONNECTED` event; a publish made while messages
+  wait queues behind them, so nothing published later overtakes them. They go out within the
+  send window of §6.1, never more than the protocol takes; each waits there for its turn (on no
+  thread: the next goes out when one is handed over).
+  While the subscriptions are being restored the instance already is `CONNECTED`; with
+  `publishAwaitConnection` a publish in that moment waits too, so that a message to a channel the
+  instance subscribes itself is not sent before the subscription is back.
+- **No thread of its own.** The timeouts run on the scheduler of the instance; the messages go
+  out on the thread that connected or that settled the previous one.
+- `MessagingRuntimeDTO.awaitingPublishes` is the number of messages waiting now.
+
+Checks 1 to 3 of §6 run at once: a message the instance would refuse anyway fails at once. A
+waiting message is encoded (CloudEvents) when it goes out.
+
+Neither option changes what a publish gives: a message handed over when the connection breaks
+fails as before, and QoS 0 stays send-and-forget. The services of an instance stay registered
+while it is not connected (§2.3), so that subscriptions survive a reconnect; waiting for the
+connection is the publisher's choice of the instance, not a change of the service.
+
+TCK: `AwaitConnectionTest` (a sibling of the instance under test, created through Configuration
+Admin); core unit tests for timeout, bounds and stop.
 
 ---
 
@@ -823,6 +873,7 @@ state.
 | `connectionState` | name of `ConnectionState` |
 | `reconnects` | reconnects since start |
 | `streamPublishFailures` | messages of stream publishes skipped after a failure (`streamPublishFailures=continue`) |
+| `awaitingPublishes` | single publishes waiting for the connection now (`publishAwaitConnection`, §6.2) |
 | `subscriptions` | `SubscriptionDTO[]` — application subscriptions only (reply-to internals excluded) |
 | `replyToSubscriptions` | `ReplyToSubscriptionDTO[]` of bound handlers |
 
@@ -1195,6 +1246,7 @@ slower than the sender loses messages there.
 | `ReplyToWhiteboardTest` | `requestNamingAForeignReplyChannelIsNotAnswered`, `singleHandlerAnswers`, `manyHandlerStreamsAndCompletes`, `defaultReplyChannelForRequestsWithout`, `handlerWithoutTargetIsNotBound`, `unregisteringUnbinds`, `aFailingHandlerFailsTheRequestAtOnce`, `aFailingResponseStreamEndsWithAnError` |
 | `RuntimeTest` | `subscriptionsAreListed`, `listenerIsToldTheCurrentState`, `listenerWithForeignTargetHearsNothing` |
 | `ReconnectTest` | `subscriptionsSurviveAConnectionLoss` (also asserts `DISCONNECTED` as previous state of the reconnect event), `publishFailsWhileDisconnectedAndWorksAfterwards` |
+| `AwaitConnectionTest` | `aPublishWaitsForTheConnectionWhenConfigured`, `aStreamPublishWaitsForTheConnectionWhenConfigured` (runs with `BrokerControl` and Configuration Admin) |
 | `CloudEventsTest` | `attributesAndDataTravel`, `extensionsAreHeaders`, `generatedIdAndTime`, `plainMessagesTravelAsCloudEventsToo`, `aMessageThatIsNoCloudEventIsDroppedByDefault` |
 
 ---
@@ -1266,6 +1318,8 @@ WebSocket, buffering of messages published while disconnected.
 - Reserved MQTT user properties `requeued` and `content-encoding` are refused as application
   headers; `autoCreate=false` is refused where channels are created on first use (MSG180).
 - TCK runs for `durable`, `autoCreate` and the CloudEvents binary mode (§15.5).
+- GitHub #20: publishing while not connected can wait for the connection, off by default
+  (`publishAwaitConnection`, `streamPublishAwaitConnection`, §6.1, §6.2).
 
 Wildcard enforcement, size limits on AMQP and WebSocket, the previous state of reconnect events,
 feature names from `adapt()`, the `MessagePublisher`/`MessageSubscription` failure Javadoc,

@@ -35,13 +35,16 @@ import org.osgi.util.pushstream.PushEventConsumer;
  * cannot wait for itself.
  * <p>
  * A failed message ends the publishing ({@code streamPublishFailures=stop}, the default) or is
- * skipped and counted ({@code continue}).
+ * skipped and counted ({@code continue}). With {@code streamPublishAwaitConnection=true} the
+ * stream waits while the instance is not connected instead of failing its messages; a message
+ * already handed over when the connection breaks still fails as above.
  */
 final class StreamPublish implements PushEventConsumer<Message> {
 
 	private final AbstractMessagingInstance instance;
 	private final MessageContext context;
 	private final boolean skipFailures;
+	private final boolean awaitConnection;
 	private final Deferred<Long> result;
 	private final AtomicLong handedOver = new AtomicLong();
 	private final AtomicInteger outstanding = new AtomicInteger();
@@ -53,12 +56,15 @@ final class StreamPublish implements PushEventConsumer<Message> {
 	 * @param instance the instance publishing
 	 * @param context the context of every message, {@code null} for the context of each message
 	 * @param failures {@code stop} or {@code continue}
+	 * @param awaitConnection whether the stream waits while the instance is not connected
 	 * @param result resolved with the number of messages handed over
 	 */
-	StreamPublish(AbstractMessagingInstance instance, MessageContext context, String failures, Deferred<Long> result) {
+	StreamPublish(AbstractMessagingInstance instance, MessageContext context, String failures, boolean awaitConnection,
+			Deferred<Long> result) {
 		this.instance = instance;
 		this.context = context;
 		this.skipFailures = "continue".equals(failures);
+		this.awaitConnection = awaitConnection;
 		this.result = result;
 	}
 
@@ -86,6 +92,11 @@ final class StreamPublish implements PushEventConsumer<Message> {
 
 	private long publish(Message message) throws InterruptedException {
 		if (failure.get() != null) {
+			return ABORT;
+		}
+		// the delivering thread waits, as for room in the window: the source holds the messages
+		if (awaitConnection && !instance.awaitConnected()) {
+			fail(new MessagingException("Messaging instance " + instance.getName() + " is closed"));
 			return ABORT;
 		}
 		if (!instance.acquireSend()) {

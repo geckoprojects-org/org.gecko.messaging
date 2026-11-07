@@ -53,6 +53,11 @@ public class MessagingRuntimeDTO extends DTO {
 	 */
 	public long streamPublishFailures;
 
+	/**
+	 * The single publishes waiting for the connection ({@code publishAwaitConnection}).
+	 */
+	public int awaitingPublishes;
+
 	/** The active subscriptions. */
 	public SubscriptionDTO[] subscriptions;
 

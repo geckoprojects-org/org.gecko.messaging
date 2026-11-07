@@ -124,10 +124,19 @@ public abstract class AbstractMessagingInstance {
 	/** Guarded by sendLock. */
 	private int streamOutstanding;
 	private final AtomicLong streamPublishFailures = new AtomicLong();
+	/** Single publishes waiting for the connection, {@code publishAwaitConnection}. */
+	private final PublishWait publishWait;
+	/** Stream publishes waiting for the connection wait on it, {@code streamPublishAwaitConnection}. */
+	private final Object connectedSignal = new Object();
 	private final CloudEventBinding.Wire wire = this::doPublish;
 
 	private final Object stateLock = new Object();
 	private volatile ConnectionState state = ConnectionState.CONNECTING;
+	/**
+	 * Connected and the subscriptions restored: what waited for the connection may go out. Set
+	 * after the restore, cleared whenever the state leaves {@code CONNECTED}.
+	 */
+	private volatile boolean ready;
 	private boolean everConnected;
 	private boolean stopped;
 	private int attempt;
@@ -188,6 +197,7 @@ public abstract class AbstractMessagingInstance {
 		this.promises = new PromiseFactory(callbacks, scheduler);
 		this.defaultContext = config.defaultContext();
 		this.replyTo = new ReplyToSupport(this);
+		this.publishWait = new PublishWait(this, config);
 	}
 
 	private static ThreadFactory threads(String prefix) {
@@ -444,6 +454,8 @@ public abstract class AbstractMessagingInstance {
 		}
 		OsgiBinding binding = osgi;
 		setState(ConnectionState.CLOSED, false, false, null);
+		publishWait.failAll("is stopped");
+		signalConnected();
 		if (binding != null) {
 			binding.unregister();
 		}
@@ -514,6 +526,8 @@ public abstract class AbstractMessagingInstance {
 			if (isFatal(t)) {
 				LOG.log(Level.SEVERE, "Messaging instance " + config.name() + " gives up connecting", t);
 				setState(ConnectionState.CLOSED, false, false, t);
+				publishWait.failAll("gave up connecting: " + t);
+				signalConnected();
 				for (SubscriptionHandle h : new ArrayList<>(subscriptions)) {
 					closeSubscription(h, t);
 				}
@@ -556,6 +570,12 @@ public abstract class AbstractMessagingInstance {
 				closeSubscription(h, e);
 			}
 		}
+		synchronized (stateLock) {
+			ready = state == ConnectionState.CONNECTED;
+		}
+		signalConnected();
+		// what waited for the connection goes out before anything published later
+		publishWait.send();
 		// CONNECTING on the first connect, DISCONNECTED on a reconnect
 		fire(previous, ConnectionState.CONNECTED, reconnect, sessionPresent, null);
 	}
@@ -593,6 +613,7 @@ public abstract class AbstractMessagingInstance {
 				return;
 			}
 			state = ConnectionState.DISCONNECTED;
+			ready = false;
 		}
 		for (SubscriptionHandle h : subscriptions) {
 			h.setConnected(false);
@@ -608,6 +629,36 @@ public abstract class AbstractMessagingInstance {
 		scheduleReconnect(cause);
 	}
 
+	/** Wakes the stream publishes waiting for the connection. */
+	private void signalConnected() {
+		synchronized (connectedSignal) {
+			connectedSignal.notifyAll();
+		}
+	}
+
+	/**
+	 * Waits until the instance is connected ({@code streamPublishAwaitConnection}).
+	 *
+	 * @return {@code false} if the instance is closed and never connects again
+	 * @throws InterruptedException if interrupted
+	 */
+	boolean awaitConnected() throws InterruptedException {
+		synchronized (connectedSignal) {
+			while (!ready) {
+				if (state == ConnectionState.CLOSED || isStopped()) {
+					return false;
+				}
+				connectedSignal.wait(100);
+			}
+			return true;
+		}
+	}
+
+	/** @return whether the instance is connected and its subscriptions are restored */
+	boolean isConnected() {
+		return ready;
+	}
+
 	private void setState(ConnectionState newState, boolean reconnect, boolean sessionPresent, Throwable cause) {
 		ConnectionState old;
 		synchronized (stateLock) {
@@ -616,6 +667,7 @@ public abstract class AbstractMessagingInstance {
 				return;
 			}
 			state = newState;
+			ready = false;
 		}
 		fire(old, newState, reconnect, sessionPresent, cause);
 	}
@@ -702,10 +754,33 @@ public abstract class AbstractMessagingInstance {
 			if (max > 0 && payload.remaining() > max) {
 				throw new MessagingException("The payload of " + payload.remaining() + " bytes exceeds the limit of " + max);
 			}
-			if (state != ConnectionState.CONNECTED) {
-				throw new MessagingException("Messaging instance " + config.name() + " is not connected (" + state + ")");
+			SimpleMessageContext simple = SimpleMessageContextBuilder.toSimple(ctx);
+			// waiting is ready-based: a message must not overtake the restore of the subscriptions
+			if (state != ConnectionState.CONNECTED || publishWait.enabled() && (!ready || publishWait.hasWaiting())) {
+				// a message published later never overtakes one waiting for the connection
+				if (publishWait.enabled() && state != ConnectionState.CLOSED) {
+					return publishWait.offer(simple, payload);
+				}
+				if (state != ConnectionState.CONNECTED) {
+					throw new MessagingException("Messaging instance " + config.name() + " is not connected (" + state + ")");
+				}
 			}
-			return cloudEvents.publish(SimpleMessageContextBuilder.toSimple(ctx), payload, wire);
+			return send(simple, payload);
+		} catch (Exception e) {
+			return promises.failed(e);
+		}
+	}
+
+	/**
+	 * Encodes and hands a checked message to the protocol.
+	 *
+	 * @param context the context, checked
+	 * @param payload the payload
+	 * @return the promise of the hand-over
+	 */
+	Promise<Void> send(SimpleMessageContext context, ByteBuffer payload) {
+		try {
+			return cloudEvents.publish(context, payload, wire);
 		} catch (Exception e) {
 			return promises.failed(e);
 		}
@@ -725,7 +800,8 @@ public abstract class AbstractMessagingInstance {
 			messages.close();
 			return promises.failed(new MessagingException("streamPublishFailures must be stop or continue, not " + streamFailures()));
 		}
-		StreamPublish publish = new StreamPublish(this, context, streamFailures(), promises.deferred());
+		StreamPublish publish = new StreamPublish(this, context, streamFailures(),
+				config.bool("streamPublishAwaitConnection", false), promises.deferred());
 		messages.forEachEvent(publish);
 		return publish.promise();
 	}
@@ -770,11 +846,29 @@ public abstract class AbstractMessagingInstance {
 		}
 	}
 
-	/** A message of a stream publish was handed over or failed. */
+	/**
+	 * Takes room in the send window without waiting.
+	 *
+	 * @return {@code false} if the window is full
+	 */
+	boolean tryAcquireSend() {
+		synchronized (sendLock) {
+			if (streamOutstanding >= publishWindow()) {
+				return false;
+			}
+			streamOutstanding++;
+			return true;
+		}
+	}
+
+	/** A message of a stream publish, or one that waited for the connection, was handed over or failed. */
 	void releaseSend() {
 		synchronized (sendLock) {
 			streamOutstanding--;
 			sendLock.notifyAll();
+		}
+		if (publishWait.enabled() && publishWait.hasWaiting()) {
+			publishWait.send();
 		}
 	}
 
@@ -1055,6 +1149,7 @@ public abstract class AbstractMessagingInstance {
 			dto.reconnects = reconnects;
 		}
 		dto.streamPublishFailures = streamPublishFailures.get();
+		dto.awaitingPublishes = publishWait.size();
 		dto.subscriptions = subscriptions.stream().filter(h -> !h.isInternal()).map(SubscriptionHandle::toDTO)
 				.toArray(SubscriptionDTO[]::new);
 		return dto;
