@@ -48,6 +48,24 @@ class CloudEventCodecTest {
 	}
 
 	@Test
+	void timeIsWrittenAsRfc3339() {
+		MessageContext ctx = new SimpleMessageContextBuilder().buildContext();
+		Map<String, String> written = Map.of("2026-11-10T17:04:00Z", "2026-11-10T17:04:00Z", "2026-11-10T17:00:00+01:00",
+				"2026-11-10T17:00:00+01:00", "2026-11-10T17:04:28Z", "2026-11-10T17:04:28Z", "2026-11-10T17:04:28.123Z",
+				"2026-11-10T17:04:28.123Z");
+		written.forEach((time, text) -> {
+			SimpleCloudEvent event = new SimpleCloudEvent("id-1", "/source", "example.type", null, null,
+					OffsetDateTime.parse(time), Map.of());
+			byte[] env = CloudEventCodec.toStructured(event, ctx, ByteBuffer.allocate(0));
+			assertThat(new String(env, UTF_8)).contains("\"time\":\"" + text + "\"");
+			assertThat(CloudEventCodec.fromStructured(env).cloudEvent().getTime()).isEqualTo(event.getTime());
+			Map<String, Object> headers = CloudEventCodec.toBinaryHeaders(event, "ce-");
+			assertThat(headers).containsEntry("ce-time", text);
+			assertThat(CloudEventCodec.fromBinaryHeaders(headers, "ce-").cloudEvent().getTime()).isEqualTo(event.getTime());
+		});
+	}
+
+	@Test
 	void structuredBinaryDataIsBase64AndTextIsString() {
 		MessageContext bin = new SimpleMessageContextBuilder().contentType("application/octet-stream").buildContext();
 		byte[] env = CloudEventCodec.toStructured(ce, bin, ByteBuffer.wrap(new byte[] { 0, -1, 7 }));

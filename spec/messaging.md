@@ -843,7 +843,8 @@ With a mode other than `none` the instance announces `cloudEvents`.
 **API.** `builder.adapt(CloudEventMessageContextBuilder.class)` sets `id`, `source`, `type`,
 `subject`, `dataSchema`, `time` or copies a `CloudEvent` (`withCloudEvent`). `type` and `source`
 are required (`MessagingException` at build); a missing `id` is generated (UUID), a missing
-`time` is the build time. The content type is `datacontenttype`; headers are the extension
+`time` is the build time. `time` is written as an RFC 3339 timestamp, seconds included
+(`2026-11-10T17:04:00Z`), in both content modes. The content type is `datacontenttype`; headers are the extension
 attributes. Received CloudEvents have a `CloudEventMessageContext` whose `getCloudEvent()` gives
 the attributes; `CloudEvent.getExtensions()` equals the message headers.
 
