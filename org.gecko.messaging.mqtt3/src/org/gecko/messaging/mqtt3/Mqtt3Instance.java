@@ -64,7 +64,8 @@ import org.osgi.util.promise.Promise;
  * correlation and reply-to, and the instance announces them.
  * <p>
  * Configuration, besides the common keys: {@code uri} ({@code tcp://}, {@code ssl://},
- * {@code ws://}, {@code wss://}), {@code cleanSession} (default {@code true}),
+ * {@code ws://}, {@code wss://}; over TLS with the {@code tls.*} keys of the core),
+ * {@code cleanSession} (default {@code true}),
  * {@code keepAliveInterval} (s, default 30), {@code maxInflight} (default 100), {@code qos}
  * (default publish and subscribe QoS, default 1), {@code maxMessageSize} (bytes, default 1 MiB,
  * packets received and messages sent), {@code sharedGroup} (group of point-to-point
@@ -157,6 +158,10 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 		}
 		if (config.password() != null) {
 			options.setPassword(config.password().toCharArray());
+		}
+		if (tls.context() != null) {
+			// client certificate and trust of the instance; the host name check of the client stays on
+			options.setSocketFactory(tls.context().getSocketFactory());
 		}
 		client = c;
 		filters.clear();

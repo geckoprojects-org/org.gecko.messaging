@@ -34,6 +34,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.eclipse.jetty.websocket.api.Callback;
 import org.eclipse.jetty.websocket.api.Session;
@@ -65,7 +66,7 @@ import org.osgi.util.promise.Promise;
  * refused. Messages are sent as binary frames; received text frames are taken as UTF-8 bytes.
  * <p>
  * Configuration, besides the common keys: {@code uri} ({@code ws://} or {@code wss://}, the base
- * of the channel paths), {@code keepAliveInterval} (s, default 30; idle timeout three times that),
+ * of the channel paths; over TLS with the {@code tls.*} keys of the core), {@code keepAliveInterval} (s, default 30; idle timeout three times that),
  * {@code maxThreads} (of the client, default 8), {@code maxMessageSize} (bytes, default 1 MiB),
  * {@code maxPublishSessions} (sessions kept open for channels only published to, default 16; the
  * least recently used one is closed beyond that — a request names its reply channel, so without
@@ -126,6 +127,13 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 			QueuedThreadPool threads = new QueuedThreadPool((int) config.number("maxThreads", 8), 1);
 			threads.setName("msg-" + getName() + "-ws");
 			HttpClient http = new HttpClient();
+			if (tls.context() != null) {
+				// client certificate and trust of the instance; Jetty's client checks the host name
+				// of the server against its certificate by default, and that stays
+				SslContextFactory.Client ssl = new SslContextFactory.Client();
+				ssl.setSslContext(tls.context());
+				http.setSslContextFactory(ssl);
+			}
 			http.setExecutor(threads);
 			WebSocketClient c = new WebSocketClient(http);
 			c.setIdleTimeout(Duration.ofMillis(3 * keepAliveMillis));

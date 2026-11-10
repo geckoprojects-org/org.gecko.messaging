@@ -16,3 +16,11 @@ tck.runrequires: \
 
 -runproperties.tck: \
 	org.gecko.messaging.tck.timeout=10000
+
+# Mutual TLS (TlsTest): the stores docker/brokers.sh makes for the TLS listeners of its brokers. A
+# run against such a broker adds
+#   -runproperties.tls: org.gecko.messaging.tck.tls.uri=<uri>, ${tck.tls}
+tck.tls: \
+	org.gecko.messaging.tck.tls.keystore=${workspace}/build/tck-tls/client.p12,\
+	org.gecko.messaging.tck.tls.truststore=${workspace}/build/tck-tls/truststore.p12,\
+	org.gecko.messaging.tck.tls.password=tck-tls

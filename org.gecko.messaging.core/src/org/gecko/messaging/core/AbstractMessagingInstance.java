@@ -105,6 +105,8 @@ public abstract class AbstractMessagingInstance {
 
 	private final String protocol;
 	protected final MessagingConfiguration config;
+	/** The TLS scheme and stores of the connection, read when the instance is created. */
+	protected final TlsSettings tls;
 	protected final Features features;
 	private final ScheduledThreadPoolExecutor scheduler;
 	private final ExecutorService workers;
@@ -162,6 +164,8 @@ public abstract class AbstractMessagingInstance {
 	protected AbstractMessagingInstance(String protocol, MessagingConfiguration config, Collection<String> features) {
 		this.protocol = requireNonNull(protocol);
 		this.config = requireNonNull(config);
+		// before any thread exists: a store that cannot be read fails the instance here
+		this.tls = TlsSettings.of(config);
 		Set<String> f = new LinkedHashSet<>(features);
 		if (config.cloudEvents()) {
 			f.add(FEATURE_CLOUD_EVENTS);

@@ -73,7 +73,8 @@ import com.rabbitmq.client.ShutdownSignalException;
  * automatic recovery is off, subscriptions are restored by the instance. There is no retain.
  * <p>
  * Configuration, besides the common keys: {@code uri} ({@code amqp://}, {@code amqps://}, with
- * user, password and virtual host), {@code exchange} (exchange of topics, default
+ * user, password and virtual host; over TLS with the {@code tls.*} keys of the core, and with
+ * the host name of the broker checked against its certificate), {@code exchange} (exchange of topics, default
  * {@code amq.topic}), {@code heartbeat} (s, default 30), {@code prefetch} (unacknowledged messages
  * per subscription, default 100), {@code maxMessageSize} (bytes, default 1 MiB, bodies sent and
  * received), {@code qos} (default publish and subscribe QoS, default 1).
@@ -129,6 +130,11 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 	protected boolean doConnect(long timeoutMillis) throws Exception {
 		ConnectionFactory factory = new ConnectionFactory();
 		factory.setUri(config.uri());
+		if (tls.isTls()) {
+			// for amqps the client's own default trusts every certificate and checks no host name:
+			// the stores of the instance or the trust of the JVM instead, and the host name checked
+			factory.useSslProtocol(tls.contextOrDefault());
+		}
 		if (config.username() != null) {
 			factory.setUsername(config.username());
 		}

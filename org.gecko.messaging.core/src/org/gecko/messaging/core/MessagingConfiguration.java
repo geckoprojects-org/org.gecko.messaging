@@ -34,6 +34,8 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * <li>{@code osgi.messaging.name} — instance name, required</li>
  * <li>{@code uri} — connection URI</li>
  * <li>{@code username}, {@code .password} (or {@code password})</li>
+ * <li>{@code tls.keystore}, {@code tls.truststore} with their passwords and types — client
+ * certificate and trusted certificates of a TLS connection, see {@link TlsSettings}</li>
  * <li>{@code clientId} — stable client identity; default the instance name</li>
  * <li>{@code connectTimeout} — ms per connect attempt, default 10000</li>
  * <li>{@code reconnectDelay}, {@code reconnectMaxDelay} — ms, backoff 1000 doubling to 30000</li>

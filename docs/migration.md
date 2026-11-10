@@ -263,7 +263,7 @@ bundles in the bndrun.
 | `password` (AMQP), `password` / `.password` / `_password` (MQTT) | `.password` (`password` is still read as a fallback) |
 | `autoRecovery` | none. Use `reconnectDelay` (default 1000 ms) and `reconnectMaxDelay` (default 30000 ms) |
 | `jmx` | none. Use `MessageServiceRuntime` |
-| `tls`, `keyStore`, `keyStorePassword`, `trustStore`, `trustStorePassword` | a TLS scheme in `uri`. There are no keystore keys: set the JVM defaults (`javax.net.ssl.keyStore`, `javax.net.ssl.trustStore`, …) |
+| `tls`, `keyStore`, `keyStorePassword`, `trustStore`, `trustStorePassword` | a TLS scheme in `uri`, and per instance `tls.keystore`, `.tls.keystore.password`, `tls.truststore`, `.tls.truststore.password` (PKCS12 by default, `tls.keystore.type` / `tls.truststore.type` otherwise). Without them the trust of the JVM applies. On a plain scheme the keys are an error |
 | `exchange`, `routingKey`, `topic` (AMQP, default channel) | `context.channel`, `context.channelExtension`. The `exchange` key now means the topic exchange (default `amq.topic`) |
 | `rpcQueue`, `rpcRoutingKey` (`AMQPReplyToExecutor`) | handler properties `osgi.messaging.replyToSubscription.channel` / `.channelExtension` |
 | `name` (AMQP, used for thread names) | `osgi.messaging.name` |

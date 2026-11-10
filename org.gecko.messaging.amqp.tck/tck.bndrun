@@ -14,3 +14,8 @@
 -runproperties.amqp: \
 	org.gecko.messaging.tck.separator=.,\
 	org.gecko.messaging.tck.wildcard.single=*
+
+# the TLS listener of the broker demands a client certificate (TlsTest)
+-runproperties.tls: \
+	org.gecko.messaging.tck.tls.uri=amqps://localhost:15677,\
+	${tck.tls}
