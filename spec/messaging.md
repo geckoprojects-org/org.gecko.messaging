@@ -97,7 +97,8 @@ registers a reply-to handler whose `osgi.messaging.target` selects the instance.
 1. A configuration is created for the factory PID of a binding (§13). The configuration MUST
    contain `osgi.messaging.name`; otherwise construction fails with `MessagingException`.
 2. The instance validates its configuration (unknown `cloudEvents` mode, missing `uri` for
-   network bindings, unsupported binding options) and fails activation on errors. With
+   network bindings, unsupported binding options, TLS stores that cannot be read, §2.2.1) and
+   fails activation on errors. With
    `cloudEvents=binary` on a protocol without headers, start fails with a `MessagingException`
    naming `cloudEvents=structured` as the alternative.
 3. `start` registers the services (§2.3), opens the `ConnectionListener` tracker and, if
@@ -131,6 +132,12 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `uri` | String | binding specific | Connection URI. Required for `mqtt`, `mqtt3`, `amqp`, `websocket`. |
 | `username` | String | — | User name. |
 | `.password` / `password` | String | — | Password; `.password` (private property) is read first. |
+| `tls.keystore` | String | — | Path of the key store with the client certificate and its key (§2.2.1). |
+| `.tls.keystore.password` / `tls.keystore.password` | String | — | Its password, also of the key; the private property is read first. |
+| `tls.keystore.type` | String | `PKCS12` | Its type. |
+| `tls.truststore` | String | trust of the JVM | Path of the trust store with the certificates to trust (§2.2.1). |
+| `.tls.truststore.password` / `tls.truststore.password` | String | — | Its password; the private property is read first. |
+| `tls.truststore.type` | String | `PKCS12` | Its type. |
 | `clientId` | String | instance name | Stable client identity on the broker. |
 | `connectTimeout` | long ms | `10000` | Deadline of one connect attempt, including handshake; also of an MQTT subscribe and a WebSocket channel session. |
 | `reconnectDelay` | long ms | `1000` | First backoff of the reconnect cycle (at least 10). |
@@ -161,6 +168,29 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 The default context is used when `subscribe(MessageContext)` gets `null`, or when a published
 message has no context; a context without channel takes the configured channel. With neither, the
 operation fails with `MessagingException("No channel given and none configured")`.
+
+#### 2.2.1 TLS
+
+An instance connects over TLS when its `uri` has a TLS scheme (`ssl`, `wss`, `amqps`, per
+binding §13). Without further configuration the broker is authenticated against the trust of
+the JVM, and the instance presents no certificate.
+
+- `tls.truststore` names the certificates the instance trusts instead of the trust of the JVM —
+  a broker with a certificate of a private authority, without changing the JVM-wide trust store.
+- `tls.keystore` names the client certificate and key the instance presents when the broker asks
+  for one (mutual TLS).
+- Either store alone is valid.
+- The host name of the broker is always checked against its certificate; there is no key to
+  turn the check off, and none to trust every certificate.
+- The stores are read once, when the instance is created. A store that cannot be read (missing,
+  wrong password, wrong type), a key store without a private key and a trust store without a
+  trusted certificate fail activation with a `MessagingException` naming the path — not the
+  first connect. A changed store is taken with the next configuration update.
+- On a `uri` without TLS scheme any `tls.*` key is a configuration error and fails activation:
+  a certificate nobody asks for protects nothing, and silently ignoring it would hide that.
+- A refused handshake (no or an unknown client certificate, a broker certificate the instance
+  does not trust, a host name that does not match) is a failed connect attempt of the reconnect
+  cycle (§10.2), not a fatal error: the other side may be corrected.
 
 ### 2.3 Services and Service Properties
 
@@ -925,7 +955,7 @@ configuration, building on `org.gecko.messaging.core`.
 |---|---|
 | Protocol / factory PID | `mqtt` / `org.gecko.messaging.mqtt` |
 | Client | Eclipse Paho MQTT v5, one `MqttAsyncClient` per instance, `MemoryPersistence`, manual acks |
-| URI schemes | `tcp://`, `ssl://`, `ws://`, `wss://` |
+| URI schemes | `tcp://`, `ssl://`, `ws://`, `wss://`; `ssl` and `wss` with the stores of §2.2.1 as socket factory, host name check of the client on |
 | Channels | topic = channel; queue = `$share/<sharedGroup>/<channel>`; wildcards `+`, `#` |
 | QoS | 0, 1, 2 on publish and subscribe; received messages carry their QoS in `osgi.messaging.qos` and `osgi.messaging.retain=true` if retained |
 | Context mapping | content type → content type; content encoding → user property `content-encoding`; headers → user properties (values as String); correlation id → correlation data; reply-to → response topic; TTL → message expiry interval (s) |
@@ -959,6 +989,7 @@ A binding of its own for brokers and devices without MQTT 5.
 |---|---|
 | Protocol / factory PID | `mqtt3` / `org.gecko.messaging.mqtt3` |
 | Client | Eclipse Paho MQTT v3, protocol version 3.1.1, manual acks |
+| URI schemes | as mqtt, TLS as mqtt (§2.2.1) |
 | Channels | as mqtt; queues via `$share/<sharedGroup>/<channel>` — not defined by MQTT 3.1.1, only where the broker offers it (Mosquitto, HiveMQ, EMQX) |
 | Wire | topic, payload, QoS, retain flag only; no content type, headers, TTL or reply-to without structured CloudEvents |
 | Acknowledgement | as mqtt; re-queue detected by fingerprint (at most 1024 kept) |
@@ -984,6 +1015,7 @@ subscriptions may receive it twice.
 | Protocol / factory PID | `amqp` / `org.gecko.messaging.amqp` |
 | Client | RabbitMQ Java client, one connection per instance, automatic recovery off |
 | URI | `amqp://`, `amqps://` with user, password, virtual host |
+| TLS | `amqps` with the stores of §2.2.1, or the default context of the JVM; the host name is checked. The client's own default for `amqps` (trust any certificate, no host name check) is never used |
 | Topics | routing key on `exchange` (default `amq.topic`); each subscription an exclusive, auto-delete, server-named queue bound with the channel; wildcards `*`, `#`, separator `.` |
 | Channel extension | channel = exchange (type `topic`), extension = routing key |
 | Queues | named queue on the default exchange; competing consumers; no extension |
@@ -1016,7 +1048,7 @@ subscriptions may receive it twice.
 
 | Key | Default | Meaning |
 |---|---|---|
-| `uri` | required | `ws://` or `wss://` base of the channel paths |
+| `uri` | required | `ws://` or `wss://` base of the channel paths; `wss` with the stores of §2.2.1, host name check of the client on |
 | `keepAliveInterval` | `30` | s; idle timeout is three times that |
 | `maxThreads` | `8` | client threads |
 | `maxMessageSize` | `1048576` | bytes, checked before sending, largest message received; announced in `osgi.messaging.maxMessageSize` |
@@ -1101,6 +1133,11 @@ An instance with CloudEvents takes CloudEvents only unless `cloudEvents.acceptPl
   `.`, are not service properties.
 - When credentials (user name, password or user info) go over a plaintext scheme (`tcp`, `mqtt`,
   `ws`, `amqp`), the instance logs a warning recommending a TLS scheme.
+- The passwords of the TLS stores (§2.2.1) are such keys: they appear in no service property, no
+  DTO and no log or exception message. The paths of the stores are no secret and are service
+  properties.
+- Over a TLS scheme the broker certificate and its host name are always verified, on every
+  binding (§2.2.1, §13.4).
 
 ### 14.5 Bounded Resources
 
@@ -1136,6 +1173,10 @@ and that every feature not announced fails.
 | `org.gecko.messaging.tck.wildcard.multi` | `#` | multi-level wildcard |
 | `org.gecko.messaging.tck.proxy.listen` | run project default | port of the `TcpProxy` |
 | `org.gecko.messaging.tck.proxy.broker` | run project default | `host:port` of the broker |
+| `org.gecko.messaging.tck.tls.uri` | — | URI (TLS scheme) of a broker that demands a client certificate; without it `TlsTest` is skipped |
+| `org.gecko.messaging.tck.tls.keystore` | — | key store with a client certificate that broker accepts |
+| `org.gecko.messaging.tck.tls.truststore` | — | trust store with the authority of that broker, one the JVM does not trust by itself |
+| `org.gecko.messaging.tck.tls.password` | — | password of both stores |
 
 Channels are unique per run (`tck/<random>/...`). Every test has a 60 s timeout; a service or
 connection that never appeared fails later tests at once.
@@ -1210,6 +1251,14 @@ Example (`org.gecko.messaging.mqtt.tck/configs/tck.json`):
 Runs 11–13 use the CloudEvents binary mode, where the protocol has headers; the other
 `tck-cloudevents` runs the structured mode.
 
+Runs 3, 5 and 7 also run `TlsTest`: Mosquitto (`ssl://localhost:11887`) and RabbitMQ
+(`amqps://localhost:15677`) listen over TLS as well and demand a client certificate there.
+`docker/brokers.sh up` makes the certificates anew — an authority, the broker certificate for
+`localhost`, and `client.p12` and `truststore.p12` in `build/tck-tls` (password `tck-tls`, the
+properties `tck.tls` of `cnf/ext/tck-run.bnd`) — and needs `openssl` and the `keytool` of the JDK
+for it. The TLS connections go to the broker directly, not through the proxy. `wss` is tested in
+the WebSocket bundle against a server of the test (`WebSocketTlsTest`); the hub has no TLS.
+
 ### 15.6 Load Profiles
 
 Every run project also has a `load.bndrun` (`LoadTest`, only with the framework property
@@ -1247,6 +1296,7 @@ slower than the sender loses messages there.
 | `RuntimeTest` | `subscriptionsAreListed`, `listenerIsToldTheCurrentState`, `listenerWithForeignTargetHearsNothing` |
 | `ReconnectTest` | `subscriptionsSurviveAConnectionLoss` (also asserts `DISCONNECTED` as previous state of the reconnect event), `publishFailsWhileDisconnectedAndWorksAfterwards` |
 | `AwaitConnectionTest` | `aPublishWaitsForTheConnectionWhenConfigured`, `aStreamPublishWaitsForTheConnectionWhenConfigured` (runs with `BrokerControl` and Configuration Admin) |
+| `TlsTest` | `aClientCertificateAuthenticatesTheInstance`, `theStorePasswordsAreNoServiceProperties`, `withoutAClientCertificateTheBrokerRefusesTheInstance`, `aBrokerOfAnUnknownAuthorityIsNotTrusted` (runs with `org.gecko.messaging.tck.tls.uri` and Configuration Admin) |
 | `CloudEventsTest` | `attributesAndDataTravel`, `extensionsAreHeaders`, `generatedIdAndTime`, `plainMessagesTravelAsCloudEventsToo`, `aMessageThatIsNoCloudEventIsDroppedByDefault` |
 
 ---
@@ -1314,6 +1364,9 @@ WebSocket, buffering of messages published while disconnected.
   the acknowledgement decision in `AcknowledgeSupport`, the services in `OsgiBinding`,
   `Extensions` for extension values, `SimpleMessageContextBuilder.buildSimple()`, a `doClose()`
   hook with `stop()` final.
+- GitHub #21: key store and trust store per instance (`tls.*`, §2.2.1) on mqtt, mqtt3, amqp and
+  websocket — mutual TLS and private authorities; `amqps` verifies the broker certificate and
+  host name instead of trusting any.
 - GitHub #13: shared MQTT broker subscriptions take the highest QoS (`SubscriptionGroup`, §13.2).
 - Reserved MQTT user properties `requeued` and `content-encoding` are refused as application
   headers; `autoCreate=false` is refused where channels are created on first use (MSG180).

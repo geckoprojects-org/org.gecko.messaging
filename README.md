@@ -86,6 +86,8 @@ Java 21 and a container runtime (Docker or Podman) for the brokers of the TCK ru
 
 `brokerUp` starts Mosquitto (port 11883) and RabbitMQ (port 15675, user `tck`) with
 [docker/brokers.sh](docker/brokers.sh); the memory and WebSocket runs need no external broker.
+Both brokers also listen over TLS and demand a client certificate there (ports 11887 and 15677);
+the script makes the certificates on every start and needs `openssl` and `keytool` for it.
 
 All tests run in GitHub Actions on every push and are published as check runs. Jenkins builds
 without `testOSGi`, waits for the GitHub check of the commit and publishes snapshots and releases.

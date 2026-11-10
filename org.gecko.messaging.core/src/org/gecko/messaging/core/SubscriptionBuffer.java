@@ -60,6 +60,12 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 	 * start. Guarded by this.
 	 */
 	private boolean skipping;
+	/**
+	 * Messages were discarded from the queue: what the stream takes next is dropped up to the next
+	 * group start. The stream takes from the queue without this lock, so it may get hold of a
+	 * message of a group while the messages before it are discarded. Guarded by this.
+	 */
+	private boolean gap;
 
 	private SubscriptionBuffer(int size, long maxBytes, Policy policy, String groupHeader) {
 		this.size = size;
@@ -171,6 +177,7 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 		}
 		discarded(oldest);
 		if (groupHeader != null) {
+			gap = true;
 			// the rest of the group is of no use without its start
 			PushEvent<? extends Message> next;
 			while ((next = queue.peek()) != null && !startsGroup(next) && queue.remove(next)) {
@@ -180,10 +187,11 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 	}
 
 	private boolean startsGroup(PushEvent<? extends Message> event) {
-		if (event.getType() != EventType.DATA) {
-			return true;
-		}
-		Object v = event.getData().getContext() == null ? null : event.getData().getContext().getHeaders().get(groupHeader);
+		return event.getType() != EventType.DATA || startsGroup(event.getData());
+	}
+
+	private boolean startsGroup(Message message) {
+		Object v = message.getContext() == null ? null : message.getContext().getHeaders().get(groupHeader);
 		return Boolean.TRUE.equals(Extensions.bool(v));
 	}
 
@@ -214,19 +222,29 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 	 * The stream took a message from the buffer.
 	 *
 	 * @param message the message
-	 * @return the message
+	 * @return {@code true} to deliver it; {@code false} if it is dropped, as a message of a group
+	 *         that lost messages before it
 	 */
-	Message taken(Message message) {
+	boolean taken(Message message) {
+		boolean drop;
 		synchronized (this) {
 			messages--;
 			bytes -= bytes(message);
 			notifyAll();
+			if (gap && startsGroup(message)) {
+				gap = false;
+			}
+			drop = gap;
+		}
+		if (drop) {
+			dropped(message);
+			return false;
 		}
 		AcknowledgeSupport ack = AcknowledgeSupport.of(message);
 		if (ack != null) {
 			ack.taken();
 		}
-		return message;
+		return true;
 	}
 
 	private static long bytes(Message message) {

@@ -9,3 +9,8 @@
 	bnd.identity;id='org.gecko.messaging.mqtt',\
 	bnd.identity;id='org.gecko.messaging.mqtt.tck',\
 	${tck.runrequires}
+
+# the TLS listener of the broker demands a client certificate (TlsTest)
+-runproperties.tls: \
+	org.gecko.messaging.tck.tls.uri=ssl://localhost:11887,\
+	${tck.tls}

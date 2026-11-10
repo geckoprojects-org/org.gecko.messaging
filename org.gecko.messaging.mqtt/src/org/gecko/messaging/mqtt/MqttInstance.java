@@ -66,7 +66,8 @@ import org.osgi.util.promise.Promise;
  * reconnect with a kept session).
  * <p>
  * Configuration, besides the common keys: {@code uri} ({@code tcp://}, {@code ssl://},
- * {@code ws://}, {@code wss://}), {@code cleanStart} (default {@code true}),
+ * {@code ws://}, {@code wss://}; over TLS with the {@code tls.*} keys of the core),
+ * {@code cleanStart} (default {@code true}),
  * {@code sessionExpiryInterval} (s, default 0), {@code keepAliveInterval} (s, default 30),
  * {@code receiveMaximum} (default 100), {@code qos} (default publish and subscribe QoS, default 1),
  * {@code maxMessageSize} (bytes, default 1 MiB, packets received and messages sent),
@@ -147,6 +148,10 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		}
 		if (config.password() != null) {
 			options.setPassword(config.password().getBytes(UTF_8));
+		}
+		if (tls.context() != null) {
+			// client certificate and trust of the instance; the host name check of the client stays on
+			options.setSocketFactory(tls.context().getSocketFactory());
 		}
 		client = c;
 		filters.clear();
