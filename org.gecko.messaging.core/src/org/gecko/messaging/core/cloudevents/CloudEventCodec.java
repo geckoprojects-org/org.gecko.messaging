@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -107,9 +108,7 @@ public final class CloudEventCodec {
 		h.put(prefix + "type", ce.getType());
 		putIfSet(h, prefix + "subject", ce.getSubject());
 		putIfSet(h, prefix + "dataschema", ce.getDataSchema());
-		if (ce.getTime() != null) {
-			h.put(prefix + "time", ce.getTime().toString());
-		}
+		putIfSet(h, prefix + "time", timestamp(ce.getTime()));
 		ce.getExtensions().forEach((k, v) -> h.put(prefix + attributeName(k), v));
 		return h;
 	}
@@ -165,7 +164,7 @@ public final class CloudEventCodec {
 		member(b, "type", ce.getType());
 		member(b, "subject", ce.getSubject());
 		member(b, "dataschema", ce.getDataSchema());
-		member(b, "time", ce.getTime() == null ? null : ce.getTime().toString());
+		member(b, "time", timestamp(ce.getTime()));
 		String contentType = context.getContentType();
 		member(b, "datacontenttype", contentType);
 		member(b, EXTENSION_CORRELATION_ID, context.getCorrelationId());
@@ -332,6 +331,14 @@ public final class CloudEventCodec {
 
 	private static String str(Object o) {
 		return o == null ? null : o.toString();
+	}
+
+	/**
+	 * The {@code time} attribute as an RFC 3339 timestamp. {@link OffsetDateTime#toString()} leaves the seconds out
+	 * on a whole minute, which RFC 3339 does not allow.
+	 */
+	private static String timestamp(OffsetDateTime time) {
+		return time == null ? null : DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(time);
 	}
 
 	private static OffsetDateTime time(Object o) {
