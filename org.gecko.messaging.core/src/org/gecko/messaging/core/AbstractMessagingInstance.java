@@ -937,7 +937,7 @@ public abstract class AbstractMessagingInstance {
 				.withExecutor(workers)
 				.withScheduler(scheduler)
 				.build()
-				.map(buffer::taken);
+				.filter(buffer::taken);
 	}
 
 	/**
@@ -973,7 +973,7 @@ public abstract class AbstractMessagingInstance {
 				.withExecutor(workers)
 				.withScheduler(scheduler)
 				.build()
-				.map(buffer::taken);
+				.filter(buffer::taken);
 	}
 
 	/**
