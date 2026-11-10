@@ -229,7 +229,8 @@ A binding bundle provides (annotation `ProvideMessagingImplementation` in core):
 A consumer bundle SHOULD require an implementation with `@RequireMessaging` (package
 `org.gecko.messaging.api.annotations`), optionally `@RequireMessaging(protocol = "mqtt")`; it
 generates a requirement on `osgi.implementation=osgi.messaging` in the version range of the
-specification, filtered by protocol if given.
+specification, filtered by protocol if given (`osgi.messaging.protocol=*` otherwise). The TCK
+bundle carries it without a protocol, every run project (§15.4) with its own.
 
 ---
 

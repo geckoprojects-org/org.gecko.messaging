@@ -35,8 +35,11 @@ import org.osgi.namespace.implementation.ImplementationNamespace;
 @Target({ TYPE, PACKAGE })
 @Requirement(namespace = ImplementationNamespace.IMPLEMENTATION_NAMESPACE, //
 		name = MessagingConstants.MESSAGING_IMPLEMENTATION, //
-		filter = "(&(osgi.implementation=" + MessagingConstants.MESSAGING_IMPLEMENTATION + ")${frange;"
-				+ MessagingConstants.MESSAGING_SPECIFICATION_VERSION + "}${if;${#protocol};(osgi.messaging.protocol=${#protocol})})")
+		version = MessagingConstants.MESSAGING_SPECIFICATION_VERSION, //
+		// bnd verifies the filter as written, before it expands macros: a macro may stand in a
+		// value, not in place of a clause. Without a protocol any will do; every implementation
+		// has the attribute.
+		filter = "(" + MessagingConstants.MESSAGING_PROTOCOL_PROPERTY + "=${if;${#protocol};${#protocol};*})")
 public @interface RequireMessaging {
 
 	/**
