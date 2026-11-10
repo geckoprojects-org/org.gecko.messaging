@@ -5,6 +5,7 @@ Bundle-Description: Runs the messaging TCK against the AMQP implementation and a
 
 -buildpath: \
 	osgi.annotation;version=latest,\
+	org.gecko.messaging.api;version=snapshot,\
 	org.gecko.messaging.tck;version=snapshot,\
 	org.osgi.framework;version=latest,\
 	org.osgi.service.component.annotations;version=latest
