@@ -69,7 +69,7 @@ import org.osgi.util.promise.Promise;
  * {@code ws://}, {@code wss://}; over TLS with the {@code tls.*} keys of the core),
  * {@code cleanStart} (default {@code true}),
  * {@code sessionExpiryInterval} (s, default 0), {@code keepAliveInterval} (s, default 30),
- * {@code receiveMaximum} (default 100), {@code qos} (default publish and subscribe QoS, default 1),
+ * {@code receiveMaximum} (default 100, at most {@code bufferSize}), {@code qos} (default publish and subscribe QoS, default 1),
  * {@code maxMessageSize} (bytes, default 1 MiB, packets received and messages sent),
  * {@code sharedGroup} (group of point-to-point subscriptions, default
  * {@value #DEFAULT_SHARED_GROUP}: every instance on a queue competes for its messages, whatever its
@@ -109,6 +109,8 @@ public final class MqttInstance extends AbstractMessagingInstance {
 	private final String sharedGroup;
 	/** Largest packet received and message sent, in bytes. */
 	private final long maxMessageSize;
+	/** {@code receiveMaximum}, at most {@code bufferSize}. */
+	private final int receiveWindow;
 	private volatile MqttAsyncClient client;
 	/** Broker subscriptions by topic filter, with the local subscriptions they feed. */
 	private final Map<String, SubscriptionGroup> filters = new ConcurrentHashMap<>();
@@ -128,6 +130,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		this.defaultQos = (int) config.number("qos", QOS_AT_LEAST_ONCE);
 		this.sharedGroup = config.string("sharedGroup", DEFAULT_SHARED_GROUP);
 		this.maxMessageSize = Math.min(Integer.MAX_VALUE, config.number("maxMessageSize", 1 << 20));
+		this.receiveWindow = receiveWindow("receiveMaximum", 100);
 	}
 
 	@Override
@@ -141,7 +144,7 @@ public final class MqttInstance extends AbstractMessagingInstance {
 		options.setSessionExpiryInterval(config.number("sessionExpiryInterval", 0));
 		options.setKeepAliveInterval((int) config.number("keepAliveInterval", 30));
 		options.setConnectionTimeout((int) Math.max(1, (timeoutMillis + 999) / 1000));
-		options.setReceiveMaximum((int) config.number("receiveMaximum", 100));
+		options.setReceiveMaximum(receiveWindow);
 		options.setMaximumPacketSize(maxMessageSize);
 		if (config.username() != null) {
 			options.setUserName(config.username());
@@ -170,6 +173,11 @@ public final class MqttInstance extends AbstractMessagingInstance {
 	@Override
 	protected int protocolSendWindow() {
 		return serverReceiveMaximum;
+	}
+
+	@Override
+	protected int receiveWindow() {
+		return receiveWindow;
 	}
 
 	@Override

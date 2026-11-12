@@ -58,6 +58,12 @@ public class MessagingRuntimeDTO extends DTO {
 	 */
 	public int awaitingPublishes;
 
+	/**
+	 * The receive window the client sets: the unacknowledged messages the broker sends at most,
+	 * per connection or per subscription without buffer of its own; at most {@code bufferSize}.
+	 * {@code 0} if the client sets none (the broker's limit, or no flow control).
+	 */
+	public int receiveWindow;
 	/** The active subscriptions. */
 	public SubscriptionDTO[] subscriptions;
 

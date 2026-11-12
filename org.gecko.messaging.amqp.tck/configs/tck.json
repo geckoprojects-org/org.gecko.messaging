@@ -39,5 +39,36 @@
 		"bufferSize:Long": 256,
 		"reconnectDelay:Long": 50,
 		"reconnectMaxDelay:Long": 200
+	},
+	"org.gecko.messaging.amqp~tckloadedge": {
+		"osgi.messaging.name": "tck-load-edge",
+		"uri": "amqp://localhost:15676",
+		"username": "tck",
+		".password": "tck",
+		"connectTimeout:Long": 3000,
+		"heartbeat:Long": 2,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"prefetch:Long": 30,
+		"bufferSize:Long": 30,
+		"bufferBytes:Long": 4194304,
+		"maxMessageSize:Long": 131072,
+		"workerThreads:Long": 2
+	},
+	"org.gecko.messaging.amqp~tckloadhigh": {
+		"osgi.messaging.name": "tck-load-high",
+		"uri": "amqp://localhost:15676",
+		"username": "tck",
+		".password": "tck",
+		"connectTimeout:Long": 3000,
+		"heartbeat:Long": 2,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"prefetch:Long": 1000,
+		"bufferSize:Long": 2048,
+		"bufferBytes:Long": 67108864,
+		"maxMessageSize:Long": 65536,
+		"workerThreads": "virtual",
+		"publishWindow:Long": 500
 	}
 }

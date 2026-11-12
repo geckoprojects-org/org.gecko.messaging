@@ -34,6 +34,12 @@ public class SubscriptionDTO extends DTO {
 	 */
 	public long droppedMessages;
 
+	/**
+	 * The receive window that applies to the subscription: the connection's, or its own where the
+	 * protocol sets one per subscription; {@code 0} if the client sets none.
+	 */
+	public int receiveWindow;
+
 	/** The messages the buffer of the subscription holds at most. */
 	public int bufferSize;
 

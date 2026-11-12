@@ -579,6 +579,13 @@ unknown policy fails the subscribe with `MessagingException`):
 A video stream next to commands on one instance: the video subscription with a small buffer,
 `DISCARD_OLDEST` and `groupHeader`, the command subscription with the instance defaults.
 
+**Buffers of the application.** The buffer of a subscription belongs to the flow control with
+the broker (§8): its settings are the ones above, its queue and policy cannot be replaced. An
+application that wants parallel processing, an executor of its own or a different order buffers
+behind it with the PushStream API, e.g.
+`stream.buildBuffer().withExecutor(executor).withParallelism(4).build()`; a buffer built so is
+the application's, with the PushStream defaults (32 messages, `FAIL`) unless it sets others.
+
 ---
 
 ## 8 Acknowledgement
@@ -632,6 +639,50 @@ auto-ack, WebSocket) the queue policy applies; WebSocket reads further frames on
 than `bufferSize` messages are in flight, so that TCP throttles the hub. MQTT flow control is per
 connection: a slow subscription holds back the QoS ≥ 1 messages of every subscription of its
 instance, so slow consumers belong in an instance of their own.
+
+**The window follows the buffer.** Nothing blocks and nothing overflows as long as
+
+> `bufferSize` ≥ receive window and `bufferBytes` ≥ receive window × largest message.
+
+The instance therefore lowers a configured receive window to `bufferSize` (logged once at INFO)
+instead of trusting the configuration. Bytes are not adjusted for — the largest message is rarely
+the usual one, and the byte bound protects the heap: when window × `maxMessageSize` exceeds
+`bufferBytes`, that is logged once, as a WARNING if one of the three values is configured, at FINE
+for the defaults (100 × 1 MiB against 16 MiB). The effective window is `receiveWindow` of the
+runtime DTO and of each `SubscriptionDTO` (`0` where the client sets none).
+
+| Binding | Window | Follows the buffer |
+|---|---|---|
+| mqtt | `receiveMaximum`, one per connection, fixed at CONNECT | lowered to the instance's `bufferSize`; a subscription or response stream with a smaller own buffer (`BLOCK`, `FAIL`) cannot lower it and is warned about |
+| amqp | `prefetch`, per subscription channel | lowered to the instance's `bufferSize` and to each subscription's own `bufferSize`; the shared reply channel keeps the instance's, a smaller response-stream buffer is warned about (once) |
+| mqtt3 | the broker's in-flight limit (e.g. Mosquitto `max_inflight_messages`), not set by the client | no adjustment, `receiveWindow` is `0`: keep `bufferSize` at least the broker's limit |
+| websocket | reads further frames only while fewer than `bufferSize` are in flight | aligned by construction, `receiveWindow` `0` |
+| memory | none | — |
+
+Settings by scenario (MQTT/AMQP; measured with `LoadTest`, `LOAD_INSTANCE=tck-load-edge` /
+`tck-load-high` in the `load.bndrun` of the run projects):
+
+| Scenario | Settings |
+|---|---|
+| Low load / edge | window (`receiveMaximum`/`prefetch`) 30, `bufferSize` 30, `bufferBytes` 4 MiB, `maxMessageSize` 128 KiB, `workerThreads` 2 |
+| Default | window 100, `bufferSize` 1024, `bufferBytes` 16 MiB, `maxMessageSize` 1 MiB, `workerThreads` 4 |
+| High throughput | window 1000, `bufferSize` 2048, `bufferBytes` 64 MiB, `maxMessageSize` 64 KiB, `workerThreads=virtual`, `publishWindow` 500 |
+| Telemetry/video, loss acceptable | QoS 0, `DISCARD_OLDEST`, `groupHeader` for video (§7) |
+| A slow consumer among fast ones | an instance of its own (MQTT: one window per connection) |
+
+Measured 2026-11-12 (one local machine, Mosquitto and RabbitMQ in containers, `LOAD_SCALE=1`):
+in every scenario all seven profiles of `LoadTest` (§15.6) passed on both bindings — nothing lost,
+order kept, no reconnect, no failed stream. The profiles run at fixed rates, so they show
+robustness rather than capacity; where the scenarios differ:
+
+| | mqtt edge | mqtt default | mqtt high | amqp edge | amqp default | amqp high |
+|---|---|---|---|---|---|---|
+| Stream publish at full speed (msg/s) | 6100 | 9400 | 8000 | 5800 | 5200 | 5300 |
+| Commands next to a video stream, latency p50 / p99 (ms) | 141 / 400 | 26 / 47 | 25 / 47 | 120 / 224 | 21 / 43 | 24 / 29 |
+
+The edge settings cost latency when a second stream competes (two worker threads, small window),
+not robustness. A larger window does not raise the rate of a single stream on one machine: the
+broker and the subscriber are the limit, the window only decides how much is outstanding.
 
 ---
 
@@ -918,13 +969,15 @@ state.
 | `reconnects` | reconnects since start |
 | `streamPublishFailures` | messages of stream publishes skipped after a failure (`streamPublishFailures=continue`) |
 | `awaitingPublishes` | single publishes waiting for the connection now (`publishAwaitConnection`, §6.2) |
+| `receiveWindow` | the receive window the client sets, at most `bufferSize` (§8); `0` if it sets none |
 | `subscriptions` | `SubscriptionDTO[]` — application subscriptions only (reply-to internals excluded) |
 | `replyToSubscriptions` | `ReplyToSubscriptionDTO[]` of bound handlers |
 | `replyStreams` | `SubscriptionDTO[]` of the response streams of `publishWithReplyMany` open now: `channel` the reply channel, `receivedMessages` the responses so far, `droppedMessages` and the buffer fields of the stream's own buffer |
 
 `SubscriptionDTO`: `channel` (`ChannelDTO`), `receivedMessages`, `droppedMessages` (undecodable,
 no CloudEvent on an instance that takes CloudEvents only, or discarded by a full buffer),
-`bufferSize`, `bufferBytes` (limits), `bufferedMessages`, `bufferedBytes` (in the buffer now) and
+`receiveWindow` (the window that applies to it, §8), `bufferSize`, `bufferBytes` (limits),
+`bufferedMessages`, `bufferedBytes` (in the buffer now) and
 `blockedMillis` (time a full `BLOCK` buffer held back delivery): a slow subscriber and a
 throttling broker are visible.
 `ChannelDTO`: `name`, `extension`, `connected` (subscribed on the broker right now).
@@ -983,7 +1036,7 @@ configuration, building on `org.gecko.messaging.core`.
 | `cleanStart` | `true` | MQTT clean start |
 | `sessionExpiryInterval` | `0` | s |
 | `keepAliveInterval` | `30` | s |
-| `receiveMaximum` | `100` | unacknowledged QoS 1/2 messages from the broker |
+| `receiveMaximum` | `100` | unacknowledged QoS 1/2 messages from the broker; at most `bufferSize` (§8) |
 | `qos` | `1` | default QoS |
 | `maxMessageSize` | `1048576` | bytes, sent and received |
 | `sharedGroup` | `messaging` (`DEFAULT_SHARED_GROUP`) | group of shared subscriptions; one group for all instances, so every instance on a queue competes |
@@ -1045,7 +1098,7 @@ subscriptions may receive it twice.
 |---|---|---|
 | `exchange` | `amq.topic` | exchange of topics |
 | `heartbeat` | `30` | s |
-| `prefetch` | `100` | unacknowledged messages per subscription |
+| `prefetch` | `100` | unacknowledged messages per subscription; at most `bufferSize` and the subscription's own buffer (§8) |
 | `maxMessageSize` | `1048576` | bytes, bodies sent and received |
 | `qos` | `1` | default QoS, 0 or 1 |
 
@@ -1278,7 +1331,11 @@ the WebSocket bundle against a server of the test (`WebSocketTlsTest`); the hub 
 
 Every run project also has a `load.bndrun` (`LoadTest`, only with the framework property
 `org.gecko.messaging.tck.load`) against an instance `tck-load` with a keep-alive of 2 s and a
-buffer of 256: a protocol thread held up by a full buffer then shows as a reconnect.
+buffer of 256: a protocol thread held up by a full buffer then shows as a reconnect. MQTT and
+AMQP also have the scenario instances `tck-load-edge` and `tck-load-high` of §8, selected with
+`LOAD_INSTANCE=<name>` in the environment (CI runs `tck-load` only). `ReceiveWindowTest` checks
+that the window is lowered to `bufferSize` and that a stalled `BLOCK` subscriber with a buffer of
+3 never blocks where the window follows the subscription (AMQP).
 
 | Profile | Load | Asserted |
 |---|---|---|

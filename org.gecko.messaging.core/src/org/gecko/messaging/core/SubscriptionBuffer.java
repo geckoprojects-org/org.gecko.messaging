@@ -268,6 +268,16 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 		}
 	}
 
+	/** @return the messages the buffer takes at most */
+	int size() {
+		return size;
+	}
+
+	/** @return {@code true} if a full buffer drops messages instead of blocking or failing */
+	boolean dropsWhenFull() {
+		return policy == Policy.DISCARD_OLDEST;
+	}
+
 	/** @return the messages in the buffer, not yet taken by the stream */
 	synchronized int buffered() {
 		return Math.max(0, messages);

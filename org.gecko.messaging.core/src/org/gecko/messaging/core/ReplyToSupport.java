@@ -73,6 +73,7 @@ final class ReplyToSupport implements ReplyToPublisher {
 	private final Map<String, Pending> pending = new ConcurrentHashMap<>();
 	/** The response streams not closed yet, also after their exchange ended. */
 	private final Set<Many> streams = ConcurrentHashMap.newKeySet();
+	private final AtomicBoolean windowWarned = new AtomicBoolean();
 	private final Object sharedLock = new Object();
 	private String sharedChannel;
 	private SubscriptionHandle sharedHandle;
@@ -203,6 +204,9 @@ final class ReplyToSupport implements ReplyToPublisher {
 				watch(TimeUnit.MILLISECONDS.toNanos(r.timeout));
 			}
 			streams.add(this);
+			// the reply subscription's window does not follow the buffer of a request: told once
+			instance.checkWindow(buffer, instance.receiveWindow(), "the response stream of " + r.correlationId,
+					windowWarned.compareAndSet(false, true) ? Level.WARNING : Level.FINE);
 		}
 
 		@Override
@@ -318,6 +322,7 @@ final class ReplyToSupport implements ReplyToPublisher {
 			dto.channel = SubscriptionHandle.channelDTO(r.replyTo, null, instance.getConnectionState() == ConnectionState.CONNECTED);
 			dto.receivedMessages = received.get();
 			buffer.fill(dto);
+			dto.receiveWindow = instance.receiveWindow();
 			return dto;
 		}
 
