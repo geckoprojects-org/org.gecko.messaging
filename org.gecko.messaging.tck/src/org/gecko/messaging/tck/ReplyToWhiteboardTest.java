@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Hashtable;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
@@ -34,6 +35,7 @@ import org.gecko.messaging.api.replyto.ReplyToSingleSubscriptionHandler;
 import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.osgi.util.promise.Promise;
 import org.osgi.util.pushstream.PushStreamProvider;
 import org.osgi.util.pushstream.SimplePushEventSource;
 
@@ -172,6 +174,35 @@ public class ReplyToWhiteboardTest extends AbstractMessagingTest {
 		assertThat(failure).isInstanceOf(MessagingException.class).hasMessageContaining("responder failed")
 				.hasMessageNotContaining("internal detail");
 		assertThat(System.currentTimeMillis() - start).as("not by the reply timeout").isLessThan(tck.timeout());
+	}
+
+	@Test
+	void aSlowConsumerReceivesEveryResponseOfAFastResponder() throws Exception {
+		// the responder's stream is synchronous and pushes at once; the consumer is slower: the
+		// responder is held back by the send window, the requester by its buffer, nothing fails
+		assumeTrue(tck.has(FEATURE_REPLY_TO_MANY));
+		int count = 500;
+		String channel = tck.channel("wb", "flow");
+		PushStreamProvider psp = new PushStreamProvider();
+		ReplyToManySubscriptionHandler handler = (request, responses) -> psp.streamOf(
+				IntStream.range(0, count).mapToObj(n -> responses.get().content(Tck.bytes(String.valueOf(n))).buildMessage()));
+		register(ReplyToManySubscriptionHandler.class, handler, handlerProperties(channel));
+		awaitBound(channel);
+		List<String> got = Collections.synchronizedList(new ArrayList<>());
+		Promise<Void> done = replyTo.publishWithReplyMany(builder().content(Tck.bytes("n")).buildMessage(), request(channel, "flow-1"))
+				.map(Tck::text).forEach(t -> {
+					if (got.size() % 50 == 0) {
+						try {
+							Thread.sleep(20);
+						} catch (InterruptedException e) {
+							Thread.currentThread().interrupt();
+						}
+					}
+					got.add(t);
+				});
+		assertThat(done.getFailure()).isNull();
+		assertThat(got).containsExactlyElementsOf(IntStream.range(0, count).mapToObj(String::valueOf).toList());
+		tck.await("response stream closed", () -> runtime.getRuntimeDTO().replyStreams.length == 0);
 	}
 
 	@Test

@@ -62,6 +62,16 @@ public final class SubscriptionHandle {
 			return null;
 		}
 
+		/**
+		 * Returns whether the sink reports itself when it has taken a message
+		 * ({@link AcknowledgeSupport#taken()}), as a sink with buffer does.
+		 *
+		 * @return {@code false} if a message counts as taken once accepted
+		 */
+		default boolean takesItself() {
+			return buffer() != null;
+		}
+
 	}
 
 	private static final AtomicLong IDS = new AtomicLong();

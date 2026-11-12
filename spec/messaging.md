@@ -625,8 +625,9 @@ throttles the broker instead of blocking a thread of the protocol (which, on MQT
 the keep-alive and drop the connection), and a buffer at least as large as that window never
 fills. Where several local subscriptions share one broker subscription (§13.2), the message is
 completed once every one has taken and decided it. A message still in the buffer when the
-subscription ends is rejected, with re-queue on a queue; one a `DISCARD_OLDEST` buffer discards
-is counted as dropped and rejected without re-queue. Without broker flow control (QoS 0, AMQP
+subscription ends is rejected, with re-queue on a queue, also when the consumer closes the stream
+while a delivery waits for room in a full `BLOCK` buffer (that delivery returns); one a
+`DISCARD_OLDEST` buffer discards is counted as dropped and rejected without re-queue. Without broker flow control (QoS 0, AMQP
 auto-ack, WebSocket) the queue policy applies; WebSocket reads further frames only while fewer
 than `bufferSize` messages are in flight, so that TCP throttles the hub. MQTT flow control is per
 connection: a slow subscription holds back the QoS ≥ 1 messages of every subscription of its
@@ -643,7 +644,7 @@ Registered when `replyTo` is announced.
 | Method | Result |
 |---|---|
 | `publishWithReply(Message[, MessageContext])` | `Promise<Message>` with the first response; fails with `TimeoutException` after the reply timeout, and with `MessagingException` at once on a response carrying `replyerror`. Every failure goes through the promise. |
-| `publishWithReplyMany(Message[, MessageContext])` | `PushStream<Message>`; requires `replyToMany` (`FeatureNotSupportedException` thrown at once). The request is published when the stream is connected. The stream ends with the response carrying header `replycomplete=true` (not part of the stream) or when the consumer closes it; it fails with `MessagingException` if that response also carries `replyerror`, and with `TimeoutException` if no response arrives within the timeout since the request or the previous response. |
+| `publishWithReplyMany(Message[, MessageContext])` | `PushStream<Message>`; requires `replyToMany` (`FeatureNotSupportedException` thrown at once). The request is published when the stream is connected. The stream ends with the response carrying header `replycomplete=true` (not part of the stream) or when the consumer closes it; it fails with `MessagingException` if that response also carries `replyerror`, and with `TimeoutException` if no response arrives within the timeout since the request or the previous response while the consumer is not behind. |
 
 Reply headers (`MessagingConstants`, both valid CloudEvents extension names):
 
@@ -667,6 +668,14 @@ Rules:
   (`MessagingException` otherwise). A second request with a correlation id that is still waiting
   fails with `MessagingException`.
 - Timeout: `osgi.messaging.replyTo.timeout` if positive, else configuration `replyTimeout`.
+- A response stream is buffered like a subscription stream (§7, §8): `bufferSize`, `bufferBytes`,
+  `queuePolicy` and `groupHeader` of the request's extensions, bounded by the instance's; invalid
+  settings throw at once. The settings are not sent with the request. Each request has a buffer of
+  its own, so a slow consumer does not hold up the dispatcher of the shared reply channel; a
+  response counts as taken, and is acknowledged on the broker, once the stream takes it from that
+  buffer. As for subscriptions, a buffer at least the broker window never fills; a stalled stream
+  then holds places of that window (on MQTT per connection). The reply timeout does not run while
+  responses wait in the buffer: the responder is held back by the consumer, not late.
 
 ### 9.2 Generated Reply Channels
 
@@ -699,12 +708,15 @@ Rules:
   is not bound.
 - Per request, the handler gets a builder already set to reply channel and the request's
   correlation id (a fresh one per response for many-handlers). A single response is published if
-  non-null; a many-stream's messages are published, followed by an empty response with header
-  `replycomplete=true` (`HEADER_REPLY_COMPLETE`) when the stream ends.
+  non-null; a many-stream is published as a stream publish (§6.1: pulled only while the send
+  window has room, `streamPublishFailures` applies), on a worker thread, followed by an empty
+  response with header `replycomplete=true` (`HEADER_REPLY_COMPLETE`) once every response is
+  handed over.
 - A single handler that throws is answered with an empty response carrying
   `replyerror=The responder failed`; a response stream that fails ends with `replycomplete=true`
-  and `replyerror=The responder failed`. The reason MUST NOT carry exception text or other
-  internals of the responder; the failure is logged on the responder side.
+  and `replyerror=The responder failed`; so does one whose response cannot be published. The
+  reason MUST NOT carry exception text or other internals of the responder; the failure is
+  logged on the responder side.
 - Modifying the service properties rebinds; unregistering unbinds and ends the subscription.
 - Handlers run on the worker threads. When more than `bufferSize` requests of one handler are in
   flight, the receiving thread runs the handler itself (caller runs), so broker flow control holds
@@ -908,6 +920,7 @@ state.
 | `awaitingPublishes` | single publishes waiting for the connection now (`publishAwaitConnection`, §6.2) |
 | `subscriptions` | `SubscriptionDTO[]` — application subscriptions only (reply-to internals excluded) |
 | `replyToSubscriptions` | `ReplyToSubscriptionDTO[]` of bound handlers |
+| `replyStreams` | `SubscriptionDTO[]` of the response streams of `publishWithReplyMany` open now: `channel` the reply channel, `receivedMessages` the responses so far, `droppedMessages` and the buffer fields of the stream's own buffer |
 
 `SubscriptionDTO`: `channel` (`ChannelDTO`), `receivedMessages`, `droppedMessages` (undecodable,
 no CloudEvent on an instance that takes CloudEvents only, or discarded by a full buffer),
@@ -1325,7 +1338,7 @@ to a channel).
 | MSG130 | MUST | Publish-subscribe channels | Met | 4.1 | `PublishSubscribeTest.everySubscriberOfATopicReceives` |
 | MSG140 | MUST | Quality of service | Met (AMQP 0–1, WebSocket 0) | 6 | `DeliveryOptionsTest.atLeastOnceIsConfirmed`, `atMostOnceIsAlwaysAccepted`, `invalidQosFails`, `subscriptionsOfOneChannelWithDifferentQosAllReceive` |
 | MSG150 | MUST | Send-and-forget and send-and-forward | Met | 6 | `DeliveryOptionsTest.atMostOnceIsAlwaysAccepted`, `atLeastOnceIsConfirmed` |
-| MSG160 | SHOULD | Reply-to, caller and receiver side | Met | 9 | `ReplyToTest.*`, `ReplyToWhiteboardTest.*` (incl. `requestNamingAForeignReplyChannelIsNotAnswered`, `aFailingHandlerFailsTheRequestAtOnce`, `aFailingResponseStreamEndsWithAnError`) |
+| MSG160 | SHOULD | Reply-to, caller and receiver side | Met | 9 | `ReplyToTest.*`, `ReplyToWhiteboardTest.*` (incl. `requestNamingAForeignReplyChannelIsNotAnswered`, `aFailingHandlerFailsTheRequestAtOnce`, `aFailingResponseStreamEndsWithAnError`, `aSlowConsumerReceivesEveryResponseOfAFastResponder`) |
 | MSG170 | SHOULD | Filter semantics: exchange/routing key, wildcards | Met (memory, MQTT, AMQP) | 4.2, 4.3 | `ChannelTypesTest.singleLevelWildcard`, `multiLevelWildcard`, `channelExtension` |
 | MSG180 | MAY | Auto-create / do-not-autocreate | Met — do-not-autocreate kept on AMQP, refused with `FeatureNotSupportedException` where channels are created on first use (MQTT) | 4.4 | `ChannelTypesTest.noAutoCreateIsKeptOrRefused`, `DeliveryOptionsTest.durableQueueDelivers` |
 | MSG200 | MUST | Byte bodies | Met | 5.1 | `PublishSubscribeTest.allByteValuesSurvive`, `emptyPayload`; `MessageContextTest.payloadBuffersAreIndependent` |

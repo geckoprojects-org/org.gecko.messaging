@@ -63,5 +63,10 @@ public class MessagingRuntimeDTO extends DTO {
 
 	/** The bound reply-to handlers. */
 	public ReplyToSubscriptionDTO[] replyToSubscriptions;
+	/**
+	 * The response streams of reply-to-many requests open now, each with its own buffer: the
+	 * channel is the reply-to channel, {@code receivedMessages} the responses so far.
+	 */
+	public SubscriptionDTO[] replyStreams;
 
 }

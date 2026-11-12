@@ -37,6 +37,11 @@ import org.osgi.util.pushstream.QueuePolicy;
  * {@code DISCARD_OLDEST} counts what it discards as dropped and rejects it without re-queue, so
  * that it does not hold a place of the broker's flow control for ever. With a group header it
  * discards whole groups, so that what stays starts with a group start (a key frame).
+ * <p>
+ * When its stream is closed the buffer is {@link #release() released}: a delivery waiting for
+ * room returns, and what is buffered or still arrives is settled as abandoned. Otherwise a
+ * delivery blocked on a full buffer would hold the protocol's thread for ever, as nothing takes
+ * from the queue of a closed stream.
  */
 final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<PushEvent<? extends Message>>> {
 
@@ -55,6 +60,12 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 	private long bytes;
 	/** Guarded by this. */
 	private long blockedNanos;
+	/** The messages the buffer dropped. Guarded by this. */
+	private long dropped;
+	/** The stream is closed: nothing takes from the queue any more. Guarded by this. */
+	private boolean released;
+	/** The queue of the stream, once made. */
+	private volatile BlockingQueue<PushEvent<? extends Message>> queue;
 	/**
 	 * A group lost messages: the rest of it is discarded as it arrives, up to the next group
 	 * start. Guarded by this.
@@ -115,7 +126,9 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 
 	/** @return a new, empty queue of the buffer's size; it takes memory as it fills */
 	BlockingQueue<PushEvent<? extends Message>> newQueue() {
-		return new LinkedBlockingQueue<>(size);
+		BlockingQueue<PushEvent<? extends Message>> q = new LinkedBlockingQueue<>(size);
+		queue = q;
+		return q;
 	}
 
 	/** @param h the subscription, once the stream is connected */
@@ -126,11 +139,23 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 	@Override
 	public void doOffer(BlockingQueue<PushEvent<? extends Message>> queue, PushEvent<? extends Message> event) throws Exception {
 		if (event.getType() != EventType.DATA) {
-			queue.put(event);
+			synchronized (this) {
+				// after release the queue is empty: the end still reaches the stream
+				while (!queue.offer(event)) {
+					if (released) {
+						return;
+					}
+					wait(100);
+				}
+			}
 			return;
 		}
 		long n = bytes(event.getData());
 		synchronized (this) {
+			if (released) {
+				abandon(event.getData());
+				return;
+			}
 			if (groupHeader != null) {
 				if (startsGroup(event)) {
 					skipping = false;
@@ -158,6 +183,10 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 						long start = System.nanoTime();
 						wait(100);
 						blockedNanos += System.nanoTime() - start;
+						if (released) {
+							abandon(event.getData());
+							return;
+						}
 				}
 			}
 			messages++;
@@ -205,8 +234,50 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 		dropped(message);
 	}
 
+	/**
+	 * The stream of the buffer is closed: a delivery waiting for room returns, what is buffered
+	 * and what still arrives is settled as abandoned.
+	 */
+	void release() {
+		BlockingQueue<PushEvent<? extends Message>> q = queue;
+		synchronized (this) {
+			if (released) {
+				return;
+			}
+			released = true;
+			notifyAll();
+			if (q == null) {
+				return;
+			}
+			PushEvent<? extends Message> event;
+			while ((event = q.poll()) != null) {
+				if (event.getType() == EventType.DATA) {
+					messages--;
+					bytes -= bytes(event.getData());
+					abandon(event.getData());
+				}
+			}
+		}
+	}
+
+	/** A message the closed stream will not take. */
+	private static void abandon(Message message) {
+		AcknowledgeSupport ack = AcknowledgeSupport.of(message);
+		if (ack != null) {
+			ack.abandoned();
+		}
+	}
+
+	/** @return the messages in the buffer, not yet taken by the stream */
+	synchronized int buffered() {
+		return Math.max(0, messages);
+	}
+
 	/** Counts and settles a message that does not reach the stream. */
 	private void dropped(Message message) {
+		synchronized (this) {
+			dropped++;
+		}
 		SubscriptionHandle h = handle.get();
 		if (h != null) {
 			h.dropped();
@@ -258,6 +329,10 @@ final class SubscriptionBuffer implements QueuePolicy<Message, BlockingQueue<Pus
 		dto.bufferedMessages = Math.max(0, messages);
 		dto.bufferedBytes = Math.max(0, bytes);
 		dto.blockedMillis = TimeUnit.NANOSECONDS.toMillis(blockedNanos);
+		if (handle.get() == null) {
+			// not attached to a subscription of its own: the buffer's drops are all there are
+			dto.droppedMessages = dropped;
+		}
 	}
 
 }

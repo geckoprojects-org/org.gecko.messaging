@@ -243,7 +243,11 @@ final class ReplyToWhiteboard {
 					responses.close();
 					return;
 				}
-				responses.forEach(m -> instance.publish(m, null)).onSuccess(v -> {
+				// a stream publish: the handler's stream is pulled only while the send window has
+				// room, and a response that fails ends the stream. Never on the thread of the
+				// protocol: a synchronous stream pushes in the thread that connects it and would
+				// wait there for the window, which that very thread frees.
+				instance.workers().execute(() -> instance.publish(responses, null).onSuccess(n -> {
 					MessageContextBuilder end = responseBuilder(request, reply).header(HEADER_REPLY_COMPLETE, Boolean.TRUE);
 					instance.publish(end.buildMessage(), null);
 				}).onFailure(t -> {
@@ -251,7 +255,7 @@ final class ReplyToWhiteboard {
 					MessageContextBuilder end = responseBuilder(request, reply).header(HEADER_REPLY_COMPLETE, Boolean.TRUE)
 							.header(HEADER_REPLY_ERROR, RESPONDER_FAILED);
 					instance.publish(end.buildMessage(), null);
-				});
+				}));
 			} else {
 				Message response;
 				try {

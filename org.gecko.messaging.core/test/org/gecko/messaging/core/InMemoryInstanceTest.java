@@ -548,6 +548,160 @@ class InMemoryInstanceTest {
 		assertThat(handled).as("the newest is kept").contains("m5");
 	}
 
+	@Test
+	void aDeliveryBlockedOnAFullBufferEndsWhenTheStreamCloses() throws Exception {
+		// the broker delivers on one thread, as a protocol does: a delivery left blocked would
+		// hold up every other subscription of the instance
+		InMemoryInstance i = start();
+		MessageContext ctx = i.newBuilder().channel("slow").extensionEntry(EXTENSION_BUFFER_SIZE, 2)
+				.extensionEntry(EXTENSION_QUEUE_POLICY, "block").buildContext();
+		CountDownLatch never = new CountDownLatch(1);
+		PushStream<Message> slow = i.subscribe(ctx);
+		slow.forEach(m -> {
+			try {
+				never.await(30, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		List<Message> other = collect(i.subscribe("other"));
+		await(() -> i.getRuntimeDTO().subscriptions.length == 2);
+		for (int n = 0; n < 6; n++) {
+			i.publish(text(i, "slow", "m" + n), null).getValue();
+		}
+		await(() -> i.getRuntimeDTO().subscriptions[0].bufferedMessages == 2
+				|| i.getRuntimeDTO().subscriptions[1].bufferedMessages == 2);
+		slow.close();
+		i.publish(text(i, "other", "x"), null).getValue();
+		await(() -> other.size() == 1);
+		never.countDown();
+	}
+
+	/** Answers each request on "many" with the given number of responses, then the end marker. */
+	private static void respondMany(InMemoryInstance i, int count, long pauseBeforeEnd) {
+		i.subscribe("many").forEach(request -> {
+			MessageContext rc = request.getContext();
+			for (int n = 0; n < count; n++) {
+				i.publish(i.newBuilder().channel(rc.getReplyToChannel()).correlationId(rc.getCorrelationId())
+						.content(ByteBuffer.wrap(("" + n).getBytes())).buildMessage(), null);
+			}
+			if (pauseBeforeEnd > 0) {
+				sleep(pauseBeforeEnd);
+			}
+			i.publish(i.newBuilder().channel(rc.getReplyToChannel()).correlationId(rc.getCorrelationId())
+					.header(HEADER_REPLY_COMPLETE, true).buildMessage(), null);
+		});
+	}
+
+	private static void sleep(long millis) {
+		try {
+			Thread.sleep(millis);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	@Test
+	void aSlowConsumerOfResponsesThrottlesInsteadOfFailing() throws Exception {
+		InMemoryInstance i = start();
+		respondMany(i, 200, 0);
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		MessageContext ctx = i.newBuilder().channel("many").extensionEntry(EXTENSION_BUFFER_SIZE, 4)
+				.extensionEntry(EXTENSION_QUEUE_POLICY, "block").buildContext();
+		List<String> responses = Collections.synchronizedList(new ArrayList<>());
+		Promise<Void> done = i.replyToPublisher().publishWithReplyMany(text(i, "many", "go"), ctx).map(InMemoryInstanceTest::text)
+				.forEach(r -> {
+					sleep(1);
+					responses.add(r);
+				});
+		done.getValue();
+		assertThat(done.getFailure()).isNull();
+		assertThat(responses).containsExactlyElementsOf(IntStream.range(0, 200).mapToObj(String::valueOf).toList());
+		assertThat(i.getRuntimeDTO().replyStreams).isEmpty();
+	}
+
+	@Test
+	void theReplyTimeoutDoesNotRunWhileTheConsumerIsBehind() throws Exception {
+		// replyTimeout 2000: the end comes 2500 ms after the responses, while the consumer still
+		// works through them
+		InMemoryInstance i = start();
+		respondMany(i, 10, 2500);
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		List<String> responses = Collections.synchronizedList(new ArrayList<>());
+		Promise<Void> done = i.replyToPublisher().publishWithReplyMany(text(i, "many", "go")).map(InMemoryInstanceTest::text)
+				.forEach(r -> {
+					sleep(300);
+					responses.add(r);
+				});
+		done.getValue();
+		assertThat(done.getFailure()).isNull();
+		assertThat(responses).hasSize(10);
+	}
+
+	@Test
+	void aStalledResponseStreamHoldsUpNoOtherRequest() throws Exception {
+		// the buffer is larger than what arrives, as a buffer at least the broker window is
+		InMemoryInstance i = start();
+		respondMany(i, 20, 0);
+		i.subscribe("single").forEach(request -> {
+			MessageContext rc = request.getContext();
+			i.publish(i.newBuilder().channel(rc.getReplyToChannel()).correlationId(rc.getCorrelationId())
+					.content(ByteBuffer.wrap("pong".getBytes())).buildMessage(), null);
+		});
+		await(() -> i.getRuntimeDTO().subscriptions.length == 2);
+		MessageContext ctx = i.newBuilder().channel("many").extensionEntry(EXTENSION_BUFFER_SIZE, 50).buildContext();
+		CountDownLatch stalled = new CountDownLatch(1);
+		PushStream<Message> slow = i.replyToPublisher().publishWithReplyMany(text(i, "many", "go"), ctx);
+		slow.forEach(m -> {
+			try {
+				stalled.await(30, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		// one in the consumer, the rest buffered
+		await(() -> i.getRuntimeDTO().replyStreams.length == 1 && i.getRuntimeDTO().replyStreams[0].bufferedMessages == 19);
+		var dto = i.getRuntimeDTO().replyStreams[0];
+		assertThat(dto.bufferSize).isEqualTo(50);
+		assertThat(dto.receivedMessages).isEqualTo(20);
+		assertThat(dto.channel.name).isNotNull();
+		assertThat(text(i.replyToPublisher().publishWithReply(text(i, "single", "ping")).getValue())).isEqualTo("pong");
+		slow.close();
+		await(() -> i.getRuntimeDTO().replyStreams.length == 0);
+		stalled.countDown();
+	}
+
+	@Test
+	void stoppingFailsAResponseStreamBlockedOnItsBuffer() throws Exception {
+		InMemoryInstance i = start();
+		respondMany(i, 20, 0);
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		MessageContext ctx = i.newBuilder().channel("many").extensionEntry(EXTENSION_BUFFER_SIZE, 2)
+				.extensionEntry(EXTENSION_QUEUE_POLICY, "block").buildContext();
+		CountDownLatch stalled = new CountDownLatch(1);
+		Promise<Void> done = i.replyToPublisher().publishWithReplyMany(text(i, "many", "go"), ctx).forEach(m -> {
+			try {
+				stalled.await(2, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+		});
+		await(() -> i.getRuntimeDTO().replyStreams.length == 1 && i.getRuntimeDTO().replyStreams[0].bufferedMessages == 2);
+		// the delivery blocked on the full buffer does not hold up the stop
+		i.stop();
+		stalled.countDown();
+		await(done::isDone);
+		assertThat(done.getFailure()).isInstanceOf(MessagingException.class);
+	}
+
+	@Test
+	void invalidBufferSettingsOfAResponseStreamFailAtOnce() throws Exception {
+		InMemoryInstance i = start();
+		MessageContext ctx = i.newBuilder().channel("many").extensionEntry(EXTENSION_QUEUE_POLICY, "nonsense").buildContext();
+		assertThatThrownBy(() -> i.replyToPublisher().publishWithReplyMany(text(i, "many", "go"), ctx))
+				.isInstanceOf(MessagingException.class);
+	}
+
 	/** A subscriber blocked until released, recording what it handles. */
 	private static final class Gate {
 		final CountDownLatch release = new CountDownLatch(1);

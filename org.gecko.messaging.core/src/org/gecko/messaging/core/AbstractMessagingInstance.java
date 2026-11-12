@@ -929,7 +929,29 @@ public abstract class AbstractMessagingInstance {
 	 * @return the stream
 	 */
 	PushStream<Message> stream(PushEventSource<Message> source, MessageContext context) {
-		SubscriptionBuffer buffer = SubscriptionBuffer.of(config, defaultQueuePolicy(), context);
+		return stream(source, buffer(context));
+	}
+
+	/**
+	 * Returns a buffer with the settings of a context, bounded by the instance's.
+	 *
+	 * @param context the context with buffer extensions, {@code null} for the instance's settings
+	 * @return the buffer
+	 * @throws MessagingException if a setting is invalid
+	 */
+	SubscriptionBuffer buffer(MessageContext context) {
+		return SubscriptionBuffer.of(config, defaultQueuePolicy(),
+				context != null ? context : new SimpleMessageContextBuilder().buildSimple());
+	}
+
+	/**
+	 * Builds a stream of a source of the instance through a buffer.
+	 *
+	 * @param source the source
+	 * @param buffer the buffer, used by this stream only
+	 * @return the stream
+	 */
+	PushStream<Message> stream(PushEventSource<Message> source, SubscriptionBuffer buffer) {
 		return pushStreams.buildStream(source)
 				.withBuffer(buffer.newQueue())
 				.withQueuePolicy(buffer)
@@ -1023,7 +1045,11 @@ public abstract class AbstractMessagingInstance {
 		if (opened != null) {
 			opened.accept(h);
 		}
-		return () -> closeSubscription(h, null);
+		return () -> {
+			// first, so that a delivery blocked on the full buffer returns
+			buffer.release();
+			closeSubscription(h, null);
+		};
 	}
 
 	/**
@@ -1115,7 +1141,7 @@ public abstract class AbstractMessagingInstance {
 			} finally {
 				h.deliveryLock.unlock();
 			}
-			if (h.sink().buffer() == null) {
+			if (!h.sink().takesItself()) {
 				AcknowledgeSupport ack = AcknowledgeSupport.of(message);
 				if (ack != null) {
 					ack.taken();
@@ -1154,6 +1180,7 @@ public abstract class AbstractMessagingInstance {
 		}
 		dto.streamPublishFailures = streamPublishFailures.get();
 		dto.awaitingPublishes = publishWait.size();
+		dto.replyStreams = replyTo.streamDTOs();
 		dto.subscriptions = subscriptions.stream().filter(h -> !h.isInternal()).map(SubscriptionHandle::toDTO)
 				.toArray(SubscriptionDTO[]::new);
 		return dto;
