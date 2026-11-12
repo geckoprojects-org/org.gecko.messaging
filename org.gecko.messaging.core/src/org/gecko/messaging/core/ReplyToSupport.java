@@ -16,18 +16,21 @@ package org.gecko.messaging.core;
 import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessagingException;
+import org.gecko.messaging.api.dto.SubscriptionDTO;
 import org.gecko.messaging.api.replyto.MessagingSession;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
 import org.gecko.messaging.api.runtime.ConnectionState;
@@ -38,7 +41,6 @@ import org.osgi.util.pushstream.PushEvent;
 import org.osgi.util.pushstream.PushEventConsumer;
 import org.osgi.util.pushstream.PushEventSource;
 import org.osgi.util.pushstream.PushStream;
-import org.osgi.util.pushstream.PushStreamProvider;
 
 /**
  * The requesting side of reply-to messaging. Requests without reply-to channel share one generated
@@ -55,13 +57,22 @@ final class ReplyToSupport implements ReplyToPublisher {
 		/** @return {@code true} if the exchange is over */
 		boolean response(Message message);
 
+		/**
+		 * @return {@code true} if the exchange takes its responses into a buffer and reports when
+		 *         they are taken from it; otherwise a response counts as taken once handled
+		 */
+		default boolean buffers() {
+			return false;
+		}
+
 		void fail(Throwable t);
 
 	}
 
 	private final AbstractMessagingInstance instance;
 	private final Map<String, Pending> pending = new ConcurrentHashMap<>();
-	private final PushStreamProvider pushStreams = new PushStreamProvider();
+	/** The response streams not closed yet, also after their exchange ended. */
+	private final Set<Many> streams = ConcurrentHashMap.newKeySet();
 	private final Object sharedLock = new Object();
 	private String sharedChannel;
 	private SubscriptionHandle sharedHandle;
@@ -132,9 +143,14 @@ final class ReplyToSupport implements ReplyToPublisher {
 	@Override
 	public PushStream<Message> publishWithReplyMany(Message requestMessage, MessageContext context) {
 		instance.getFeatures().require(FEATURE_REPLY_TO_MANY, "Reply-to publishing with many responses");
+		if (requestMessage == null) {
+			throw new IllegalArgumentException("requestMessage");
+		}
+		// buffered like a subscription, with the settings of the request's extensions
+		SubscriptionBuffer buffer = instance.buffer(context != null ? context : requestMessage.getContext());
 		Request r = prepare(requestMessage, context);
-		PushEventSource<Message> source = consumer -> openMany(r, consumer);
-		return pushStreams.buildStream(source).withExecutor(instance.workers()).withScheduler(instance.scheduler()).build();
+		PushEventSource<Message> source = consumer -> openMany(r, buffer, consumer);
+		return instance.stream(source, buffer);
 	}
 
 	@Override
@@ -147,94 +163,185 @@ final class ReplyToSupport implements ReplyToPublisher {
 		return SessionClient.open(instance, openRequest, context);
 	}
 
-	private AutoCloseable openMany(Request r, PushEventConsumer<? super Message> consumer) throws Exception {
-		Object lock = new Object();
-		ScheduledFuture<?>[] timeout = new ScheduledFuture<?>[1];
-		boolean[] done = new boolean[1];
-		SubscriptionHandle[] own = new SubscriptionHandle[1];
-		Pending p = new Pending() {
-			@Override
-			public boolean response(Message message) {
-				synchronized (lock) {
-					if (done[0]) {
-						return true;
-					}
-					reschedule();
-					try {
-						MessagingException failure = responderFailure(message);
-						if (failure != null) {
-							end(PushEvent.error(failure));
-							return true;
-						}
-						if (Boolean.TRUE.equals(Extensions.bool(message.getContext().getHeaders().get(HEADER_REPLY_COMPLETE)))) {
-							end(PushEvent.close());
-							return true;
-						}
-						if (consumer.accept(PushEvent.data(message)) < 0) {
-							end(null);
-							return true;
-						}
-					} catch (Exception e) {
-						end(null);
-						return true;
-					}
-					return false;
-				}
-			}
+	private AutoCloseable openMany(Request r, SubscriptionBuffer buffer, PushEventConsumer<? super Message> consumer)
+			throws Exception {
+		Many many = new Many(r, buffer, consumer);
+		many.open();
+		send(r, many.own, many);
+		return many::close;
+	}
 
-			@Override
-			public void fail(Throwable t) {
-				synchronized (lock) {
-					end(PushEvent.error(t));
-				}
-			}
+	/**
+	 * A request with many responses. The responses go into a buffer of the request's own, so that
+	 * a slow consumer holds up neither the dispatcher of a shared reply channel nor other requests;
+	 * a response counts as taken, and is acknowledged on the broker, once the stream takes it from
+	 * the buffer. The reply timeout runs only while the consumer is not behind.
+	 */
+	private final class Many implements Pending {
 
-			private void reschedule() {
-				if (timeout[0] != null) {
-					timeout[0].cancel(false);
-				}
-				timeout[0] = instance.scheduler().schedule(() -> {
-					fail(new TimeoutException("No further response to " + r.correlationId + " within " + r.timeout + " ms"));
-				}, r.timeout, TimeUnit.MILLISECONDS);
-			}
+		private final Request r;
+		private final SubscriptionBuffer buffer;
+		private final PushEventConsumer<? super Message> consumer;
+		/** Orders the events into the stream. Held while a full buffer blocks a delivery. */
+		private final Object lock = new Object();
+		private final AtomicLong received = new AtomicLong();
+		private volatile long lastResponse = System.nanoTime();
+		private volatile ScheduledFuture<?> timeout;
+		/** Written under lock. */
+		private volatile boolean done;
+		private SubscriptionHandle own;
 
-			private void end(PushEvent<Message> last) {
-				if (done[0]) {
-					return;
-				}
-				done[0] = true;
-				if (timeout[0] != null) {
-					timeout[0].cancel(false);
-				}
-				pending.remove(r.correlationId, this);
-				release(own[0]);
-				if (last != null) {
-					try {
-						consumer.accept(last);
-					} catch (Exception e) {
-						LOG.log(Level.FINE, "Closing a response stream failed", e);
-					}
-				}
-			}
-		};
-		synchronized (lock) {
-			own[0] = register(r, p);
-			timeout[0] = instance.scheduler().schedule(() -> p.fail(new TimeoutException("No response to " + r.correlationId
-					+ " within " + r.timeout + " ms")), r.timeout, TimeUnit.MILLISECONDS);
+		Many(Request r, SubscriptionBuffer buffer, PushEventConsumer<? super Message> consumer) {
+			this.r = r;
+			this.buffer = buffer;
+			this.consumer = consumer;
 		}
-		send(r, own[0], p);
-		return () -> {
+
+		void open() throws Exception {
 			synchronized (lock) {
-				if (!done[0]) {
-					done[0] = true;
-					if (timeout[0] != null) {
-						timeout[0].cancel(false);
-					}
-					pending.remove(r.correlationId, p);
-					release(own[0]);
+				own = register(r, this);
+				watch(TimeUnit.MILLISECONDS.toNanos(r.timeout));
+			}
+			streams.add(this);
+		}
+
+		@Override
+		public boolean buffers() {
+			return true;
+		}
+
+		@Override
+		public boolean response(Message message) {
+			lastResponse = System.nanoTime();
+			synchronized (lock) {
+				if (done) {
+					taken(message);
+					return true;
+				}
+				MessagingException failure = responderFailure(message);
+				if (failure != null) {
+					taken(message);
+					end(PushEvent.error(failure));
+					return true;
+				}
+				if (Boolean.TRUE.equals(Extensions.bool(message.getContext().getHeaders().get(HEADER_REPLY_COMPLETE)))) {
+					taken(message);
+					end(PushEvent.close());
+					return true;
+				}
+				received.incrementAndGet();
+				long back;
+				try {
+					// blocks while the buffer is full, if its policy says so
+					back = consumer.accept(PushEvent.data(message));
+				} catch (Exception e) {
+					back = -1;
+				}
+				if (back < 0) {
+					// the stream did not take it: closed, or failed on a full buffer
+					abandon(message);
+					end(null);
+					return true;
+				}
+				return false;
+			}
+		}
+
+		@Override
+		public void fail(Throwable t) {
+			// first: a delivery blocked on the full buffer returns and frees the lock; what is
+			// buffered is given up, the stream ends with the failure
+			buffer.release();
+			synchronized (lock) {
+				end(PushEvent.error(t));
+			}
+		}
+
+		/** The consumer closed the stream. */
+		void close() {
+			// first: a delivery blocked on the full buffer returns and frees the lock
+			buffer.release();
+			synchronized (lock) {
+				end(null);
+			}
+			streams.remove(this);
+		}
+
+		private void watch(long nanos) {
+			timeout = instance.scheduler().schedule(this::checkTimeout, nanos, TimeUnit.NANOSECONDS);
+		}
+
+		/** Without the lock: a delivery blocked on the full buffer holds it. */
+		private void checkTimeout() {
+			if (done) {
+				return;
+			}
+			long limit = TimeUnit.MILLISECONDS.toNanos(r.timeout);
+			if (buffer.buffered() > 0) {
+				// the consumer is behind: the responder waits for it, not the other way round
+				lastResponse = System.nanoTime();
+				watch(limit);
+				return;
+			}
+			long idle = System.nanoTime() - lastResponse;
+			if (idle < limit) {
+				watch(limit - idle);
+				return;
+			}
+			fail(new TimeoutException((received.get() == 0 ? "No response to " : "No further response to ") + r.correlationId
+					+ " within " + r.timeout + " ms"));
+		}
+
+		/** Under lock. */
+		private void end(PushEvent<Message> last) {
+			if (done) {
+				return;
+			}
+			done = true;
+			ScheduledFuture<?> t = timeout;
+			if (t != null) {
+				t.cancel(false);
+			}
+			pending.remove(r.correlationId, this);
+			release(own);
+			if (last != null) {
+				try {
+					consumer.accept(last);
+				} catch (Exception e) {
+					LOG.log(Level.FINE, "Closing a response stream failed", e);
 				}
 			}
-		};
+		}
+
+		SubscriptionDTO toDTO() {
+			SubscriptionDTO dto = new SubscriptionDTO();
+			dto.channel = SubscriptionHandle.channelDTO(r.replyTo, null, instance.getConnectionState() == ConnectionState.CONNECTED);
+			dto.receivedMessages = received.get();
+			buffer.fill(dto);
+			return dto;
+		}
+
+	}
+
+	/** A response is taken as soon as it is handled: acknowledged on the broker, if it has to be. */
+	private static void taken(Message message) {
+		AcknowledgeSupport ack = AcknowledgeSupport.of(message);
+		if (ack != null) {
+			ack.taken();
+		}
+	}
+
+	/** A response the stream will not take. */
+	private static void abandon(Message message) {
+		AcknowledgeSupport ack = AcknowledgeSupport.of(message);
+		if (ack != null) {
+			ack.abandoned();
+		}
+	}
+
+	/** @return the buffers of the response streams open now */
+	SubscriptionDTO[] streamDTOs() {
+		return streams.stream().map(Many::toDTO).toArray(SubscriptionDTO[]::new);
 	}
 
 	private record Request(Message message, MessageContext context, String correlationId, String replyTo, boolean shared,
@@ -263,8 +370,11 @@ final class ReplyToSupport implements ReplyToPublisher {
 		}
 		Long t = Extensions.number(ctx.getExtensions().get(EXTENSION_REPLY_TIMEOUT));
 		long timeout = t != null && t > 0 ? t : instance.getConfiguration().replyTimeout();
+		// settings of the requesting side, not to be sent
 		MessageContext request = instance.newBuilder().withContext(ctx).correlationId(correlationId).replyTo(replyTo)
-				.extensionEntry(EXTENSION_REPLY_TIMEOUT, null).buildContext();
+				.extensionEntry(EXTENSION_REPLY_TIMEOUT, null).extensionEntry(EXTENSION_BUFFER_SIZE, null)
+				.extensionEntry(EXTENSION_BUFFER_BYTES, null).extensionEntry(EXTENSION_QUEUE_POLICY, null)
+				.extensionEntry(EXTENSION_GROUP_HEADER, null).buildContext();
 		return new Request(requestMessage, request, correlationId, replyTo, shared, timeout);
 	}
 
@@ -335,12 +445,22 @@ final class ReplyToSupport implements ReplyToPublisher {
 			Pending p = id == null ? null : pending.get(id);
 			if (p == null) {
 				LOG.fine(() -> "Dropping a response without waiting request: " + id);
+				taken(message);
 				return 0;
 			}
+			boolean buffers = p.buffers();
 			if (p.response(message)) {
 				pending.remove(id, p);
 			}
+			if (!buffers) {
+				taken(message);
+			}
 			return 0;
+		}
+
+		@Override
+		public boolean takesItself() {
+			return true;
 		}
 
 		@Override
