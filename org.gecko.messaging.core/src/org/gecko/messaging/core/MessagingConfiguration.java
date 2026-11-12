@@ -54,7 +54,8 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * CloudEvents takes CloudEvents only and drops (and counts) the rest</li>
  * <li>{@code workerThreads} — threads delivering messages and running handlers, default 4;
  * {@code virtual} for a virtual thread per task</li>
- * <li>{@code bufferSize} — buffer per subscription, default 1024 messages</li>
+ * <li>{@code bufferSize} — buffer per subscription, default 1024 messages; the receive window
+ * of a binding ({@code receiveMaximum}, {@code prefetch}) is lowered to it</li>
  * <li>{@code bufferBytes} — payload bytes per subscription buffer, default 16 MiB</li>
  * <li>{@code queuePolicy} — when a buffer is full: {@code BLOCK}, {@code DISCARD_OLDEST},
  * {@code FAIL}; default {@code BLOCK}, which holds back the protocol thread (back-pressure)</li>

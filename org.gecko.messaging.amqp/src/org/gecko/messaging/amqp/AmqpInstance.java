@@ -76,7 +76,8 @@ import com.rabbitmq.client.ShutdownSignalException;
  * user, password and virtual host; over TLS with the {@code tls.*} keys of the core, and with
  * the host name of the broker checked against its certificate), {@code exchange} (exchange of topics, default
  * {@code amq.topic}), {@code heartbeat} (s, default 30), {@code prefetch} (unacknowledged messages
- * per subscription, default 100), {@code maxMessageSize} (bytes, default 1 MiB, bodies sent and
+ * per subscription, default 100, at most {@code bufferSize} and the subscription's own buffer),
+ * {@code maxMessageSize} (bytes, default 1 MiB, bodies sent and
  * received), {@code qos} (default publish and subscribe QoS, default 1).
  */
 public final class AmqpInstance extends AbstractMessagingInstance {
@@ -122,8 +123,18 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 			throw new MessagingException("AMQP offers QoS 0 and 1, not " + defaultQos);
 		}
 		this.topicExchange = config.string("exchange", "amq.topic");
-		this.prefetch = (int) config.number("prefetch", 100);
 		this.maxMessageSize = (int) Math.min(Integer.MAX_VALUE, config.number("maxMessageSize", 1 << 20));
+		this.prefetch = receiveWindow("prefetch", 100);
+	}
+
+	@Override
+	protected int receiveWindow() {
+		return prefetch;
+	}
+
+	@Override
+	protected boolean receiveWindowPerSubscription() {
+		return true;
 	}
 
 	@Override
@@ -390,7 +401,8 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		String extension = handle.channelExtension();
 		Channel ch = connection().createChannel();
 		try {
-			ch.basicQos(prefetch);
+			// at most the subscription's own buffer: the broker stops sending before it is full
+			ch.basicQos(receiveWindow(handle));
 			String source;
 			if (queue) {
 				declare(ch, context, handle.channel(), true);

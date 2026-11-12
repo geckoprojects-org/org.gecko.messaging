@@ -219,6 +219,7 @@ public final class SubscriptionHandle {
 		if (buffer != null) {
 			buffer.fill(dto);
 		}
+		dto.receiveWindow = instance.receiveWindow(this);
 		return dto;
 	}
 

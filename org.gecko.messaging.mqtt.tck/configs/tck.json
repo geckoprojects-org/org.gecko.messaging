@@ -31,5 +31,32 @@
 		"bufferSize:Long": 256,
 		"reconnectDelay:Long": 50,
 		"reconnectMaxDelay:Long": 200
+	},
+	"org.gecko.messaging.mqtt~tckloadedge": {
+		"osgi.messaging.name": "tck-load-edge",
+		"uri": "tcp://localhost:11884",
+		"connectTimeout:Long": 3000,
+		"keepAliveInterval:Long": 2,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"receiveMaximum:Long": 30,
+		"bufferSize:Long": 30,
+		"bufferBytes:Long": 4194304,
+		"maxMessageSize:Long": 131072,
+		"workerThreads:Long": 2
+	},
+	"org.gecko.messaging.mqtt~tckloadhigh": {
+		"osgi.messaging.name": "tck-load-high",
+		"uri": "tcp://localhost:11884",
+		"connectTimeout:Long": 3000,
+		"keepAliveInterval:Long": 2,
+		"reconnectDelay:Long": 50,
+		"reconnectMaxDelay:Long": 200,
+		"receiveMaximum:Long": 1000,
+		"bufferSize:Long": 2048,
+		"bufferBytes:Long": 67108864,
+		"maxMessageSize:Long": 65536,
+		"workerThreads": "virtual",
+		"publishWindow:Long": 500
 	}
 }

@@ -241,6 +241,99 @@ class InMemoryInstanceTest {
 		}
 	}
 
+	/** An instance with a window per subscription, as AMQP's prefetch, and nothing behind it. */
+	private AbstractMessagingInstance windowed(Map<String, Object> extra, boolean perSubscription) {
+		Map<String, Object> props = new HashMap<>();
+		props.put(MESSAGING_NAME_PROPERTY, "windowed");
+		props.put("uri", "memory://" + broker);
+		props.putAll(extra);
+		return new AbstractMessagingInstance("memory", new MessagingConfiguration(props), List.of(FEATURE_PUBLISH_SUBSCRIBE)) {
+			private final int window = receiveWindow("prefetch", 100);
+
+			@Override
+			protected int receiveWindow() {
+				return window;
+			}
+
+			@Override
+			protected boolean receiveWindowPerSubscription() {
+				return perSubscription;
+			}
+
+			@Override
+			protected long maxMessageSize() {
+				return 1 << 20;
+			}
+
+			@Override
+			protected boolean doConnect(long timeoutMillis) {
+				return false;
+			}
+
+			@Override
+			protected void doDisconnect() {
+			}
+
+			@Override
+			protected Promise<Void> doPublish(SimpleMessageContext context, ByteBuffer payload) {
+				return promises.resolved(null);
+			}
+
+			@Override
+			protected void doSubscribe(SubscriptionHandle handle) {
+			}
+
+			@Override
+			protected void doUnsubscribe(SubscriptionHandle handle) {
+			}
+		};
+	}
+
+	@Test
+	void theReceiveWindowFollowsTheBuffer() throws Exception {
+		AbstractMessagingInstance i = windowed(Map.of("bufferSize", 40L, "prefetch", 100L), true);
+		try {
+			i.startStandalone();
+			await(() -> i.getConnectionState() == ConnectionState.CONNECTED);
+			assertThat(i.getRuntimeDTO().receiveWindow).as("lowered to bufferSize").isEqualTo(40);
+			i.subscribe(i.newBuilder().channel("small").extensionEntry(EXTENSION_BUFFER_SIZE, 5).buildContext()).forEach(m -> {
+			});
+			i.subscribe("default").forEach(m -> {
+			});
+			await(() -> i.getRuntimeDTO().subscriptions.length == 2);
+			assertThat(i.getRuntimeDTO().subscriptions).extracting(d -> d.channel.name + "=" + d.receiveWindow)
+					.containsExactlyInAnyOrder("small=5", "default=40");
+		} finally {
+			i.stop();
+		}
+	}
+
+	@Test
+	void aWindowPerConnectionIsNotLoweredBySubscriptions() throws Exception {
+		AbstractMessagingInstance i = windowed(Map.of("prefetch", 30L), false);
+		try {
+			i.startStandalone();
+			await(() -> i.getConnectionState() == ConnectionState.CONNECTED);
+			assertThat(i.getRuntimeDTO().receiveWindow).as("below bufferSize, unchanged").isEqualTo(30);
+			i.subscribe(i.newBuilder().channel("small").extensionEntry(EXTENSION_BUFFER_SIZE, 5).buildContext()).forEach(m -> {
+			});
+			await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+			assertThat(i.getRuntimeDTO().subscriptions[0].receiveWindow).as("the connection's, warned about").isEqualTo(30);
+		} finally {
+			i.stop();
+		}
+	}
+
+	@Test
+	void noWindowWithoutFlowControl() throws Exception {
+		InMemoryInstance i = start();
+		i.subscribe("c").forEach(m -> {
+		});
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		assertThat(i.getRuntimeDTO().receiveWindow).isZero();
+		assertThat(i.getRuntimeDTO().subscriptions[0].receiveWindow).isZero();
+	}
+
 	private static Message plain(String channel, String text) {
 		return new SimpleMessageContextBuilder().channel(channel).content(ByteBuffer.wrap(text.getBytes(UTF_8))).buildMessage();
 	}

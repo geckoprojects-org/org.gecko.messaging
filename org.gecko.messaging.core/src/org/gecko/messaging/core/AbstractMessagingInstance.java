@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -359,6 +360,85 @@ public abstract class AbstractMessagingInstance {
 	 */
 	protected long maxMessageSize() {
 		return 0;
+	}
+
+	/**
+	 * Returns the receive window the client sets: the unacknowledged messages the broker sends at
+	 * most, per connection (MQTT 5 {@code receiveMaximum}) or per subscription without buffer of
+	 * its own (AMQP {@code prefetch}). Bindings compute it with {@link #receiveWindow(String, int)}.
+	 *
+	 * @return the window, {@code 0} if the client sets none
+	 */
+	protected int receiveWindow() {
+		return 0;
+	}
+
+	/**
+	 * Returns whether the protocol sets the receive window per subscription, so that it follows the
+	 * buffer of each subscription; otherwise it is one for the connection.
+	 *
+	 * @return {@code true} for a window per subscription
+	 */
+	protected boolean receiveWindowPerSubscription() {
+		return false;
+	}
+
+	/**
+	 * Returns a configured receive window, lowered to {@code bufferSize}: the broker then stops
+	 * sending before a buffer fills, and a full {@code BLOCK} buffer never holds the protocol's
+	 * thread (§8). Logged once when lowered. Bytes are not adjusted for: when the window of
+	 * messages of the largest size exceeds {@code bufferBytes}, that is logged once, as a warning
+	 * if one of the values is configured.
+	 *
+	 * @param key the configuration key of the window
+	 * @param defaultValue its default
+	 * @return the window to set
+	 */
+	protected final int receiveWindow(String key, int defaultValue) {
+		long configured = Math.max(1, config.number(key, defaultValue));
+		int window = (int) Math.min(configured, config.bufferSize());
+		if (window < configured) {
+			LOG.info(() -> config.name() + ": " + key + " " + configured + " lowered to bufferSize " + window
+					+ ", so that the broker stops sending before a buffer is full");
+		}
+		long max = maxMessageSize();
+		if (max > 0 && window * max > config.bufferBytes()) {
+			Map<String, Object> raw = config.raw();
+			boolean chosen = raw.containsKey(key) || raw.containsKey("bufferBytes") || raw.containsKey("maxMessageSize");
+			LOG.log(chosen ? Level.WARNING : Level.FINE, () -> config.name() + ": " + key + " " + window + " messages of up to "
+					+ max + " bytes exceed bufferBytes " + config.bufferBytes()
+					+ ": large messages can fill a buffer before the broker stops sending, the queue policy then applies");
+		}
+		return window;
+	}
+
+	/**
+	 * Returns the receive window that applies to a subscription.
+	 *
+	 * @param h the subscription
+	 * @return the window, {@code 0} if the client sets none
+	 */
+	protected final int receiveWindow(SubscriptionHandle h) {
+		int window = receiveWindow();
+		SubscriptionBuffer buffer = h.sink().buffer();
+		return window > 0 && receiveWindowPerSubscription() && buffer != null ? Math.min(window, buffer.size()) : window;
+	}
+
+	/**
+	 * Warns when a buffer is smaller than the receive window that applies to it and would block
+	 * or fail when full: the window cannot follow it (one per connection, or a shared reply
+	 * channel).
+	 *
+	 * @param buffer the buffer
+	 * @param window the window that applies
+	 * @param what what the buffer belongs to
+	 * @param level the level of the message
+	 */
+	void checkWindow(SubscriptionBuffer buffer, int window, String what, Level level) {
+		if (window > buffer.size() && !buffer.dropsWhenFull()) {
+			LOG.log(level, () -> config.name() + ": the buffer of " + what + " (" + buffer.size()
+					+ ") is smaller than the receive window (" + window + "): when it is full, it holds up delivery of the connection");
+		}
 	}
 
 	/**
@@ -1042,6 +1122,7 @@ public abstract class AbstractMessagingInstance {
 		SubscriptionHandle h = addSubscription(ctx, sink, false);
 		self[0] = h;
 		buffer.attach(h);
+		checkWindow(buffer, receiveWindow(h), h.toString(), Level.WARNING);
 		if (opened != null) {
 			opened.accept(h);
 		}
@@ -1181,6 +1262,7 @@ public abstract class AbstractMessagingInstance {
 		dto.streamPublishFailures = streamPublishFailures.get();
 		dto.awaitingPublishes = publishWait.size();
 		dto.replyStreams = replyTo.streamDTOs();
+		dto.receiveWindow = receiveWindow();
 		dto.subscriptions = subscriptions.stream().filter(h -> !h.isInternal()).map(SubscriptionHandle::toDTO)
 				.toArray(SubscriptionDTO[]::new);
 		return dto;
