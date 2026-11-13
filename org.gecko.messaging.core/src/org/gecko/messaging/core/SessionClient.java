@@ -35,11 +35,13 @@ import org.osgi.util.promise.Promise;
 import org.osgi.util.pushstream.PushStream;
 
 /**
- * The requesting side of a duplex session. It subscribes a generated channel for the messages of
- * the responder and its control messages, opens the session with a request, and then sends to
- * the channel the responder named in its {@code accept}.
+ * The requesting side of a duplex session. It subscribes a reply channel for the messages of the
+ * responder and its control messages, opens the session with a request, and then sends to the
+ * channel the responder named in its {@code accept}. The reply channel is the one the context
+ * names ({@link MessageContext#getReplyToChannel()}), so that it can lie in a tree a broker ACL
+ * grants, or else a generated one.
  * <p>
- * Two subscriptions share the generated channel: one for control (accept, ping, close, and the
+ * Two subscriptions share the reply channel: one for control (accept, ping, close, and the
  * lease, which every message renews), made before the request goes out, and the receive stream,
  * made when the application connects it — whereupon the responder is told {@code ready} and
  * starts sending.
@@ -70,7 +72,8 @@ final class SessionClient implements MessagingSession {
 
 	private SessionClient(AbstractMessagingInstance instance, MessageContext context, long lease) {
 		this.instance = instance;
-		this.replyChannel = instance.createReplyChannel();
+		String named = context.getReplyToChannel();
+		this.replyChannel = named != null && !named.isEmpty() ? named : instance.createReplyChannel();
 		this.lease = lease;
 		this.receiveExtensions = new HashMap<>();
 		for (String key : RECEIVE_EXTENSIONS) {
@@ -88,7 +91,8 @@ final class SessionClient implements MessagingSession {
 	 *
 	 * @param instance the instance
 	 * @param request the request, its payload and headers reach the handler
-	 * @param context the context with the responder's channel, {@code null} for the request's
+	 * @param context the context with the responder's channel and optionally the reply channel,
+	 *            {@code null} for the request's
 	 * @return the promise of the session
 	 */
 	static Promise<MessagingSession> open(AbstractMessagingInstance instance, Message request, MessageContext context) {

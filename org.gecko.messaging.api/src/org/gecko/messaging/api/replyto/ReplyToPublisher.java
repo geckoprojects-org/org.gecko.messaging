@@ -15,6 +15,7 @@ package org.gecko.messaging.api.replyto;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContext;
+import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagingConstants;
 import org.osgi.annotation.versioning.ProviderType;
 import org.osgi.util.promise.Promise;
@@ -99,6 +100,12 @@ public interface ReplyToPublisher {
 	 * Opens a duplex session with the given context, see {@link #openSession(Message)}. The
 	 * extension {@link org.gecko.messaging.api.MessagingConstants#EXTENSION_SESSION_LEASE} asks for
 	 * a lease; the buffer extensions apply to {@link MessagingSession#receive()}.
+	 * <p>
+	 * A reply-to channel in the context ({@link MessageContextBuilder#replyTo(String)}) is where the
+	 * responder's messages and control messages arrive, for the whole session; without one the
+	 * session uses a generated channel. The responder answers a named channel only if its
+	 * {@code replyToAllowed} allows it, and otherwise refuses the session as any request it would
+	 * not answer. Sessions may share a named channel: each takes the messages of its own id.
 	 *
 	 * @param openRequest the request, only its payload and headers are used
 	 * @param context the context, with the channel of the responder

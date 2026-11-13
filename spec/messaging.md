@@ -812,11 +812,15 @@ of a camera streaming video to a viewer that steers it with commands. Requires
 **Wire protocol.** All messages of a session carry its id as correlation id. Control messages
 carry the header `replysession` and are not delivered to the application:
 
-1. The requester subscribes a generated reply channel R and publishes `open` (with
+1. The requester subscribes a reply channel R and publishes `open` (with
    `replysessionlease`, its payload and headers reach the handler) to the handler's request
-   channel, reply-to R.
-2. The responder checks the reply-to channel (§9.6) and `maxSessions` (refused: `replyerror`
-   on R), generates a channel C, calls the handler and answers `accept` with
+   channel, reply-to R. R is the reply-to channel of the `openSession` context if it names one,
+   otherwise a generated channel.
+2. The responder checks the reply-to channel (§9.6: a channel not allowed is not answered at all,
+   the requester's `openSession` fails after the reply timeout) and `maxSessions` (refused:
+   `replyerror` on R), takes a channel C — the handler's service property
+   `osgi.messaging.replyToSubscription.sessionChannelPrefix` followed by `/` and a generated id,
+   otherwise a generated channel —, calls the handler and answers `accept` with
    `replysessionchannel=C` and the granted lease. Messages to the handler arrive on C; those
    before the handler connects its stream are held (at most `bufferSize`, the oldest first out).
 3. When the requester connects `receive()`, it sends `ready` on C; only then the responder
@@ -828,6 +832,13 @@ carry the header `replysession` and are not delivered to the application:
    buffer of `receive()`; on the responder the handler's message stream ends and its returned
    stream is closed. The end of the handler's stream ends the session (`close` to the
    requester); its failure as well, with `replyerror`.
+
+**Channels under an ACL.** A broker ACL that lets each node read only its own subtree (for
+example `<replyChannel>/<node>`, mosquitto with `use_identity_as_username`) holds sessions as it
+holds single requests: the requester names R in that subtree, and the responder's C lies under the
+handler's session channel prefix. `replyChannelPrefix` does the same per instance; the named
+channel and the prefix property set it per request and per handler, for an instance that serves
+many contracts. Several sessions MAY share a named R: each takes only the messages with its own id.
 
 **Receive buffer.** `receive()` is a subscription stream of R with the buffer extensions of the
 `openSession` context (§7): a video viewer asks for a small `DISCARD_OLDEST` buffer with

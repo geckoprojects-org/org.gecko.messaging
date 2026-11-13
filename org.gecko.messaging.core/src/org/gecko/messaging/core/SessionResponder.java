@@ -16,6 +16,7 @@ package org.gecko.messaging.core;
 import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -30,8 +31,8 @@ import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
 import org.osgi.util.pushstream.PushStream;
 
 /**
- * The responding side of one duplex session. It subscribes a generated channel for the
- * requester's messages (control and data in two subscriptions, as {@link SessionClient}), lets
+ * The responding side of one duplex session. It subscribes a channel of its own for the
+ * requester's messages (generated, or under the handler's session channel prefix) (control and data in two subscriptions, as {@link SessionClient}), lets
  * the handler open the session, answers {@code accept}, and publishes the handler's stream to the
  * requester once it is {@code ready}.
  */
@@ -55,11 +56,13 @@ final class SessionResponder {
 	private volatile PushStream<Message> responses;
 	private volatile ScheduledFuture<?> timer;
 
-	private SessionResponder(AbstractMessagingInstance instance, String id, String replyChannel, long lease, Set<SessionResponder> open) {
+	private SessionResponder(AbstractMessagingInstance instance, String id, String replyChannel, String channelPrefix, long lease,
+			Set<SessionResponder> open) {
 		this.instance = instance;
 		this.id = id;
 		this.replyChannel = replyChannel;
-		this.channel = instance.createReplyChannel();
+		this.channel = channelPrefix != null && !channelPrefix.isEmpty() ? channelPrefix + "/" + UUID.randomUUID()
+				: instance.createReplyChannel();
 		this.lease = lease;
 		this.open = open;
 		this.messages = new HeldSource(instance.getConfiguration().bufferSize());
@@ -71,11 +74,13 @@ final class SessionResponder {
 	 * @param instance the instance
 	 * @param handler the handler
 	 * @param request the {@code open} request, its reply-to channel allowed
+	 * @param channelPrefix the prefix of the session's own channel, {@code null} for a generated one
 	 * @param open the open sessions of the handler
 	 * @param responseBuilders builders of messages to the requester
 	 * @param refuse tells the requester a refusal
 	 */
-	static void open(AbstractMessagingInstance instance, ReplyToSessionHandler handler, Message request, Set<SessionResponder> open,
+	static void open(AbstractMessagingInstance instance, ReplyToSessionHandler handler, Message request, String channelPrefix,
+			Set<SessionResponder> open,
 			Supplier<MessageContextBuilder> responseBuilders, Runnable refuse) {
 		String id = request.getContext().getCorrelationId();
 		String reply = request.getContext().getReplyToChannel();
@@ -92,7 +97,7 @@ final class SessionResponder {
 		long max = config.number("maxSessionLease", 300_000);
 		Long asked = Extensions.number(request.getContext().getHeaders().get(HEADER_SESSION_LEASE));
 		long lease = Math.min(max, Math.max(min, asked != null ? asked : config.number("sessionLease", 10_000)));
-		SessionResponder s = new SessionResponder(instance, id, reply, lease, open);
+		SessionResponder s = new SessionResponder(instance, id, reply, channelPrefix, lease, open);
 		open.add(s);
 		try {
 			s.start(handler, request, responseBuilders);
