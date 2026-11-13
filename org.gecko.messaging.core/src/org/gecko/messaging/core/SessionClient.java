@@ -22,6 +22,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -57,10 +58,17 @@ final class SessionClient implements MessagingSession {
 	private static final String[] RECEIVE_EXTENSIONS = { EXTENSION_BUFFER_SIZE, EXTENSION_BUFFER_BYTES, EXTENSION_QUEUE_POLICY,
 			EXTENSION_GROUP_HEADER, EXTENSION_QOS };
 
+	/** Extensions of the session context that stay with the requester. */
+	private static final String[] LOCAL_EXTENSIONS = { EXTENSION_SESSION_LEASE, EXTENSION_REPLY_TIMEOUT, EXTENSION_SESSION_CREDIT };
+
 	private final AbstractMessagingInstance instance;
 	private final String id = UUID.randomUUID().toString();
 	private final String replyChannel;
 	private final Map<String, Object> receiveExtensions;
+	/** The messages granted the responder in flight, {@code 0} for no credit. */
+	private final int credit;
+	/** Messages the application took since the last grant. */
+	private final AtomicInteger taken = new AtomicInteger();
 	private final Deferred<MessagingSession> opened;
 	private final Deferred<Void> closed;
 	private final AtomicBoolean ended = new AtomicBoolean();
@@ -85,8 +93,24 @@ final class SessionClient implements MessagingSession {
 				receiveExtensions.put(key, v);
 			}
 		}
+		this.credit = credit(instance, context, receiveExtensions);
 		this.opened = instance.promises().deferred();
 		this.closed = instance.promises().deferred();
+	}
+
+	/**
+	 * The credit: as asked, kept to the receive buffer; by default the buffer when it waits, none
+	 * when it drops.
+	 */
+	private static int credit(AbstractMessagingInstance instance, MessageContext context, Map<String, Object> receiveExtensions) {
+		SimpleMessageContextBuilder b = new SimpleMessageContextBuilder();
+		receiveExtensions.forEach(b::extensionEntry);
+		SubscriptionBuffer buffer = instance.buffer(b.buildSimple());
+		Long asked = Extensions.number(context.getExtensions().get(EXTENSION_SESSION_CREDIT));
+		if (asked == null) {
+			return buffer.dropsWhenFull() ? 0 : buffer.size();
+		}
+		return (int) Math.max(0, Math.min(asked, buffer.size()));
 	}
 
 	/**
@@ -138,7 +162,9 @@ final class SessionClient implements MessagingSession {
 		for (String key : RECEIVE_EXTENSIONS) {
 			b.extensionEntry(key, null);
 		}
-		b.extensionEntry(EXTENSION_SESSION_LEASE, null).extensionEntry(EXTENSION_REPLY_TIMEOUT, null);
+		for (String key : LOCAL_EXTENSIONS) {
+			b.extensionEntry(key, null);
+		}
 		Long asked = Extensions.number(ctx.getExtensions().get(EXTENSION_REPLY_TIMEOUT));
 		long timeout = asked != null && asked > 0 ? asked : instance.getConfiguration().replyTimeout();
 		timer = instance.scheduler().schedule(
@@ -236,11 +262,27 @@ final class SessionClient implements MessagingSession {
 				if (ended.get()) {
 					closeLater(h, null);
 				} else {
-					sendControl("ready");
+					sendControl("ready", credit > 0 ? credit : null);
 				}
 			});
+			if (credit > 0) {
+				// taken by the application: grant as much again, in batches of half the credit
+				receive = receive.map(m -> {
+					took();
+					return m;
+				});
+			}
 		}
 		return receive;
+	}
+
+	private void took() {
+		if (taken.incrementAndGet() >= Math.max(1, credit / 2)) {
+			int n = taken.getAndSet(0);
+			if (n > 0 && !ended.get()) {
+				sendControl("credit", n);
+			}
+		}
 	}
 
 	@Override
@@ -275,13 +317,20 @@ final class SessionClient implements MessagingSession {
 	}
 
 	private void sendControl(String kind) {
+		sendControl(kind, null);
+	}
+
+	private void sendControl(String kind, Integer credit) {
 		String channel = sendChannel;
 		if (channel == null) {
 			return;
 		}
 		lastSent = System.nanoTime();
-		instance.publish(instance.newBuilder().buildMessage(),
-				instance.newBuilder().channel(channel).correlationId(id).header(HEADER_SESSION, kind).buildContext())
+		MessageContextBuilder b = instance.newBuilder().channel(channel).correlationId(id).header(HEADER_SESSION, kind);
+		if (credit != null) {
+			b.header(HEADER_SESSION_CREDIT, credit);
+		}
+		instance.publish(instance.newBuilder().buildMessage(), b.buildContext())
 				.onFailure(t -> LOG.log(Level.FINE, "Session " + id + ": could not send " + kind, t));
 	}
 

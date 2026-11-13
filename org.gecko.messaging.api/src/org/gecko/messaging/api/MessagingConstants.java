@@ -190,6 +190,16 @@ public final class MessagingConstants {
 	public static final String EXTENSION_SESSION_LEASE = "osgi.messaging.replyTo.sessionLease";
 
 	/**
+	 * Extension of a session request: the credit the requester grants the responder — the most
+	 * messages in flight to it. Type {@code Integer}; {@code 0} for none, so that the responder
+	 * sends as fast as it can. Without it the credit is the size of the receive buffer when its
+	 * queue policy waits ({@code BLOCK}, {@code FAIL}), and none when it drops
+	 * ({@code DISCARD_OLDEST}: a video viewer skips frames rather than slow the camera down). It
+	 * is kept to the buffer size, so that a full buffer never holds up the connection.
+	 */
+	public static final String EXTENSION_SESSION_CREDIT = "osgi.messaging.replyTo.sessionCredit";
+
+	/**
 	 * Extension of a subscription: the messages its buffer holds at most. Type {@code Integer}, at
 	 * most the instance's {@code bufferSize}, which applies without it.
 	 */
@@ -242,7 +252,7 @@ public final class MessagingConstants {
 
 	/**
 	 * Header of the control messages of a duplex session: {@code open}, {@code accept},
-	 * {@code ready}, {@code ping} or {@code close}. Messages with it are not delivered to the
+	 * {@code ready}, {@code credit}, {@code ping} or {@code close}. Messages with it are not delivered to the
 	 * application.
 	 */
 	public static final String HEADER_SESSION = "replysession";
@@ -257,6 +267,13 @@ public final class MessagingConstants {
 	 * valid CloudEvents extension name.
 	 */
 	public static final String HEADER_SESSION_REASON = "replysessionreason";
+
+	/**
+	 * Header of a {@code ready} and a {@code credit} control message of a duplex session: the
+	 * messages the requester grants the responder, first in all, then as many more as it took. A
+	 * responder without it in {@code ready} sends without credit.
+	 */
+	public static final String HEADER_SESSION_CREDIT = "replysessioncredit";
 
 	/** Header of an {@code open} and an {@code accept}: the lease in milliseconds. */
 	public static final String HEADER_SESSION_LEASE = "replysessionlease";

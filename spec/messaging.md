@@ -842,6 +842,19 @@ carry the header `replysession` and are not delivered to the application:
    characters, as `replyerror`); `closed()` fails with it, and the requester sends `close`. Should
    the message be lost, the requester ends with the lease.
 
+**Credit.** The requester grants the responder credit, as reactive streams do: `ready` carries
+`replysessioncredit=n`, and each time its application took half of n messages from `receive()`
+it sends `credit` with as many. The responder publishes only within the credit and otherwise
+holds the handler's stream in the delivering thread (as a stream publish waits for its send
+window, §6.1), so a slow requester slows the responder down instead of filling its buffer and
+holding up its connection (`BLOCK`). The credit is the extension
+`osgi.messaging.replyTo.sessionCredit` of the `openSession` context, kept to the size of the
+receive buffer; by default that size when the buffer waits (`BLOCK`, `FAIL`), and `0` — no
+credit — when it drops (`DISCARD_OLDEST`), so that a video viewer skips frames rather than
+slow the camera down. A `ready` without the header (an older requester) means no credit; an
+older responder ignores `credit`. One requester, one responder: a stream to many receivers has
+no credit by design. The application's last message (step 6) is sent outside the credit.
+
 **Channels under an ACL.** A broker ACL that lets each node read only its own subtree (for
 example `<replyChannel>/<node>`, mosquitto with `use_identity_as_username`) holds sessions as it
 holds single requests: the requester names R in that subtree, and the responder's C lies under the

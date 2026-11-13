@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.gecko.messaging.api.Message;
@@ -262,6 +263,52 @@ public class SessionTest extends AbstractMessagingTest {
 	}
 
 	@Test
+	void theCreditOfASlowRequesterHoldsBackTheResponder() throws Exception {
+		String channel = tck.channel("session", "credit");
+		int count = 200;
+		int buffer = 8;
+		AtomicInteger produced = new AtomicInteger();
+		handler(channel, (request, commands, builders) -> streams.streamOf(IntStream.range(0, count).boxed()).map(i -> {
+			produced.incrementAndGet();
+			return builders.get().content(Tck.bytes("m" + i)).buildMessage();
+		}));
+		// a waiting buffer: the credit is its size by default
+		MessagingSession s = replyTo.openSession(text(channel, "open"),
+				builder().channel(channel).extensionEntry(EXTENSION_BUFFER_SIZE, buffer).extensionEntry(EXTENSION_QUEUE_POLICY, "BLOCK")
+						.buildContext()).getValue();
+		sessions.add(s);
+		List<String> received = new CopyOnWriteArrayList<>();
+		AtomicInteger ahead = new AtomicInteger();
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onClose(ended::countDown).forEach(m -> {
+			received.add(Tck.text(m));
+			ahead.accumulateAndGet(produced.get() - received.size(), Math::max);
+			slowly();
+		});
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the session ends after all messages").isTrue();
+		assertThat(received).as("nothing dropped, in order")
+				.containsExactlyElementsOf(IntStream.range(0, count).mapToObj(i -> "m" + i).toList());
+		// in flight: the credit, and one message the responder holds while it waits for more
+		assertThat(ahead.get()).as("the responder never ran ahead of the credit").isLessThanOrEqualTo(buffer + 1);
+	}
+
+	@Test
+	void aRequesterWithoutCreditGetsEverythingAsBefore() throws Exception {
+		String channel = tck.channel("session", "nocredit");
+		int count = 100;
+		handler(channel, (request, commands, builders) -> streams
+				.streamOf(IntStream.range(0, count).mapToObj(i -> builders.get().content(Tck.bytes("m" + i)).buildMessage())));
+		MessagingSession s = replyTo.openSession(text(channel, "open"),
+				builder().channel(channel).extensionEntry(EXTENSION_SESSION_CREDIT, 0).buildContext()).getValue();
+		sessions.add(s);
+		List<String> received = new CopyOnWriteArrayList<>();
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onClose(ended::countDown).forEach(m -> received.add(Tck.text(m)));
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the session ends after all messages").isTrue();
+		assertThat(received).containsExactlyElementsOf(IntStream.range(0, count).mapToObj(i -> "m" + i).toList());
+	}
+
+	@Test
 	void aSessionUsesTheReplyChannelItNames() throws Exception {
 		String channel = tck.channel("session", "named");
 		// a tree a broker ACL grants: the consumer reads its own subtree, the provider its own
@@ -310,6 +357,15 @@ public class SessionTest extends AbstractMessagingTest {
 		assertThat(handled.get()).as("the handler never saw it").isZero();
 		assertThat(atVictim).as("nothing answered to a channel the requester may not name").isEmpty();
 		assertThat(openSessions(channel)).isZero();
+	}
+
+	/** A slow consumer: 5 ms per message. */
+	private static void slowly() {
+		try {
+			Thread.sleep(5);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	/** The application subscriptions under the generated reply prefix, but for the named channel. */

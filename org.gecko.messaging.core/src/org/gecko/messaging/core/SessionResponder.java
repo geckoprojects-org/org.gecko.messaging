@@ -17,6 +17,7 @@ import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -27,6 +28,7 @@ import java.util.logging.Logger;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContextBuilder;
+import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
 import org.gecko.messaging.api.replyto.SessionEndedException;
 import org.osgi.util.pushstream.PushStream;
@@ -57,6 +59,9 @@ final class SessionResponder {
 	private volatile PushStream<Message> responses;
 	private volatile Supplier<MessageContextBuilder> responseBuilders;
 	private volatile ScheduledFuture<?> timer;
+	/** The requester's credit: messages it may still receive; used once it granted any. */
+	private final Semaphore credit = new Semaphore(0);
+	private volatile boolean credited;
 
 	private SessionResponder(AbstractMessagingInstance instance, String id, String replyChannel, String channelPrefix, long lease,
 			Set<SessionResponder> open) {
@@ -148,13 +153,45 @@ final class SessionResponder {
 		Object kind = message.getContext().getHeaders().get(HEADER_SESSION);
 		if (kind == null) {
 			messages.offer(message);
+		} else if ("credit".equals(kind)) {
+			grant(message);
 		} else if ("ready".equals(kind)) {
+			// before the responses start: the first message already waits for credit
+			grant(message);
 			// never on the thread of the protocol: a synchronous source pushes all its messages in
 			// the thread that connects it, and would hold up every delivery of the connection
 			instance.workers().execute(this::startResponses);
 		} else if ("close".equals(kind)) {
 			// the requester left: nothing more to tell it
 			end(null, false);
+		}
+	}
+
+	/** Adds the credit a control message grants; a requester that never grants any gets none. */
+	private void grant(Message message) {
+		Long n = Extensions.number(message.getContext().getHeaders().get(HEADER_SESSION_CREDIT));
+		if (n != null && n > 0) {
+			// remote input: bounded, so that the permits never overflow
+			credit.release((int) Math.min(n, MAX_GRANT));
+			credited = true;
+		}
+	}
+
+	/** Most credit one control message grants. */
+	private static final int MAX_GRANT = 1 << 20;
+
+	/**
+	 * Waits in the delivering thread for credit, as a stream publish waits for room in the send
+	 * window: the handler's stream is held back while the requester is behind.
+	 */
+	private void awaitCredit() throws InterruptedException {
+		while (!credit.tryAcquire(Math.max(1, lease / 3), TimeUnit.MILLISECONDS)) {
+			if (ended.get()) {
+				break;
+			}
+		}
+		if (ended.get()) {
+			throw new MessagingException("The session " + id + " ended");
 		}
 	}
 
@@ -165,6 +202,9 @@ final class SessionResponder {
 			return;
 		}
 		instance.publish(out.map(m -> {
+			if (credited) {
+				awaitCredit();
+			}
 			lastSent = System.nanoTime();
 			return m;
 		}), null).onSuccess(n -> {
@@ -260,6 +300,8 @@ final class SessionResponder {
 			sendControl("close", false);
 		}
 		messages.end(failure);
+		// a delivering thread waiting for credit sees the end
+		credit.release(MAX_GRANT);
 		PushStream<Message> out = responses;
 		if (out != null) {
 			out.close();
