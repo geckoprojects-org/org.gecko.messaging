@@ -70,6 +70,8 @@ final class ReplyToWhiteboard {
 		final String channel;
 		final String channelExtension;
 		final String replyChannel;
+		/** The prefix of the channels a session handler's sessions listen on, {@code null} for generated ones. */
+		final String sessionChannelPrefix;
 		final boolean many;
 		final boolean session;
 		/** The open sessions of a session handler. */
@@ -80,12 +82,14 @@ final class ReplyToWhiteboard {
 		final AtomicInteger inFlight = new AtomicInteger();
 		volatile SubscriptionHandle handle;
 
-		Binding(ServiceReference<Object> reference, Object handler, String channel, String channelExtension, String replyChannel) {
+		Binding(ServiceReference<Object> reference, Object handler, String channel, String channelExtension, String replyChannel,
+				String sessionChannelPrefix) {
 			this.reference = reference;
 			this.handler = handler;
 			this.channel = channel;
 			this.channelExtension = channelExtension;
 			this.replyChannel = replyChannel;
+			this.sessionChannelPrefix = sessionChannelPrefix;
 			this.many = handler instanceof ReplyToManySubscriptionHandler;
 			this.session = handler instanceof ReplyToSessionHandler;
 		}
@@ -149,7 +153,8 @@ final class ReplyToWhiteboard {
 	private Binding bind(ServiceReference<Object> reference, Object handler) {
 		String channel = string(reference, REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY);
 		Binding b = new Binding(reference, handler, channel, string(reference, REPLY_TO_SUBSCRIPTION_CHANNEL_EXTENSION_PROPERTY),
-				string(reference, REPLY_TO_SUBSCRIPTION_REPLY_CHANNEL_PROPERTY));
+				string(reference, REPLY_TO_SUBSCRIPTION_REPLY_CHANNEL_PROPERTY),
+				string(reference, REPLY_TO_SUBSCRIPTION_SESSION_CHANNEL_PREFIX_PROPERTY));
 		if (b.many && !instance.getFeatures().has(FEATURE_REPLY_TO_MANY)) {
 			LOG.warning(() -> "Messaging instance " + instance.getName() + " cannot stream responses; handler " + reference + " not bound");
 			return null;
@@ -228,7 +233,7 @@ final class ReplyToWhiteboard {
 		b.handled.incrementAndGet();
 		try {
 			if (b.session) {
-				SessionResponder.open(instance, (ReplyToSessionHandler) b.handler, request, b.sessions,
+				SessionResponder.open(instance, (ReplyToSessionHandler) b.handler, request, b.sessionChannelPrefix, b.sessions,
 						() -> responseBuilder(request, reply), () -> instance.publish(
 								responseBuilder(request, reply).header(HEADER_REPLY_ERROR, RESPONDER_FAILED).buildMessage(), null));
 				return;

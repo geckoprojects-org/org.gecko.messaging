@@ -16,12 +16,15 @@ package org.gecko.messaging.tck;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.gecko.messaging.api.MessagingConstants.*;
 import static org.gecko.messaging.api.replyto.ReplyToSubscriptionConstants.REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY;
+import static org.gecko.messaging.api.replyto.ReplyToSubscriptionConstants.REPLY_TO_SUBSCRIPTION_SESSION_CHANNEL_PREFIX_PROPERTY;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -62,9 +65,16 @@ public class SessionTest extends AbstractMessagingTest {
 	}
 
 	private void handler(String channel, ReplyToSessionHandler handler) {
+		handler(channel, null, handler);
+	}
+
+	private void handler(String channel, String sessionChannelPrefix, ReplyToSessionHandler handler) {
 		Hashtable<String, Object> props = new Hashtable<>();
 		props.put(MESSAGING_TARGET_PROPERTY, tck.filter());
 		props.put(REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY, channel);
+		if (sessionChannelPrefix != null) {
+			props.put(REPLY_TO_SUBSCRIPTION_SESSION_CHANNEL_PREFIX_PROPERTY, sessionChannelPrefix);
+		}
 		register(ReplyToSessionHandler.class, handler, props);
 		tck.settle();
 	}
@@ -194,6 +204,74 @@ public class SessionTest extends AbstractMessagingTest {
 		Promise<MessagingSession> p = replyTo.openSession(text(channel, "open"),
 				builder().channel(channel).extensionEntry(EXTENSION_REPLY_TIMEOUT, 500L).buildContext());
 		assertThat(p.getFailure()).isNotNull();
+	}
+
+	@Test
+	void aSessionUsesTheReplyChannelItNames() throws Exception {
+		String channel = tck.channel("session", "named");
+		// a tree a broker ACL grants: the consumer reads its own subtree, the provider its own
+		String named = DEFAULT_REPLY_CHANNEL_PREFIX + tck.channel("session", "named", "consumer");
+		String provider = tck.channel("session", "named", "provider");
+		handler(channel, provider, (request, commands, builders) -> commands
+				.map(c -> builders.get().content(Tck.bytes("echo " + Tck.text(c))).buildMessage()));
+		List<Message> atNamed = collect(named);
+		tck.settle();
+		long generatedBefore = subscribedUnderGeneratedPrefix(named);
+		MessagingSession s = replyTo.openSession(text(channel, "open"), builder().channel(channel).replyTo(named).buildContext())
+				.getValue();
+		sessions.add(s);
+		List<Message> received = new CopyOnWriteArrayList<>();
+		track(s.receive()).forEach(received::add);
+		s.send(builder().content(Tck.bytes("c0")).buildMessage()).getValue();
+		tck.awaitSize(received, 1);
+		assertThat(received).extracting(Tck::text).containsExactly("echo c0");
+		// control and stream both arrived on the named channel
+		tck.await("accept and answer on the named channel", () -> atNamed.size() >= 2);
+		Message accept = atNamed.stream().filter(m -> "accept".equals(m.getContext().getHeaders().get(HEADER_SESSION))).findFirst()
+				.orElseThrow();
+		assertThat(accept.getContext().getCorrelationId()).isEqualTo(s.getSessionId());
+		assertThat(String.valueOf(accept.getContext().getHeaders().get(HEADER_SESSION_CHANNEL))).as("the provider's tree")
+				.startsWith(provider + "/");
+		assertThat(atNamed).extracting(Tck::text).contains("echo c0");
+		assertThat(subscribedUnderGeneratedPrefix(named)).as("nothing subscribed under the generated prefix")
+				.isEqualTo(generatedBefore);
+	}
+
+	@Test
+	void aSessionNamingAForeignReplyChannelIsRefused() throws Exception {
+		String channel = tck.channel("session", "foreign");
+		String foreign = tck.channel("session", "foreign", "victim");
+		AtomicInteger handled = new AtomicInteger();
+		handler(channel, (request, commands, builders) -> {
+			handled.incrementAndGet();
+			return commands;
+		});
+		List<Message> atVictim = collect(foreign);
+		tck.settle();
+		Promise<MessagingSession> p = replyTo.openSession(text(channel, "open"),
+				builder().channel(channel).replyTo(foreign).extensionEntry(EXTENSION_REPLY_TIMEOUT, 1000L).buildContext());
+		assertThat(p.getFailure()).as("not accepted").isNotNull();
+		tck.await("session refused", () -> refusedRequests(channel) == 1);
+		assertThat(handled.get()).as("the handler never saw it").isZero();
+		assertThat(atVictim).as("nothing answered to a channel the requester may not name").isEmpty();
+		assertThat(openSessions(channel)).isZero();
+	}
+
+	/** The application subscriptions under the generated reply prefix, but for the named channel. */
+	private long subscribedUnderGeneratedPrefix(String named) {
+		return Arrays.stream(tck.service(MessageServiceRuntime.class).getRuntimeDTO().subscriptions)
+				.map(d -> d.channel.name)
+				.filter(n -> n.startsWith(DEFAULT_REPLY_CHANNEL_PREFIX) && !n.equals(named))
+				.count();
+	}
+
+	private long refusedRequests(String channel) {
+		for (ReplyToSubscriptionDTO dto : tck.service(MessageServiceRuntime.class).getRuntimeDTO().replyToSubscriptions) {
+			if (dto.session && channel.equals(dto.requestChannel.name)) {
+				return dto.refusedRequests;
+			}
+		}
+		return -1;
 	}
 
 	private int openSessions(String channel) {

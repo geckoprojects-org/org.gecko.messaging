@@ -38,6 +38,15 @@ public final class ReplyToSubscriptionConstants {
 	public static final String REPLY_TO_SUBSCRIPTION_REPLY_CHANNEL_PROPERTY = "osgi.messaging.replyToSubscription.replyChannel";
 
 	/**
+	 * Service property of a {@link ReplyToSessionHandler}: the prefix of the channel each of its
+	 * sessions receives the requester's messages on, followed by {@code /} and a generated id.
+	 * Type {@code String}, optional; without it the instance generates the channel as for its
+	 * reply channels. With it the responder side of a session stays in a tree a broker ACL can
+	 * grant, as the requester's side does with a named reply-to channel.
+	 */
+	public static final String REPLY_TO_SUBSCRIPTION_SESSION_CHANNEL_PREFIX_PROPERTY = "osgi.messaging.replyToSubscription.sessionChannelPrefix";
+
+	/**
 	 * Service property of a handler: the type of the request channel,
 	 * {@link org.gecko.messaging.api.MessagingConstants#CHANNEL_TYPE_QUEUE} for competing handlers
 	 * or {@link org.gecko.messaging.api.MessagingConstants#CHANNEL_TYPE_TOPIC}. Type {@code String},
