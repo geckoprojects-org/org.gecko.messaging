@@ -145,6 +145,7 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `replyTimeout` | long ms | `30000` | Default wait of a `ReplyToPublisher` for a response. |
 | `replyChannelPrefix` | String | `osgi/messaging/reply/<clientId>` | Prefix of generated reply channels. |
 | `replyToAllowed` | String (comma-separated), String[] or Collection | `osgi/messaging/reply/` and, if set, `replyChannelPrefix` + `/` | Prefixes a reply-to channel of a received request must start with to be answered; `*` allows any (§9.6). A configured prefix matches as given: end it with the separator to allow a subtree. |
+| `sessionChannelAllowed` | as `replyToAllowed` | as `replyToAllowed` | Prefixes the channel a responder names in the `accept` of a duplex session must start with; `*` allows any (§9.7). The extension `osgi.messaging.replyTo.sessionChannelAllowed` adds prefixes per session. |
 | `cloudEvents` | String | `none` | `none`, `binary` or `structured` (case-insensitive) (§11). |
 | `cloudEvents.acceptPlain` | Boolean | `false` | With CloudEvents, also deliver received messages that are no CloudEvent, unchanged (§11.1). |
 | `cloudEvents.source` | String | `/osgi/messaging/<name>` | `source` of plain messages sent as CloudEvents. |
@@ -821,7 +822,11 @@ carry the header `replysession` and are not delivered to the application:
    `replyerror` on R), takes a channel C — the handler's service property
    `osgi.messaging.replyToSubscription.sessionChannelPrefix` followed by `/` and a generated id,
    otherwise a generated channel —, calls the handler and answers `accept` with
-   `replysessionchannel=C` and the granted lease. Messages to the handler arrive on C; those
+   `replysessionchannel=C` and the granted lease. The requester checks C before it sends
+   anything there: C MUST start with a prefix of its `sessionChannelAllowed` or of the extension
+   `osgi.messaging.replyTo.sessionChannelAllowed` of the `openSession` context, otherwise the
+   session fails (`MessagingException`) and nothing — not even `close` — goes to C. Messages to
+   the handler arrive on C; those
    before the handler connects its stream are held (at most `bufferSize`, the oldest first out).
 3. When the requester connects `receive()`, it sends `ready` on C; only then the responder
    publishes the handler's stream to R — from a worker, never a protocol thread. Nothing is
@@ -858,7 +863,9 @@ no credit by design. The application's last message (step 6) is sent outside the
 **Channels under an ACL.** A broker ACL that lets each node read only its own subtree (for
 example `<replyChannel>/<node>`, mosquitto with `use_identity_as_username`) holds sessions as it
 holds single requests: the requester names R in that subtree, and the responder's C lies under the
-handler's session channel prefix. `replyChannelPrefix` does the same per instance; the named
+handler's session channel prefix, which the requester allows with
+`osgi.messaging.replyTo.sessionChannelAllowed` (or its `sessionChannelAllowed`).
+`replyChannelPrefix` does the same per instance; the named
 channel and the prefix property set it per request and per handler, for an instance that serves
 many contracts. Several sessions MAY share a named R: each takes only the messages with its own id.
 
@@ -873,6 +880,19 @@ nothing is shown without its group start.
 | `sessionLease` | `10000` ms | requested lease (extension `osgi.messaging.replyTo.sessionLease`) |
 | `minSessionLease` / `maxSessionLease` | `1000` / `300000` ms | the responder keeps a lease within |
 | `maxSessions` | `16` | open sessions per handler |
+
+**Flow.Publisher.** `org.gecko.messaging.api.util.Flows` adapts between `PushStream` and
+`java.util.concurrent.Flow.Publisher`, for applications whose own API speaks Flow:
+
+- `toPublisher(PushStream[, Executor])` — one subscriber. The stream is consumed on a thread of
+  its own (a virtual thread by default) that waits while the subscriber asked for nothing;
+  `cancel` closes the stream; the stream's end and failure become `onComplete` and `onError`; a
+  request of 0 or less fails the subscriber and cancels (Reactive Streams 3.9).
+- `fromPublisher([PushStreamProvider,] Flow.Publisher)` — an unbuffered stream on the
+  publisher's threads, requesting one element at a time; a positive back-pressure delays the
+  next request, a negative one cancels. Closing the stream cancels the subscription, so a
+  session's end (or a stream publish that stops) reaches the application's source. A
+  handler may return `fromPublisher(...)` from `handleSession`.
 
 `ReplyToSubscriptionDTO.session` and `openSessions` show a handler's sessions. TCK:
 `SessionTest`; load profile `aVideoStreamWithCommands` (§15.6).
@@ -1209,6 +1229,11 @@ handler side effects) to any channel the answering instance may write to. The wh
 answer only reply channels starting with `osgi/messaging/reply/`, the subtree of the configured
 `replyChannelPrefix` (prefix + `/`), or a configured `replyToAllowed` prefix (`*` for any);
 refused requests are not handled and counted (`refusedRequests`).
+
+In the other direction a responder names the channel a session's requester sends to (`accept`,
+§9.7). The requester MUST send there only if the channel starts with a `sessionChannelAllowed`
+prefix (default as `replyToAllowed`) or one the `openSession` context adds; otherwise a forged
+or rogue `accept` could direct the requester's messages to any channel it may write to.
 
 A failing responder answers with `replyerror=The responder failed` (§9.3): the error response
 MUST NOT carry exception text or other internals of the responder. The requester quotes the

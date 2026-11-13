@@ -12,3 +12,6 @@ Bundle-Description: Protocol-neutral messaging API after the OSGi messaging RFC 
 	org.osgi.util.function;version=latest,\
 	org.osgi.util.promise;version=latest,\
 	org.osgi.util.pushstream;version=latest
+
+-testpath: \
+	assertj-core;version=latest

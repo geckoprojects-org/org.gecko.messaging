@@ -53,6 +53,23 @@ class MessagingConfigurationTest {
 	}
 
 	@Test
+	void sessionChannelsByDefaultOnlyGeneratedOnes() {
+		MessagingConfiguration c = config(Map.of("osgi.messaging.name", "x"));
+		assertThat(MessagingConfiguration.allowed(c.sessionChannelAllowed(), "osgi/messaging/reply/responder/1")).isTrue();
+		assertThat(MessagingConfiguration.allowed(c.sessionChannelAllowed(), "devices/x/cmd")).as("a channel the responder chose")
+				.isFalse();
+		MessagingConfiguration own = config(Map.of("osgi.messaging.name", "x", "replyChannelPrefix", "app/replies"));
+		assertThat(MessagingConfiguration.allowed(own.sessionChannelAllowed(), "app/replies/1")).isTrue();
+		assertThat(MessagingConfiguration.allowed(own.sessionChannelAllowed(), "app/replies-admin")).isFalse();
+		MessagingConfiguration listed = config(Map.of("osgi.messaging.name", "x", "sessionChannelAllowed", "providers/, *x"));
+		assertThat(MessagingConfiguration.allowed(listed.sessionChannelAllowed(), "providers/p1/abc")).isTrue();
+		assertThat(MessagingConfiguration.allowed(listed.sessionChannelAllowed(), "osgi/messaging/reply/r/1"))
+				.as("configured replaces the default").isFalse();
+		assertThat(config(Map.of("osgi.messaging.name", "x", "replyToAllowed", "*")).sessionChannelAllowed())
+				.as("independent of replyToAllowed").doesNotContain("*");
+	}
+
+	@Test
 	void displayUriHidesTheWholeUserInfo() {
 		assertThat(config(Map.of("osgi.messaging.name", "x", "uri", "mqtt://u:p@ss@host:1883")).displayUri())
 				.as("an @ in the password").isEqualTo("mqtt://host:1883");
