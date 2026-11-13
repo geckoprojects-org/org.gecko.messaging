@@ -64,4 +64,14 @@ public @interface ReplyToSubscription {
 	 */
 	String channelType() default "";
 
+	/**
+	 * The prefix of the channels a session handler takes for the messages of its sessions: the
+	 * channel of a session is this prefix, {@code /} and a generated id. The requester must allow
+	 * it (its {@code sessionChannelAllowed} or the extension
+	 * {@code osgi.messaging.replyTo.sessionChannelAllowed}).
+	 *
+	 * @return the session channel prefix, empty for a generated channel
+	 */
+	String sessionChannelPrefix() default "";
+
 }
