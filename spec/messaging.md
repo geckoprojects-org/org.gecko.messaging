@@ -831,7 +831,29 @@ carry the header `replysession` and are not delivered to the application:
 5. `close` from either side ends the session: on the requester after the messages already in the
    buffer of `receive()`; on the responder the handler's message stream ends and its returned
    stream is closed. The end of the handler's stream ends the session (`close` to the
-   requester); its failure as well, with `replyerror`.
+   requester); its failure as well, with `replyerror` (the fixed reason, never the exception's
+   text).
+6. A handler ends the session with a reason of its own by letting its stream fail with
+   `SessionEndedException(reason[, lastMessage])`. The responder publishes the last message (or an
+   empty one) on R as an ordinary session message with the header `replysessionreason=<reason>`
+   and ends the session without `close`: a control message travels on another subscription and
+   could overtake it. The requester's `receive()` delivers that message as its last element and
+   then fails with `SessionEndedException` (reason cut to 64 characters without control
+   characters, as `replyerror`); `closed()` fails with it, and the requester sends `close`. Should
+   the message be lost, the requester ends with the lease.
+
+**Credit.** The requester grants the responder credit, as reactive streams do: `ready` carries
+`replysessioncredit=n`, and each time its application took half of n messages from `receive()`
+it sends `credit` with as many. The responder publishes only within the credit and otherwise
+holds the handler's stream in the delivering thread (as a stream publish waits for its send
+window, §6.1), so a slow requester slows the responder down instead of filling its buffer and
+holding up its connection (`BLOCK`). The credit is the extension
+`osgi.messaging.replyTo.sessionCredit` of the `openSession` context, kept to the size of the
+receive buffer; by default that size when the buffer waits (`BLOCK`, `FAIL`), and `0` — no
+credit — when it drops (`DISCARD_OLDEST`), so that a video viewer skips frames rather than
+slow the camera down. A `ready` without the header (an older requester) means no credit; an
+older responder ignores `credit`. One requester, one responder: a stream to many receivers has
+no credit by design. The application's last message (step 6) is sent outside the credit.
 
 **Channels under an ACL.** A broker ACL that lets each node read only its own subtree (for
 example `<replyChannel>/<node>`, mosquitto with `use_identity_as_username`) holds sessions as it

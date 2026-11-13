@@ -17,6 +17,7 @@ import static org.gecko.messaging.api.MessagingConstants.*;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -27,7 +28,9 @@ import java.util.logging.Logger;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContextBuilder;
+import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
+import org.gecko.messaging.api.replyto.SessionEndedException;
 import org.osgi.util.pushstream.PushStream;
 
 /**
@@ -54,7 +57,11 @@ final class SessionResponder {
 	/** The requester's messages: taken by the control subscription, held until the handler connects. */
 	private final HeldSource messages;
 	private volatile PushStream<Message> responses;
+	private volatile Supplier<MessageContextBuilder> responseBuilders;
 	private volatile ScheduledFuture<?> timer;
+	/** The requester's credit: messages it may still receive; used once it granted any. */
+	private final Semaphore credit = new Semaphore(0);
+	private volatile boolean credited;
 
 	private SessionResponder(AbstractMessagingInstance instance, String id, String replyChannel, String channelPrefix, long lease,
 			Set<SessionResponder> open) {
@@ -129,6 +136,7 @@ final class SessionResponder {
 			throw new IllegalStateException("The session handler returned no stream");
 		}
 		responses = out;
+		this.responseBuilders = responseBuilders;
 		long period = Math.max(1, lease / 3);
 		timer = instance.scheduler().scheduleWithFixedDelay(this::keep, period, period, TimeUnit.MILLISECONDS);
 		lastSent = System.nanoTime();
@@ -145,13 +153,45 @@ final class SessionResponder {
 		Object kind = message.getContext().getHeaders().get(HEADER_SESSION);
 		if (kind == null) {
 			messages.offer(message);
+		} else if ("credit".equals(kind)) {
+			grant(message);
 		} else if ("ready".equals(kind)) {
+			// before the responses start: the first message already waits for credit
+			grant(message);
 			// never on the thread of the protocol: a synchronous source pushes all its messages in
 			// the thread that connects it, and would hold up every delivery of the connection
 			instance.workers().execute(this::startResponses);
 		} else if ("close".equals(kind)) {
 			// the requester left: nothing more to tell it
 			end(null, false);
+		}
+	}
+
+	/** Adds the credit a control message grants; a requester that never grants any gets none. */
+	private void grant(Message message) {
+		Long n = Extensions.number(message.getContext().getHeaders().get(HEADER_SESSION_CREDIT));
+		if (n != null && n > 0) {
+			// remote input: bounded, so that the permits never overflow
+			credit.release((int) Math.min(n, MAX_GRANT));
+			credited = true;
+		}
+	}
+
+	/** Most credit one control message grants. */
+	private static final int MAX_GRANT = 1 << 20;
+
+	/**
+	 * Waits in the delivering thread for credit, as a stream publish waits for room in the send
+	 * window: the handler's stream is held back while the requester is behind.
+	 */
+	private void awaitCredit() throws InterruptedException {
+		while (!credit.tryAcquire(Math.max(1, lease / 3), TimeUnit.MILLISECONDS)) {
+			if (ended.get()) {
+				break;
+			}
+		}
+		if (ended.get()) {
+			throw new MessagingException("The session " + id + " ended");
 		}
 	}
 
@@ -162,19 +202,62 @@ final class SessionResponder {
 			return;
 		}
 		instance.publish(out.map(m -> {
+			if (credited) {
+				awaitCredit();
+			}
 			lastSent = System.nanoTime();
 			return m;
-		}), null).onResolve(() -> {
+		}), null).onSuccess(n -> {
+			// onSuccess, not onResolve: a failed stream must not end the session as completed
 			if (!ended.get()) {
 				end(null, true);
 			}
 		}).onFailure(t -> {
-			LOG.log(Level.WARNING, "The stream of session " + id + " failed", t);
-			if (!ended.get()) {
-				sendControl("close", true);
-				end(t, false);
+			if (ended.get()) {
+				return;
 			}
+			SessionEndedException reason = reason(t);
+			if (reason != null) {
+				LOG.fine(() -> "Session " + id + " ended by its handler: " + reason.getReason());
+				sendLast(reason);
+				end(t, false);
+				return;
+			}
+			LOG.log(Level.WARNING, "The stream of session " + id + " failed", t);
+			sendControl("close", true);
+			end(t, false);
 		});
+	}
+
+	/** @return the end with a reason of the application in a failure's causes, or {@code null} */
+	private static SessionEndedException reason(Throwable t) {
+		for (Throwable c = t; c != null; c = c.getCause()) {
+			if (c instanceof SessionEndedException e) {
+				return e;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Sends the application's last message with its reason. It goes on the channel of the
+	 * session's messages, after them, so that the requester delivers it last and then ends; a
+	 * {@code close} on the control path could overtake it.
+	 */
+	private void sendLast(SessionEndedException reason) {
+		lastSent = System.nanoTime();
+		Message last = reason.getLastMessage();
+		MessageContextBuilder b = responseBuilders.get();
+		if (last != null) {
+			if (last.getContext() != null) {
+				b.withContext(last.getContext());
+			}
+			b.content(last.payload());
+		}
+		// the session's addressing wins over what the application's message carries
+		b.channel(replyChannel).correlationId(id).header(HEADER_SESSION, null).header(HEADER_REPLY_ERROR, null)
+				.header(HEADER_SESSION_REASON, reason.getReason());
+		instance.publish(b.buildMessage(), null).onFailure(t -> LOG.log(Level.FINE, "Session " + id + ": could not send its end", t));
 	}
 
 	private void keep() {
@@ -217,6 +300,8 @@ final class SessionResponder {
 			sendControl("close", false);
 		}
 		messages.end(failure);
+		// a delivering thread waiting for credit sees the end
+		credit.release(MAX_GRANT);
 		PushStream<Message> out = responses;
 		if (out != null) {
 			out.close();

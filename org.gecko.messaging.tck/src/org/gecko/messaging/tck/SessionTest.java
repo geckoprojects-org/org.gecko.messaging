@@ -25,16 +25,20 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.dto.ReplyToSubscriptionDTO;
 import org.gecko.messaging.api.replyto.MessagingSession;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
+import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
+import org.gecko.messaging.api.replyto.SessionEndedException;
 import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -207,6 +211,104 @@ public class SessionTest extends AbstractMessagingTest {
 	}
 
 	@Test
+	void aResponderEndsTheSessionWithAReasonOfItsOwn() throws Exception {
+		String channel = tck.channel("session", "reason");
+		handler(channel, (request, commands, builders) -> streams.streamOf(Stream.of("f0", "f1", "fail")).map(f -> {
+			if ("fail".equals(f)) {
+				throw new SessionEndedException("E42", builders.get().content(Tck.bytes("diagnostic")).buildMessage());
+			}
+			return builders.get().content(Tck.bytes(f)).buildMessage();
+		}));
+		MessagingSession s = open(channel);
+		List<Message> received = new CopyOnWriteArrayList<>();
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+		AtomicInteger receivedAtFailure = new AtomicInteger(-1);
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onError(t -> {
+			receivedAtFailure.set(received.size());
+			failure.set(t);
+			ended.countDown();
+		}).forEach(received::add);
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the receive stream fails").isTrue();
+		assertThat(received).extracting(Tck::text).containsExactly("f0", "f1", "diagnostic");
+		assertThat(receivedAtFailure.get()).as("the last message before the failure").isEqualTo(3);
+		assertThat(received.get(2).getContext().getHeaders()).containsEntry(HEADER_SESSION_REASON, "E42");
+		assertThat(failure.get()).isInstanceOf(SessionEndedException.class);
+		assertThat(((SessionEndedException) failure.get()).getReason()).isEqualTo("E42");
+		assertThat(s.closed().getFailure()).isInstanceOf(SessionEndedException.class);
+		tck.await("no open session", () -> openSessions(channel) == 0);
+	}
+
+	@Test
+	void aFailingResponderStillTellsNoDetail() throws Exception {
+		String channel = tck.channel("session", "failing");
+		handler(channel, (request, commands, builders) -> streams.streamOf(Stream.of("f0", "fail")).map(f -> {
+			if ("fail".equals(f)) {
+				throw new IllegalStateException("secret internals");
+			}
+			return builders.get().content(Tck.bytes(f)).buildMessage();
+		}));
+		MessagingSession s = open(channel);
+		List<Message> received = new CopyOnWriteArrayList<>();
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onError(t -> {
+			failure.set(t);
+			ended.countDown();
+		}).forEach(received::add);
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the receive stream fails").isTrue();
+		assertThat(failure.get()).isInstanceOf(MessagingException.class).isNotInstanceOf(SessionEndedException.class);
+		assertThat(failure.get().getMessage()).doesNotContain("secret");
+		assertThat(received).noneMatch(m -> m.getContext().getHeaders().containsKey(HEADER_SESSION_REASON));
+	}
+
+	@Test
+	void theCreditOfASlowRequesterHoldsBackTheResponder() throws Exception {
+		String channel = tck.channel("session", "credit");
+		int count = 200;
+		int buffer = 8;
+		AtomicInteger produced = new AtomicInteger();
+		handler(channel, (request, commands, builders) -> streams.streamOf(IntStream.range(0, count).boxed()).map(i -> {
+			produced.incrementAndGet();
+			return builders.get().content(Tck.bytes("m" + i)).buildMessage();
+		}));
+		// a waiting buffer: the credit is its size by default
+		MessagingSession s = replyTo.openSession(text(channel, "open"),
+				builder().channel(channel).extensionEntry(EXTENSION_BUFFER_SIZE, buffer).extensionEntry(EXTENSION_QUEUE_POLICY, "BLOCK")
+						.buildContext()).getValue();
+		sessions.add(s);
+		List<String> received = new CopyOnWriteArrayList<>();
+		AtomicInteger ahead = new AtomicInteger();
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onClose(ended::countDown).forEach(m -> {
+			received.add(Tck.text(m));
+			ahead.accumulateAndGet(produced.get() - received.size(), Math::max);
+			slowly();
+		});
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the session ends after all messages").isTrue();
+		assertThat(received).as("nothing dropped, in order")
+				.containsExactlyElementsOf(IntStream.range(0, count).mapToObj(i -> "m" + i).toList());
+		// in flight: the credit, and one message the responder holds while it waits for more
+		assertThat(ahead.get()).as("the responder never ran ahead of the credit").isLessThanOrEqualTo(buffer + 1);
+	}
+
+	@Test
+	void aRequesterWithoutCreditGetsEverythingAsBefore() throws Exception {
+		String channel = tck.channel("session", "nocredit");
+		int count = 100;
+		handler(channel, (request, commands, builders) -> streams
+				.streamOf(IntStream.range(0, count).mapToObj(i -> builders.get().content(Tck.bytes("m" + i)).buildMessage())));
+		MessagingSession s = replyTo.openSession(text(channel, "open"),
+				builder().channel(channel).extensionEntry(EXTENSION_SESSION_CREDIT, 0).buildContext()).getValue();
+		sessions.add(s);
+		List<String> received = new CopyOnWriteArrayList<>();
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onClose(ended::countDown).forEach(m -> received.add(Tck.text(m)));
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the session ends after all messages").isTrue();
+		assertThat(received).containsExactlyElementsOf(IntStream.range(0, count).mapToObj(i -> "m" + i).toList());
+	}
+
+	@Test
 	void aSessionUsesTheReplyChannelItNames() throws Exception {
 		String channel = tck.channel("session", "named");
 		// a tree a broker ACL grants: the consumer reads its own subtree, the provider its own
@@ -255,6 +357,15 @@ public class SessionTest extends AbstractMessagingTest {
 		assertThat(handled.get()).as("the handler never saw it").isZero();
 		assertThat(atVictim).as("nothing answered to a channel the requester may not name").isEmpty();
 		assertThat(openSessions(channel)).isZero();
+	}
+
+	/** A slow consumer: 5 ms per message. */
+	private static void slowly() {
+		try {
+			Thread.sleep(5);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		}
 	}
 
 	/** The application subscriptions under the generated reply prefix, but for the named channel. */

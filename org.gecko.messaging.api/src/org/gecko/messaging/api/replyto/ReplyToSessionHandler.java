@@ -32,6 +32,11 @@ import org.osgi.util.pushstream.PushStream;
  * {@code PushStreamProvider.streamOf}) occupies that worker for the lifetime of the session; a
  * source fed from elsewhere (a {@code SimplePushEventSource}, a capture callback) does not. When the requester closes the session or its lease
  * expires, the stream of its messages ends and the returned stream is closed.
+ * <p>
+ * When the returned stream fails, the requester learns only that the responder failed, never the
+ * exception's text. To end a session with a reason meant for the requester (an error code, a
+ * last message describing it), let the stream fail with a {@link SessionEndedException}: its last
+ * message and reason reach the requester, in that order.
  */
 @ConsumerType
 public interface ReplyToSessionHandler {
