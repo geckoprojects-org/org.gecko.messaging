@@ -28,6 +28,7 @@ import java.util.logging.Logger;
 import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
+import org.gecko.messaging.api.replyto.SessionEndedException;
 import org.osgi.util.pushstream.PushStream;
 
 /**
@@ -54,6 +55,7 @@ final class SessionResponder {
 	/** The requester's messages: taken by the control subscription, held until the handler connects. */
 	private final HeldSource messages;
 	private volatile PushStream<Message> responses;
+	private volatile Supplier<MessageContextBuilder> responseBuilders;
 	private volatile ScheduledFuture<?> timer;
 
 	private SessionResponder(AbstractMessagingInstance instance, String id, String replyChannel, String channelPrefix, long lease,
@@ -129,6 +131,7 @@ final class SessionResponder {
 			throw new IllegalStateException("The session handler returned no stream");
 		}
 		responses = out;
+		this.responseBuilders = responseBuilders;
 		long period = Math.max(1, lease / 3);
 		timer = instance.scheduler().scheduleWithFixedDelay(this::keep, period, period, TimeUnit.MILLISECONDS);
 		lastSent = System.nanoTime();
@@ -164,17 +167,57 @@ final class SessionResponder {
 		instance.publish(out.map(m -> {
 			lastSent = System.nanoTime();
 			return m;
-		}), null).onResolve(() -> {
+		}), null).onSuccess(n -> {
+			// onSuccess, not onResolve: a failed stream must not end the session as completed
 			if (!ended.get()) {
 				end(null, true);
 			}
 		}).onFailure(t -> {
-			LOG.log(Level.WARNING, "The stream of session " + id + " failed", t);
-			if (!ended.get()) {
-				sendControl("close", true);
-				end(t, false);
+			if (ended.get()) {
+				return;
 			}
+			SessionEndedException reason = reason(t);
+			if (reason != null) {
+				LOG.fine(() -> "Session " + id + " ended by its handler: " + reason.getReason());
+				sendLast(reason);
+				end(t, false);
+				return;
+			}
+			LOG.log(Level.WARNING, "The stream of session " + id + " failed", t);
+			sendControl("close", true);
+			end(t, false);
 		});
+	}
+
+	/** @return the end with a reason of the application in a failure's causes, or {@code null} */
+	private static SessionEndedException reason(Throwable t) {
+		for (Throwable c = t; c != null; c = c.getCause()) {
+			if (c instanceof SessionEndedException e) {
+				return e;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Sends the application's last message with its reason. It goes on the channel of the
+	 * session's messages, after them, so that the requester delivers it last and then ends; a
+	 * {@code close} on the control path could overtake it.
+	 */
+	private void sendLast(SessionEndedException reason) {
+		lastSent = System.nanoTime();
+		Message last = reason.getLastMessage();
+		MessageContextBuilder b = responseBuilders.get();
+		if (last != null) {
+			if (last.getContext() != null) {
+				b.withContext(last.getContext());
+			}
+			b.content(last.payload());
+		}
+		// the session's addressing wins over what the application's message carries
+		b.channel(replyChannel).correlationId(id).header(HEADER_SESSION, null).header(HEADER_REPLY_ERROR, null)
+				.header(HEADER_SESSION_REASON, reason.getReason());
+		instance.publish(b.buildMessage(), null).onFailure(t -> LOG.log(Level.FINE, "Session " + id + ": could not send its end", t));
 	}
 
 	private void keep() {

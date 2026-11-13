@@ -37,6 +37,8 @@ public interface MessagingSession extends AutoCloseable {
 	 * Returns the stream of messages from the responder. The responder starts sending when the
 	 * stream is connected, so nothing is missed before. The stream ends when the session ends:
 	 * normally when it is closed, with an error when the lease expired or the responder failed.
+	 * A responder that ends the session with a reason of its own makes the stream deliver that
+	 * last message and then fail with a {@link SessionEndedException} naming the reason.
 	 * The buffer of the stream follows the extensions of the context the session was opened with
 	 * ({@code osgi.messaging.bufferSize}, {@code queuePolicy}, {@code groupHeader}).
 	 *
@@ -63,7 +65,8 @@ public interface MessagingSession extends AutoCloseable {
 
 	/**
 	 * @return a promise resolved when the session ended normally, failed when its lease expired
-	 *         or the responder failed
+	 *         or the responder failed; failed with a {@link SessionEndedException} when the
+	 *         responder ended it with a reason of its own
 	 */
 	Promise<Void> closed();
 

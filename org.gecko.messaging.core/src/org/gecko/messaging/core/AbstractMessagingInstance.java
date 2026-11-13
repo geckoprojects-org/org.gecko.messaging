@@ -1055,6 +1055,16 @@ public abstract class AbstractMessagingInstance {
 		 */
 		boolean deliver(Message message, SubscriptionHandle handle);
 
+		/**
+		 * Whether a delivered message is the last of the stream.
+		 *
+		 * @param message the message, already in the buffer
+		 * @return the failure that ends the stream after it, {@code null} to go on
+		 */
+		default Throwable endsAfter(Message message) {
+			return null;
+		}
+
 	}
 
 	/**
@@ -1102,7 +1112,13 @@ public abstract class AbstractMessagingInstance {
 					}
 					return 0;
 				}
-				return consumer.accept(PushEvent.data(message));
+				long r = consumer.accept(PushEvent.data(message));
+				Throwable end = intercept != null ? intercept.endsAfter(message) : null;
+				if (end != null) {
+					// behind the message in the buffer: the stream delivers it, then fails
+					consumer.accept(PushEvent.error(end));
+				}
+				return r;
 			}
 
 			@Override

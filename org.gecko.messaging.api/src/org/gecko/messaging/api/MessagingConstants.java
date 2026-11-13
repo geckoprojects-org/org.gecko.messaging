@@ -250,6 +250,14 @@ public final class MessagingConstants {
 	/** Header of an {@code accept}: the channel the requester sends the session's messages to. */
 	public static final String HEADER_SESSION_CHANNEL = "replysessionchannel";
 
+	/**
+	 * Header of the last message of a duplex session that its responder ended with a reason of the
+	 * application ({@link org.gecko.messaging.api.replyto.SessionEndedException}): the reason. The
+	 * requester delivers the message and then fails the session with that reason. The name is a
+	 * valid CloudEvents extension name.
+	 */
+	public static final String HEADER_SESSION_REASON = "replysessionreason";
+
 	/** Header of an {@code open} and an {@code accept}: the lease in milliseconds. */
 	public static final String HEADER_SESSION_LEASE = "replysessionlease";
 

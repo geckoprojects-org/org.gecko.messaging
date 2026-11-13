@@ -25,6 +25,7 @@ import java.util.Hashtable;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -34,7 +35,9 @@ import org.gecko.messaging.api.Message;
 import org.gecko.messaging.api.dto.ReplyToSubscriptionDTO;
 import org.gecko.messaging.api.replyto.MessagingSession;
 import org.gecko.messaging.api.replyto.ReplyToPublisher;
+import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
+import org.gecko.messaging.api.replyto.SessionEndedException;
 import org.gecko.messaging.api.runtime.MessageServiceRuntime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -204,6 +207,58 @@ public class SessionTest extends AbstractMessagingTest {
 		Promise<MessagingSession> p = replyTo.openSession(text(channel, "open"),
 				builder().channel(channel).extensionEntry(EXTENSION_REPLY_TIMEOUT, 500L).buildContext());
 		assertThat(p.getFailure()).isNotNull();
+	}
+
+	@Test
+	void aResponderEndsTheSessionWithAReasonOfItsOwn() throws Exception {
+		String channel = tck.channel("session", "reason");
+		handler(channel, (request, commands, builders) -> streams.streamOf(Stream.of("f0", "f1", "fail")).map(f -> {
+			if ("fail".equals(f)) {
+				throw new SessionEndedException("E42", builders.get().content(Tck.bytes("diagnostic")).buildMessage());
+			}
+			return builders.get().content(Tck.bytes(f)).buildMessage();
+		}));
+		MessagingSession s = open(channel);
+		List<Message> received = new CopyOnWriteArrayList<>();
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+		AtomicInteger receivedAtFailure = new AtomicInteger(-1);
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onError(t -> {
+			receivedAtFailure.set(received.size());
+			failure.set(t);
+			ended.countDown();
+		}).forEach(received::add);
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the receive stream fails").isTrue();
+		assertThat(received).extracting(Tck::text).containsExactly("f0", "f1", "diagnostic");
+		assertThat(receivedAtFailure.get()).as("the last message before the failure").isEqualTo(3);
+		assertThat(received.get(2).getContext().getHeaders()).containsEntry(HEADER_SESSION_REASON, "E42");
+		assertThat(failure.get()).isInstanceOf(SessionEndedException.class);
+		assertThat(((SessionEndedException) failure.get()).getReason()).isEqualTo("E42");
+		assertThat(s.closed().getFailure()).isInstanceOf(SessionEndedException.class);
+		tck.await("no open session", () -> openSessions(channel) == 0);
+	}
+
+	@Test
+	void aFailingResponderStillTellsNoDetail() throws Exception {
+		String channel = tck.channel("session", "failing");
+		handler(channel, (request, commands, builders) -> streams.streamOf(Stream.of("f0", "fail")).map(f -> {
+			if ("fail".equals(f)) {
+				throw new IllegalStateException("secret internals");
+			}
+			return builders.get().content(Tck.bytes(f)).buildMessage();
+		}));
+		MessagingSession s = open(channel);
+		List<Message> received = new CopyOnWriteArrayList<>();
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+		CountDownLatch ended = new CountDownLatch(1);
+		track(s.receive()).onError(t -> {
+			failure.set(t);
+			ended.countDown();
+		}).forEach(received::add);
+		assertThat(ended.await(tck.timeout(), TimeUnit.MILLISECONDS)).as("the receive stream fails").isTrue();
+		assertThat(failure.get()).isInstanceOf(MessagingException.class).isNotInstanceOf(SessionEndedException.class);
+		assertThat(failure.get().getMessage()).doesNotContain("secret");
+		assertThat(received).noneMatch(m -> m.getContext().getHeaders().containsKey(HEADER_SESSION_REASON));
 	}
 
 	@Test

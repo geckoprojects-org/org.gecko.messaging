@@ -831,7 +831,16 @@ carry the header `replysession` and are not delivered to the application:
 5. `close` from either side ends the session: on the requester after the messages already in the
    buffer of `receive()`; on the responder the handler's message stream ends and its returned
    stream is closed. The end of the handler's stream ends the session (`close` to the
-   requester); its failure as well, with `replyerror`.
+   requester); its failure as well, with `replyerror` (the fixed reason, never the exception's
+   text).
+6. A handler ends the session with a reason of its own by letting its stream fail with
+   `SessionEndedException(reason[, lastMessage])`. The responder publishes the last message (or an
+   empty one) on R as an ordinary session message with the header `replysessionreason=<reason>`
+   and ends the session without `close`: a control message travels on another subscription and
+   could overtake it. The requester's `receive()` delivers that message as its last element and
+   then fails with `SessionEndedException` (reason cut to 64 characters without control
+   characters, as `replyerror`); `closed()` fails with it, and the requester sends `close`. Should
+   the message be lost, the requester ends with the lease.
 
 **Channels under an ACL.** A broker ACL that lets each node read only its own subtree (for
 example `<replyChannel>/<node>`, mosquitto with `use_identity_as_username`) holds sessions as it

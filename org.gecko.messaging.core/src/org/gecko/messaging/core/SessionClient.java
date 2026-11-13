@@ -30,6 +30,9 @@ import org.gecko.messaging.api.MessageContext;
 import org.gecko.messaging.api.MessageContextBuilder;
 import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.replyto.MessagingSession;
+import org.gecko.messaging.api.replyto.SessionEndedException;
+import org.gecko.messaging.core.AbstractMessagingInstance.Intercept;
+import org.gecko.messaging.core.cloudevents.CloudEventCodec;
 import org.osgi.util.promise.Deferred;
 import org.osgi.util.promise.Promise;
 import org.osgi.util.pushstream.PushStream;
@@ -204,11 +207,30 @@ final class SessionClient implements MessagingSession {
 		if (receive == null) {
 			SimpleMessageContextBuilder b = new SimpleMessageContextBuilder().channel(replyChannel);
 			receiveExtensions.forEach(b::extensionEntry);
-			receive = instance.subscribe(b.buildSimple(), (message, h) -> {
-				// the session's own messages, without control
-				return id.equals(message.getContext().getCorrelationId())
-						&& message.getContext().getHeaders().get(HEADER_SESSION) == null
-						&& message.getContext().getHeaders().get(HEADER_REPLY_ERROR) == null;
+			receive = instance.subscribe(b.buildSimple(), new Intercept() {
+				@Override
+				public boolean deliver(Message message, SubscriptionHandle h) {
+					// the session's own messages, without control
+					return id.equals(message.getContext().getCorrelationId())
+							&& message.getContext().getHeaders().get(HEADER_SESSION) == null
+							&& message.getContext().getHeaders().get(HEADER_REPLY_ERROR) == null;
+				}
+
+				@Override
+				public Throwable endsAfter(Message message) {
+					Object reason = message.getContext().getHeaders().get(HEADER_SESSION_REASON);
+					if (reason == null || !id.equals(message.getContext().getCorrelationId())) {
+						return null;
+					}
+					// the reason is remote input: short and on one line
+					SessionEndedException failure = new SessionEndedException(CloudEventCodec.printable(reason), message);
+					if (!ended.get()) {
+						// the responder ended already; tell it anyway, should it still listen
+						sendControl("close");
+					}
+					end(failure);
+					return failure;
+				}
 			}, h -> {
 				receiving = h;
 				if (ended.get()) {
