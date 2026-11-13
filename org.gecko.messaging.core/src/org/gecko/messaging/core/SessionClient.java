@@ -15,7 +15,9 @@ package org.gecko.messaging.core;
 
 import static org.gecko.messaging.api.MessagingConstants.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
@@ -59,7 +61,8 @@ final class SessionClient implements MessagingSession {
 			EXTENSION_GROUP_HEADER, EXTENSION_QOS };
 
 	/** Extensions of the session context that stay with the requester. */
-	private static final String[] LOCAL_EXTENSIONS = { EXTENSION_SESSION_LEASE, EXTENSION_REPLY_TIMEOUT, EXTENSION_SESSION_CREDIT };
+	private static final String[] LOCAL_EXTENSIONS = { EXTENSION_SESSION_LEASE, EXTENSION_REPLY_TIMEOUT, EXTENSION_SESSION_CREDIT,
+			EXTENSION_SESSION_CHANNEL_ALLOWED };
 
 	private final AbstractMessagingInstance instance;
 	private final String id = UUID.randomUUID().toString();
@@ -67,6 +70,8 @@ final class SessionClient implements MessagingSession {
 	private final Map<String, Object> receiveExtensions;
 	/** The messages granted the responder in flight, {@code 0} for no credit. */
 	private final int credit;
+	/** Prefixes the channel the responder names must start with. */
+	private final List<String> sessionChannelAllowed;
 	/** Messages the application took since the last grant. */
 	private final AtomicInteger taken = new AtomicInteger();
 	private final Deferred<MessagingSession> opened;
@@ -94,6 +99,12 @@ final class SessionClient implements MessagingSession {
 			}
 		}
 		this.credit = credit(instance, context, receiveExtensions);
+		List<String> more = MessagingConfiguration.prefixes(context.getExtensions().get(EXTENSION_SESSION_CHANNEL_ALLOWED));
+		List<String> allowed = new ArrayList<>(instance.getConfiguration().sessionChannelAllowed());
+		if (more != null) {
+			allowed.addAll(more);
+		}
+		this.sessionChannelAllowed = List.copyOf(allowed);
 		this.opened = instance.promises().deferred();
 		this.closed = instance.promises().deferred();
 	}
@@ -189,6 +200,12 @@ final class SessionClient implements MessagingSession {
 			Object channel = message.getContext().getHeaders().get(HEADER_SESSION_CHANNEL);
 			Long granted = Extensions.number(message.getContext().getHeaders().get(HEADER_SESSION_LEASE));
 			if (channel == null || sendChannel != null) {
+				return;
+			}
+			if (!MessagingConfiguration.allowed(sessionChannelAllowed, channel.toString())) {
+				// nothing goes there, not even close: the responder chose the channel
+				LOG.warning(() -> "Session " + id + ": the responder named a channel that is not allowed (sessionChannelAllowed)");
+				end(new MessagingException("The responder of session " + id + " named a channel that is not allowed"));
 				return;
 			}
 			if (granted != null && granted > 0) {

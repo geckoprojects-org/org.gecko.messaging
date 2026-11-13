@@ -24,6 +24,8 @@ import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.SubmissionPublisher;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -40,6 +42,7 @@ import org.gecko.messaging.api.MessagingException;
 import org.gecko.messaging.api.replyto.ReplyToSessionHandler;
 import org.gecko.messaging.api.replyto.SessionEndedException;
 import org.gecko.messaging.api.runtime.MessageServiceRuntime;
+import org.gecko.messaging.api.util.Flows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -319,8 +322,9 @@ public class SessionTest extends AbstractMessagingTest {
 		List<Message> atNamed = collect(named);
 		tck.settle();
 		long generatedBefore = subscribedUnderGeneratedPrefix(named);
-		MessagingSession s = replyTo.openSession(text(channel, "open"), builder().channel(channel).replyTo(named).buildContext())
-				.getValue();
+		// the provider's tree is allowed for this session only
+		MessagingSession s = replyTo.openSession(text(channel, "open"), builder().channel(channel).replyTo(named)
+				.extensionEntry(EXTENSION_SESSION_CHANNEL_ALLOWED, provider + "/").buildContext()).getValue();
 		sessions.add(s);
 		List<Message> received = new CopyOnWriteArrayList<>();
 		track(s.receive()).forEach(received::add);
@@ -337,6 +341,63 @@ public class SessionTest extends AbstractMessagingTest {
 		assertThat(atNamed).extracting(Tck::text).contains("echo c0");
 		assertThat(subscribedUnderGeneratedPrefix(named)).as("nothing subscribed under the generated prefix")
 				.isEqualTo(generatedBefore);
+	}
+
+	@Test
+	void closingTheSessionCancelsAPublisherTheHandlerReturned() throws Exception {
+		String channel = tck.channel("session", "flow");
+		SubmissionPublisher<String> frames = new SubmissionPublisher<>();
+		AtomicBoolean feeding = new AtomicBoolean(true);
+		// an application source in Flow terms, fed until nobody listens
+		Thread feeder = Thread.ofVirtual().start(() -> {
+			int i = 0;
+			while (feeding.get()) {
+				if (frames.hasSubscribers()) {
+					frames.offer("f" + i++, 50, TimeUnit.MILLISECONDS, null);
+				} else {
+					slowly();
+				}
+			}
+		});
+		try {
+			handler(channel, (request, commands, builders) -> {
+				commands.forEach(c -> {
+					// nothing
+				});
+				return Flows.fromPublisher(frames).map(f -> builders.get().content(Tck.bytes(f)).buildMessage());
+			});
+			MessagingSession s = open(channel);
+			List<Message> received = new CopyOnWriteArrayList<>();
+			track(s.receive()).forEach(received::add);
+			tck.await("frames arrive", () -> received.size() >= 3);
+			assertThat(frames.hasSubscribers()).isTrue();
+			s.close();
+			tck.await("the publisher was cancelled", () -> !frames.hasSubscribers());
+			tck.await("no open session", () -> openSessions(channel) == 0);
+		} finally {
+			feeding.set(false);
+			feeder.join(tck.timeout());
+			frames.close();
+		}
+	}
+
+	@Test
+	void anAcceptNamingAChannelNotAllowedEndsTheSession() throws Exception {
+		String channel = tck.channel("session", "forged");
+		String reply = DEFAULT_REPLY_CHANNEL_PREFIX + tck.channel("session", "forged", "reply");
+		String foreign = tck.channel("session", "forged", "victim");
+		// no handler: whoever reads the request channel answers in its place
+		List<Message> requests = collect(channel);
+		List<Message> atVictim = collect(foreign);
+		tck.settle();
+		Promise<MessagingSession> p = replyTo.openSession(text(channel, "open"), builder().channel(channel).replyTo(reply).buildContext());
+		tck.awaitSize(requests, 1);
+		String id = requests.get(0).getContext().getCorrelationId();
+		publisher.publish(builder().content(Tck.bytes("")).buildMessage(), builder().channel(reply).correlationId(id)
+				.header(HEADER_SESSION, "accept").header(HEADER_SESSION_CHANNEL, foreign).buildContext()).getValue();
+		assertThat(p.getFailure()).as("not opened").isInstanceOf(MessagingException.class).hasMessageContaining("not allowed");
+		tck.settle();
+		assertThat(atVictim).as("nothing sent to the channel the responder chose").isEmpty();
 	}
 
 	@Test

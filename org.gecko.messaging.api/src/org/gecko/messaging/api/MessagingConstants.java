@@ -200,6 +200,15 @@ public final class MessagingConstants {
 	public static final String EXTENSION_SESSION_CREDIT = "osgi.messaging.replyTo.sessionCredit";
 
 	/**
+	 * Extension of a session request: further prefixes the channel the responder names in its
+	 * {@code accept} may start with, in addition to the instance's {@code sessionChannelAllowed}
+	 * — for a responder whose channels lie in a tree of its own. Type {@code String} with
+	 * comma-separated prefixes, or {@code String[]}; {@code *} for any channel. A responder that
+	 * names a channel outside them ends the session before anything is sent there.
+	 */
+	public static final String EXTENSION_SESSION_CHANNEL_ALLOWED = "osgi.messaging.replyTo.sessionChannelAllowed";
+
+	/**
 	 * Extension of a subscription: the messages its buffer holds at most. Type {@code Integer}, at
 	 * most the instance's {@code bufferSize}, which applies without it.
 	 */

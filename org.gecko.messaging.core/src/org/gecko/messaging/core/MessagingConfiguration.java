@@ -48,6 +48,14 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * ({@code osgi/messaging/reply/}) and the configured {@code replyChannelPrefix}. A request names
  * its reply channel itself: without the check a sender could direct responses to any channel
  * the instance may write to.</li>
+ * <li>{@code sessionChannelAllowed} — prefixes the channel a responder names in the
+ * {@code accept} of a duplex session must start with, before the requester sends anything to
+ * it; same syntax and default as {@code replyToAllowed}. A responder whose channel lies
+ * elsewhere (its own {@code replyChannelPrefix}, a handler's {@code sessionChannelPrefix}) is
+ * entered here, or per session with the extension
+ * {@code osgi.messaging.replyTo.sessionChannelAllowed}. The responder names the channel itself:
+ * without the check it could direct the requester's messages to any channel the requester may
+ * write to.</li>
  * <li>{@code cloudEvents} — {@code none} (default), {@code binary} or {@code structured}</li>
  * <li>{@code cloudEvents.acceptPlain} — with CloudEvents, also deliver received messages that are
  * no CloudEvent, unchanged as plain messages; default {@code false}: an instance with
@@ -72,6 +80,7 @@ public final class MessagingConfiguration {
 	private final Map<String, Object> raw;
 	private final String name;
 	private final List<String> replyToAllowed;
+	private final List<String> sessionChannelAllowed;
 
 	/**
 	 * Reads the configuration.
@@ -91,7 +100,8 @@ public final class MessagingConfiguration {
 				&& !CloudEventConstants.MODE_STRUCTURED.equals(mode)) {
 			throw new MessagingException("Unknown cloudEvents mode '" + mode + "'");
 		}
-		this.replyToAllowed = readReplyToAllowed();
+		this.replyToAllowed = readAllowed("replyToAllowed");
+		this.sessionChannelAllowed = readAllowed("sessionChannelAllowed");
 	}
 
 	/**
@@ -214,17 +224,10 @@ public final class MessagingConfiguration {
 		return replyToAllowed;
 	}
 
-	private List<String> readReplyToAllowed() {
-		Object v = raw.get("replyToAllowed");
-		if (v instanceof String s) {
-			// one String from a configuration file may list several prefixes
-			return Arrays.stream(s.split(",")).map(String::trim).filter(p -> !p.isEmpty()).toList();
-		}
-		if (v instanceof String[] a) {
-			return List.of(a);
-		}
-		if (v instanceof Collection<?> c) {
-			return c.stream().map(String::valueOf).toList();
+	private List<String> readAllowed(String key) {
+		List<String> configured = prefixes(raw.get(key));
+		if (configured != null) {
+			return configured;
 		}
 		// secure by default: generated reply channels only
 		// a generated channel is the prefix, '/', the rest: allowing the prefix plus '/' keeps
@@ -241,12 +244,52 @@ public final class MessagingConfiguration {
 	 * @return {@code true} if the channel starts with an allowed prefix, or any is allowed
 	 */
 	public boolean replyToAllowed(String channel) {
-		for (String prefix : replyToAllowed) {
+		return allowed(replyToAllowed, channel);
+	}
+
+	/**
+	 * Reads a list of channel prefixes.
+	 *
+	 * @param v a String array, a collection, or one String with comma-separated prefixes
+	 * @return the prefixes, {@code null} if none are given
+	 */
+	static List<String> prefixes(Object v) {
+		if (v instanceof String s) {
+			// one String from a configuration file may list several prefixes
+			return Arrays.stream(s.split(",")).map(String::trim).filter(p -> !p.isEmpty()).toList();
+		}
+		if (v instanceof String[] a) {
+			return List.of(a);
+		}
+		if (v instanceof Collection<?> c) {
+			return c.stream().map(String::valueOf).toList();
+		}
+		return null;
+	}
+
+	/**
+	 * Returns whether a channel starts with one of the given prefixes.
+	 *
+	 * @param prefixes the prefixes, {@code *} for any channel
+	 * @param channel the channel
+	 * @return {@code true} if allowed
+	 */
+	static boolean allowed(List<String> prefixes, String channel) {
+		for (String prefix : prefixes) {
 			if (ANY.equals(prefix) || channel.startsWith(prefix)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Returns the prefixes the session channel a responder names must start with.
+	 *
+	 * @return the prefixes, {@code *} for any channel
+	 */
+	public List<String> sessionChannelAllowed() {
+		return sessionChannelAllowed;
 	}
 
 	/** {@code replyToAllowed} value for any channel. */
