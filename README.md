@@ -22,8 +22,9 @@ MQTT 3.1.1, AMQP 0-9-1, WebSocket and an in-memory broker, and a technology comp
   dependencies.
 - **CloudEvents** optionally, in the binary or the structured (JSON) mode.
 
-The specification draft is [spec/messaging.md](spec/messaging.md); moving from Gecko messaging
-1.x is described in [docs/migration.md](docs/migration.md).
+How to configure and use it, case by case, is the [user guide](docs/guide.md); the
+specification draft is [spec/messaging.md](spec/messaging.md); moving from Gecko messaging 1.x is
+described in [docs/migration.md](docs/migration.md).
 
 ## Modules
 

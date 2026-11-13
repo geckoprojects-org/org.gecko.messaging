@@ -748,9 +748,11 @@ Requires `replyToSubscription`. A handler is a service of type `ReplyToSingleSub
 | `osgi.messaging.replyToSubscription.channelExtension` | `REPLY_TO_SUBSCRIPTION_CHANNEL_EXTENSION_PROPERTY` | no | Extension of the request channel. |
 | `osgi.messaging.replyToSubscription.replyChannel` | `REPLY_TO_SUBSCRIPTION_REPLY_CHANNEL_PROPERTY` | no | Channel for requests without reply-to; without it they get no response. |
 | `osgi.messaging.replyToSubscription.channelType` | `REPLY_TO_SUBSCRIPTION_CHANNEL_TYPE_PROPERTY` | no | `queue` for competing handlers, or `topic`. |
+| `osgi.messaging.replyToSubscription.sessionChannelPrefix` | `REPLY_TO_SUBSCRIPTION_SESSION_CHANNEL_PREFIX_PROPERTY` | no | Session handlers only: prefix of the channel a session's messages to the handler go to (§9.7); without it a generated channel. |
 
 Component property types: `@MessagingTarget("(osgi.messaging.name=x)")` and
-`@ReplyToSubscription(channel = ..., channelExtension = "", replyChannel = "", channelType = "")`;
+`@ReplyToSubscription(channel = ..., channelExtension = "", replyChannel = "", channelType = "",
+sessionChannelPrefix = "")`;
 empty values mean "not set".
 
 Rules:
@@ -1066,6 +1068,7 @@ configuration, building on `org.gecko.messaging.core`.
 | `replyTo` | ● | ● | ○ | ● | ○ |
 | `replyToMany` | ● | ● | ○ | ● | ○ |
 | `replyToSubscription` | ● | ● | ○ | ● | ○ |
+| `replyToSession` | ● | ● | ○ | ● | ○ |
 | `generateCorrelationId` | ● | ● | ○ | ● | ○ |
 | `generateReplyChannel` | ● | ● | ○ | ● | ○ |
 | `cloudEvents` | binary/structured | binary/structured | structured | binary/structured | structured |
