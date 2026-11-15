@@ -206,6 +206,12 @@ public final class Mqtt3Instance extends AbstractMessagingInstance {
 	}
 
 	@Override
+	protected boolean isLinkUp() {
+		MqttAsyncClient c = client;
+		return c != null && c.isConnected();
+	}
+
+	@Override
 	protected boolean isFatal(Throwable failure) {
 		return failure instanceof MqttException e && FATAL.contains(e.getReasonCode());
 	}

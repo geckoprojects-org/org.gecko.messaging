@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.gecko.messaging.api.MessagingConstants;
@@ -49,6 +50,7 @@ public final class InMemoryBroker {
 	private final AtomicInteger roundRobin = new AtomicInteger();
 	private final ExecutorService delivery;
 	private volatile boolean available = true;
+	private final AtomicBoolean dropOnSubscribe = new AtomicBoolean();
 
 	/**
 	 * A published message.
@@ -77,6 +79,12 @@ public final class InMemoryBroker {
 		void subscribe(SubscriptionHandle handle) {
 			if (!open) {
 				throw new IllegalStateException("Connection closed");
+			}
+			if (dropOnSubscribe.compareAndSet(true, false)) {
+				close();
+				// a network reports the loss later, on another thread
+				delivery.execute(() -> owner.lost(new IllegalStateException("Broker " + name + " dropped the connection")));
+				throw new IllegalStateException("Connection dropped on subscribe");
 			}
 			subscriptions.put(handle.id(), handle);
 			if (!isQueue(handle.context())) {
@@ -110,6 +118,10 @@ public final class InMemoryBroker {
 				}
 			}
 			delivery.execute(() -> route(e, 0));
+		}
+
+		boolean isOpen() {
+			return open;
 		}
 
 		void close() {
@@ -175,6 +187,14 @@ public final class InMemoryBroker {
 			c.close();
 			c.owner.lost(new IllegalStateException("Broker " + name + " dropped the connection"));
 		}
+	}
+
+	/**
+	 * Drops the connection that makes the next subscription, the subscription failing — as when
+	 * a connection breaks while an instance restores its subscriptions after a reconnect.
+	 */
+	public void dropOnNextSubscribe() {
+		dropOnSubscribe.set(true);
 	}
 
 	/** @return the number of open connections */

@@ -38,7 +38,17 @@ import org.gecko.messaging.api.cloudevents.CloudEventConstants;
  * certificate and trusted certificates of a TLS connection, see {@link TlsSettings}</li>
  * <li>{@code clientId} — stable client identity; default the instance name</li>
  * <li>{@code connectTimeout} — ms per connect attempt, default 10000</li>
- * <li>{@code reconnectDelay}, {@code reconnectMaxDelay} — ms, backoff 1000 doubling to 30000</li>
+ * <li>{@code reconnectDelay}, {@code reconnectMaxDelay} — ms, first and largest wait between
+ * connect attempts, default 1000 and 30000</li>
+ * <li>{@code reconnectBackoff} — how the wait grows: {@code exponential} (default, times
+ * {@code reconnectMultiplier}, default 2), {@code linear} (plus {@code reconnectDelay}) or
+ * {@code fixed}; see {@link ReconnectBackoff}</li>
+ * <li>{@code reconnectGrowthAttempts} — attempts after which the wait stays at its last value,
+ * default 0 (grows up to {@code reconnectMaxDelay})</li>
+ * <li>{@code reconnectMaxAttempts} — failed connect attempts in a row after which the instance
+ * gives up ({@code CLOSED}, subscriptions end), default 100; 0 never gives up</li>
+ * <li>{@code reconnectStableAfter} — ms a connection must hold before the wait starts over at
+ * {@code reconnectDelay}, default 30000</li>
  * <li>{@code replyTimeout} — ms a reply-to publisher waits, default 30000</li>
  * <li>{@code replyChannelPrefix} — prefix of generated reply channels</li>
  * <li>{@code replyToAllowed} — prefixes a reply-to channel of a received request must start with
@@ -198,6 +208,11 @@ public final class MessagingConfiguration {
 	/** @return the largest reconnect delay in ms */
 	public long reconnectMaxDelay() {
 		return number("reconnectMaxDelay", 30_000);
+	}
+
+	/** @return how long a connection must hold before the reconnect backoff starts over, in ms */
+	public long reconnectStableAfter() {
+		return number("reconnectStableAfter", 30_000);
 	}
 
 	/** @return the default reply timeout in ms */

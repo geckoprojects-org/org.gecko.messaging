@@ -79,6 +79,9 @@ import org.osgi.util.pushstream.PushbackPolicyOption;
  * <li>{@link #doDisconnect()} releases every resource of the connection; it is called before each
  * reconnect attempt and on stop, and must tolerate a broken or missing connection.</li>
  * <li>The protocol calls {@link #connectionLost(Throwable)} when the connection breaks.</li>
+ * <li>{@link #isLinkUp()} tells whether the connection still stands. A subscribe that fails on a
+ * standing connection is refused for good; one that fails on a broken connection is restored by
+ * the next connect attempt.</li>
  * <li>{@link #doSubscribe(SubscriptionHandle)} makes one subscription on the broker; received
  * messages go to {@link SubscriptionHandle#deliver(SimpleMessageContext, byte[], Acknowledger)}.</li>
  * </ul>
@@ -89,9 +92,6 @@ import org.osgi.util.pushstream.PushbackPolicyOption;
 public abstract class AbstractMessagingInstance {
 
 	private static final Logger LOG = Logger.getLogger(AbstractMessagingInstance.class.getName());
-
-	/** Shortest wait between connect attempts, ms: a zero delay must not make a busy loop. */
-	static final long MIN_RECONNECT_DELAY = 10;
 
 	/**
 	 * What the structured CloudEvents envelope carries for any protocol: content type, headers as
@@ -133,6 +133,7 @@ public abstract class AbstractMessagingInstance {
 	private final Object connectedSignal = new Object();
 	private final CloudEventBinding.Wire wire = this::doPublish;
 
+	private final ReconnectBackoff backoff;
 	private final Object stateLock = new Object();
 	private volatile ConnectionState state = ConnectionState.CONNECTING;
 	/**
@@ -140,6 +141,11 @@ public abstract class AbstractMessagingInstance {
 	 * after the restore, cleared whenever the state leaves {@code CONNECTED}.
 	 */
 	private volatile boolean ready;
+	/**
+	 * The state before {@code CONNECTED} while the subscriptions are restored and nobody was told
+	 * about the connection yet, else {@code null}; under stateLock.
+	 */
+	private ConnectionState unannounced;
 	private boolean everConnected;
 	private boolean stopped;
 	private int attempt;
@@ -167,6 +173,7 @@ public abstract class AbstractMessagingInstance {
 		this.config = requireNonNull(config);
 		// before any thread exists: a store that cannot be read fails the instance here
 		this.tls = TlsSettings.of(config);
+		this.backoff = ReconnectBackoff.of(config);
 		Set<String> f = new LinkedHashSet<>(features);
 		if (config.cloudEvents()) {
 			f.add(FEATURE_CLOUD_EVENTS);
@@ -276,6 +283,15 @@ public abstract class AbstractMessagingInstance {
 	protected boolean isFatal(Throwable failure) {
 		return false;
 	}
+
+	/**
+	 * Returns whether the connection to the broker still stands. Asked after a subscribe failed
+	 * while restoring the subscriptions: on a standing connection the broker refused the
+	 * subscription and it ends, on a broken one it stays and the next connect attempt restores it.
+	 *
+	 * @return {@code true} if the connection is up
+	 */
+	protected abstract boolean isLinkUp();
 
 	/**
 	 * Returns the header prefix of the protocol's CloudEvents binary binding.
@@ -608,13 +624,7 @@ public abstract class AbstractMessagingInstance {
 		} catch (Throwable t) {
 			safeDisconnect();
 			if (isFatal(t)) {
-				LOG.log(Level.SEVERE, "Messaging instance " + config.name() + " gives up connecting", t);
-				setState(ConnectionState.CLOSED, false, false, t);
-				publishWait.failAll("gave up connecting: " + t);
-				signalConnected();
-				for (SubscriptionHandle h : new ArrayList<>(subscriptions)) {
-					closeSubscription(h, t);
-				}
+				giveUp(t);
 				return;
 			}
 			LOG.log(Level.FINE, "Connect attempt of " + config.name() + " failed", t);
@@ -636,6 +646,7 @@ public abstract class AbstractMessagingInstance {
 				reconnects++;
 			}
 			state = ConnectionState.CONNECTED;
+			unannounced = previous;
 		}
 		// restore before telling anyone: a listener that re-synchronises on a reconnect must
 		// find the subscriptions in place
@@ -647,15 +658,24 @@ public abstract class AbstractMessagingInstance {
 				doSubscribe(h);
 				h.setConnected(true);
 			} catch (Exception e) {
-				if (state != ConnectionState.CONNECTED) {
-					return; // lost again, the next attempt restores
+				if (state != ConnectionState.CONNECTED || !linkUp()) {
+					// lost again: the subscriptions stay, the next attempt restores them
+					// the protocol may report the loss later (then ignored) or never
+					LOG.log(Level.FINE, () -> "Connection lost while restoring " + h + ": " + e);
+					connectionLost(e);
+					return;
 				}
+				// refused on a standing connection: the broker will refuse it again
 				LOG.log(Level.WARNING, "Could not restore " + h, e);
 				closeSubscription(h, e);
 			}
 		}
 		synchronized (stateLock) {
-			ready = state == ConnectionState.CONNECTED;
+			if (state != ConnectionState.CONNECTED) {
+				return; // lost while restoring, never announced; the next attempt restores
+			}
+			ready = true;
+			unannounced = null;
 		}
 		signalConnected();
 		// what waited for the connection goes out before anything published later
@@ -677,12 +697,38 @@ public abstract class AbstractMessagingInstance {
 			if (stopped || pendingConnect != null) {
 				return;
 			}
-			long max = Math.max(MIN_RECONNECT_DELAY, config.reconnectMaxDelay());
-			long backoff = Math.min(max, Math.max(MIN_RECONNECT_DELAY, config.reconnectDelay()) * (1L << Math.min(attempt, 20)));
-			// between half and all of the backoff: a fleet does not reconnect in lockstep after a broker restart
-			long delay = backoff / 2 + ThreadLocalRandom.current().nextLong(backoff / 2 + 1);
-			attempt++;
-			pendingConnect = scheduler.schedule(this::connectAttempt, delay, TimeUnit.MILLISECONDS);
+			if (!backoff.exhausted(attempt)) {
+				long delay = backoff.delay(attempt, ThreadLocalRandom.current().nextDouble());
+				attempt++;
+				pendingConnect = scheduler.schedule(this::connectAttempt, delay, TimeUnit.MILLISECONDS);
+				return;
+			}
+		}
+		giveUp(new MessagingException("Messaging instance " + config.name() + " gave up after " + backoff.maxAttempts()
+				+ " connect attempts (reconnectMaxAttempts)", cause));
+	}
+
+	/**
+	 * Ends the reconnect cycle for good: the instance is {@code CLOSED}, what waits for the
+	 * connection fails and every subscription ends with the cause.
+	 */
+	private void giveUp(Throwable cause) {
+		LOG.log(Level.SEVERE, "Messaging instance " + config.name() + " gives up connecting", cause);
+		safeDisconnect();
+		setState(ConnectionState.CLOSED, false, false, cause);
+		publishWait.failAll("gave up connecting: " + cause);
+		signalConnected();
+		for (SubscriptionHandle h : new ArrayList<>(subscriptions)) {
+			closeSubscription(h, cause);
+		}
+	}
+
+	/** {@link #isLinkUp()}, a failing check counting as down. */
+	private boolean linkUp() {
+		try {
+			return isLinkUp();
+		} catch (RuntimeException e) {
+			return false;
 		}
 	}
 
@@ -692,21 +738,27 @@ public abstract class AbstractMessagingInstance {
 	 * @param cause the cause, or {@code null}
 	 */
 	protected final void connectionLost(Throwable cause) {
+		ConnectionState back;
 		synchronized (stateLock) {
 			if (stopped || state != ConnectionState.CONNECTED) {
 				return;
 			}
-			state = ConnectionState.DISCONNECTED;
+			// lost while restoring: nobody was told about the connection, the state goes back silently
+			back = unannounced;
+			unannounced = null;
+			state = back != null ? back : ConnectionState.DISCONNECTED;
 			ready = false;
 		}
 		for (SubscriptionHandle h : subscriptions) {
 			h.setConnected(false);
 		}
-		fire(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED, false, false, cause);
+		if (back == null) {
+			fire(ConnectionState.CONNECTED, ConnectionState.DISCONNECTED, false, false, cause);
+		}
 		synchronized (stateLock) {
 			// the backoff starts over only after a connection that held; one that drops at once
 			// (a client id taken over, a broker refusing after the handshake) keeps backing off
-			if (System.nanoTime() - connectedAt >= TimeUnit.MILLISECONDS.toNanos(config.reconnectMaxDelay())) {
+			if (System.nanoTime() - connectedAt >= TimeUnit.MILLISECONDS.toNanos(config.reconnectStableAfter())) {
 				attempt = 0;
 			}
 		}
@@ -1159,8 +1211,8 @@ public abstract class AbstractMessagingInstance {
 	 * @throws Exception if the broker refused it
 	 */
 	SubscriptionHandle addSubscription(SimpleMessageContext ctx, SubscriptionHandle.Sink sink, boolean internal) throws Exception {
-		if (stopped) {
-			throw new MessagingException("Messaging instance " + config.name() + " is stopped");
+		if (stopped || state == ConnectionState.CLOSED) {
+			throw new MessagingException("Messaging instance " + config.name() + " is " + (stopped ? "stopped" : "closed"));
 		}
 		SubscriptionHandle h = new SubscriptionHandle(this, ctx, sink, internal);
 		subscriptions.add(h);

@@ -14,14 +14,21 @@
 package org.gecko.messaging.tck;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.gecko.messaging.api.MessagingConstants.DEFAULT_REPLY_CHANNEL_PREFIX;
+import static org.gecko.messaging.api.MessagingConstants.FEATURE_REPLY_TO;
+import static org.gecko.messaging.api.MessagingConstants.FEATURE_REPLY_TO_SUBSCRIPTION;
 import static org.gecko.messaging.api.MessagingConstants.MESSAGING_TARGET_PROPERTY;
+import static org.gecko.messaging.api.replyto.ReplyToSubscriptionConstants.REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.util.Arrays;
 import java.util.Hashtable;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.gecko.messaging.api.Message;
+import org.gecko.messaging.api.replyto.ReplyToPublisher;
+import org.gecko.messaging.api.replyto.ReplyToSingleSubscriptionHandler;
 import org.gecko.messaging.api.runtime.ConnectionEvent;
 import org.gecko.messaging.api.runtime.ConnectionListener;
 import org.gecko.messaging.api.runtime.ConnectionState;
@@ -95,6 +102,45 @@ public class ReconnectTest extends AbstractMessagingTest {
 		List<Message> received = collect(channel);
 		publisher.publish(text(channel, "back")).getValue();
 		tck.awaitSize(received, 1);
+	}
+
+	/**
+	 * The connection breaks again while the instance restores its subscriptions (#41): the
+	 * subscriptions, and with them a reply-to handler, are restored by the next attempt instead of
+	 * ending.
+	 */
+	@Test
+	void aConnectionLostWhileRestoringKeepsTheSubscriptions() throws Exception {
+		String channel = tck.channel("reconnect", "restore");
+		List<Message> received = collect(channel);
+		boolean handler = tck.has(FEATURE_REPLY_TO_SUBSCRIPTION) && tck.has(FEATURE_REPLY_TO);
+		String requests = tck.channel("reconnect", "restore", "requests");
+		MessageServiceRuntime runtime = tck.service(MessageServiceRuntime.class);
+		if (handler) {
+			Hashtable<String, Object> props = new Hashtable<>();
+			props.put(MESSAGING_TARGET_PROPERTY, tck.filter());
+			props.put(REPLY_TO_SUBSCRIPTION_CHANNEL_PROPERTY, requests);
+			register(ReplyToSingleSubscriptionHandler.class,
+					(request, response) -> response.content(Tck.bytes("re:" + Tck.text(request))).buildMessage(), props);
+			tck.await("handler bound", () -> Arrays.stream(runtime.getRuntimeDTO().replyToSubscriptions)
+					.anyMatch(d -> requests.equals(d.requestChannel.name) && d.requestChannel.connected));
+		}
+		List<ConnectionEvent> events = listen();
+		assumeTrue(control.dropOnNextSubscribe(), "the broker control cannot drop a connection on subscribe");
+		control.dropConnections();
+		// the broken attempt counts as failed: the backoff grows, up to its default 30 s
+		tck.await("reconnected", 50_000, () -> events.stream().anyMatch(ConnectionEvent::reconnect));
+		publisher.publish(text(channel, "after")).getValue();
+		tck.awaitSize(received, 1);
+		assertThat(received).extracting(Tck::text).containsExactly("after");
+		if (handler) {
+			Message response = tck.service(ReplyToPublisher.class)
+					.publishWithReply(builder().content(Tck.bytes("ping")).buildMessage(), builder().channel(requests)
+							.correlationId("restore-1").replyTo(DEFAULT_REPLY_CHANNEL_PREFIX + tck.channel("reconnect", "restore", "reply"))
+							.buildContext())
+					.getValue();
+			assertThat(Tck.text(response)).isEqualTo("re:ping");
+		}
 	}
 
 }

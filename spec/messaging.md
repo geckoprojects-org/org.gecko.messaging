@@ -141,7 +141,12 @@ listed per binding in §13. Numeric values may be given as numbers or strings.
 | `clientId` | String | instance name | Stable client identity on the broker. |
 | `connectTimeout` | long ms | `10000` | Deadline of one connect attempt, including handshake; also of an MQTT subscribe and a WebSocket channel session. |
 | `reconnectDelay` | long ms | `1000` | First backoff of the reconnect cycle (at least 10). |
-| `reconnectMaxDelay` | long ms | `30000` | Largest backoff (at least 10); also how long a connection must hold before the backoff starts over. |
+| `reconnectMaxDelay` | long ms | `30000` | Largest backoff (at least `reconnectDelay`). |
+| `reconnectBackoff` | String | `exponential` | How the backoff grows per attempt: `exponential`, `linear` or `fixed` (case-insensitive) (§10.2). |
+| `reconnectMultiplier` | number | `2` | Factor of `exponential`, at least 1. |
+| `reconnectGrowthAttempts` | long | `0` | Attempts after which the backoff stays at its last value; `0` grows up to `reconnectMaxDelay`. |
+| `reconnectMaxAttempts` | long | `100` | Failed attempts in a row after which the instance gives up (`CLOSED`); `0` never gives up. |
+| `reconnectStableAfter` | long ms | `30000` | How long a connection must hold before the backoff starts over. |
 | `replyTimeout` | long ms | `30000` | Default wait of a `ReplyToPublisher` for a response. |
 | `replyChannelPrefix` | String | `osgi/messaging/reply/<clientId>` | Prefix of generated reply channels. |
 | `replyToAllowed` | String (comma-separated), String[] or Collection | `osgi/messaging/reply/` and, if set, `replyChannelPrefix` + `/` | Prefixes a reply-to channel of a received request must start with to be answered; `*` allows any (§9.6). A configured prefix matches as given: end it with the separator to allow a subtree. |
@@ -919,17 +924,29 @@ off (Paho `automaticReconnect=false`, RabbitMQ `automaticRecovery`/`topologyReco
 
 - Each attempt first releases the previous connection completely, then connects with a deadline of
   `connectTimeout`.
-- Backoff of attempt *n* (n from 0): `b = min(M, d · 2^min(n,20))` with
-  `d = max(10, reconnectDelay)`, `M = max(10, reconnectMaxDelay)`; the delay is drawn uniformly
-  from `[b/2, b]` (equal jitter), so a fleet does not reconnect in lockstep.
-- The backoff starts over only after a connection that held at least `reconnectMaxDelay`; a
-  connection that drops at once (client id taken over, broker refusing after the handshake) keeps
-  backing off.
+- Backoff of attempt *n* (n counts the failed attempts in a row, from 0), with
+  `d = max(10, reconnectDelay)`, `M = max(d, reconnectMaxDelay)`, `f = reconnectMultiplier` and
+  `k = min(n, g − 1)` for `g = reconnectGrowthAttempts > 0`, else `k = n`:
+  `exponential` `b = min(M, d · f^k)`, `linear` `b = min(M, d · (k + 1))`, `fixed` `b = d`.
+  The delay is drawn uniformly from `[b/2, b]` (equal jitter), so a fleet does not reconnect in
+  lockstep. Example: `reconnectGrowthAttempts=5` waits 1, 2, 4, 8, 16 s and then 16 s per attempt.
+- After `reconnectMaxAttempts` failed attempts in a row (default 100; with the default backoff,
+  jitter and connect timeouts roughly half an hour to an hour) the instance gives up like after a fatal failure. `0` never gives up;
+  an edge device that must outlast a broker away for hours or a weekend sets it to `0`, or to a
+  bound it can afford, typically with a larger `reconnectMaxDelay`. The default is finite: an
+  instance that can never reach its broker again does not retry for ever unnoticed.
+- The backoff starts over only after a connection that held at least `reconnectStableAfter`; a
+  connection that drops at once (client id taken over, broker refusing after the handshake, lost
+  again while restoring) keeps backing off and counts as a failed attempt.
 - Fatal failures end the cycle: MQTT 5 reason codes `0x86`, `0x87`, `0x8A`, `0x8C`; MQTT 3.1.1
   failed authentication / not authorised; AMQP `AuthenticationFailureException`. The state becomes
-  `CLOSED` and all subscription streams fail with the cause.
-- After a successful connect, all subscriptions are restored **before** `CONNECTED` is reported;
-  a subscription that cannot be restored fails its stream. `MessagingRuntimeDTO.reconnects`
+  `CLOSED`, waiting publishes fail and all subscription streams fail with the cause; a
+  subscription made later fails at once.
+- After a successful connect, all subscriptions are restored **before** `CONNECTED` is reported.
+  A subscription the broker refuses on a standing connection fails its stream. If the connection
+  breaks while restoring, nothing is reported: the state goes back to what it was, every
+  subscription (streams, reply-to handlers, sessions) stays and the next attempt restores it — a
+  connection lost at the wrong moment never ends a subscription. `MessagingRuntimeDTO.reconnects`
   counts reconnects.
 
 ### 10.3 Events and Listeners
@@ -1281,7 +1298,7 @@ An instance with CloudEvents takes CloudEvents only unless `cloudEvents.acceptPl
 | WebSocket paths | no empty, `.` or `..` segments: no channel leaves the base path |
 | Hub | `maxMessageSize`, `maxConnections` (256), `maxOutgoingFrames` (64, slow sessions closed), `Origin` check against `allowedOrigins`, binds `localhost` by default, **no authentication — trusted networks only** |
 | Re-queue memory (mqtt3) | 1024 fingerprints |
-| Reconnect | minimum delay 10 ms, jittered exponential backoff |
+| Reconnect | minimum delay 10 ms, jittered exponential backoff, gives up after 100 failed attempts in a row (`reconnectMaxAttempts`) |
 
 ---
 

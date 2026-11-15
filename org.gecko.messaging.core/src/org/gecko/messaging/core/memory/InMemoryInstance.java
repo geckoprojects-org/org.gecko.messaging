@@ -74,6 +74,12 @@ public final class InMemoryInstance extends AbstractMessagingInstance {
 		}
 	}
 
+	@Override
+	protected boolean isLinkUp() {
+		InMemoryBroker.Connection c = connection;
+		return c != null && c.isOpen();
+	}
+
 	void lost(Throwable cause) {
 		connectionLost(cause);
 	}

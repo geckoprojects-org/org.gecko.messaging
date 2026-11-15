@@ -21,6 +21,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -43,6 +44,7 @@ public abstract class TcpProxy implements BrokerControl {
 	private static final String PREFIX = "org.gecko.messaging.tck.proxy.";
 
 	private final Set<Socket> sockets = ConcurrentHashMap.newKeySet();
+	private final AtomicBoolean dropOnSubscribe = new AtomicBoolean();
 	private int listenPort;
 	private String brokerHost;
 	private int brokerPort;
@@ -94,6 +96,29 @@ public abstract class TcpProxy implements BrokerControl {
 		}
 	}
 
+	/**
+	 * Arms {@link #dropOnNextSubscribe()} for a subclass that overrides it and
+	 * {@link #isSubscribe(byte[], int)}.
+	 *
+	 * @return {@code true}
+	 */
+	protected final boolean armDropOnSubscribe() {
+		dropOnSubscribe.set(true);
+		return true;
+	}
+
+	/**
+	 * Returns whether data the client sends starts a subscribe request of the protocol. Called per
+	 * read while {@link #armDropOnSubscribe()} is armed.
+	 *
+	 * @param data the bytes read
+	 * @param length the number of bytes read
+	 * @return {@code true} for a subscribe request
+	 */
+	protected boolean isSubscribe(byte[] data, int length) {
+		return false;
+	}
+
 	private synchronized void open() throws IOException {
 		if (server != null) {
 			return;
@@ -130,15 +155,26 @@ public abstract class TcpProxy implements BrokerControl {
 			}
 			sockets.add(client);
 			sockets.add(broker);
-			Thread.ofVirtual().name("tck-proxy-up").start(() -> pump(client, broker));
-			Thread.ofVirtual().name("tck-proxy-down").start(() -> pump(broker, client));
+			Thread.ofVirtual().name("tck-proxy-up").start(() -> pump(client, broker, true));
+			Thread.ofVirtual().name("tck-proxy-down").start(() -> pump(broker, client, false));
 		}
 	}
 
-	/** Copies from one socket to the other; when either side ends, both are closed. */
-	private void pump(Socket from, Socket to) {
+	/**
+	 * Copies from one socket to the other; when either side ends, both are closed. Upstream, an
+	 * armed {@link #armDropOnSubscribe()} drops the connection instead of passing a subscribe on.
+	 */
+	private void pump(Socket from, Socket to, boolean upstream) {
 		try (InputStream in = from.getInputStream(); OutputStream out = to.getOutputStream()) {
-			in.transferTo(out);
+			byte[] buffer = new byte[8192];
+			int n;
+			while ((n = in.read(buffer)) >= 0) {
+				if (upstream && dropOnSubscribe.get() && isSubscribe(buffer, n) && dropOnSubscribe.compareAndSet(true, false)) {
+					return; // the finally closes both sides, the broker never sees the subscribe
+				}
+				out.write(buffer, 0, n);
+				out.flush();
+			}
 		} catch (IOException e) {
 			// a dropped or closed connection
 		} finally {

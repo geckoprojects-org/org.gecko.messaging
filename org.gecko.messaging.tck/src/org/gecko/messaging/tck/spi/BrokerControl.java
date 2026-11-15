@@ -35,4 +35,15 @@ public interface BrokerControl {
 	 */
 	void setAvailable(boolean available);
 
+	/**
+	 * Drops the connection of the instance under test that makes the next subscription, before the
+	 * broker confirms it — the connection breaks while the instance restores its subscriptions
+	 * after a reconnect. New connections are accepted.
+	 *
+	 * @return {@code false} if this control cannot do it, then the test is skipped
+	 */
+	default boolean dropOnNextSubscribe() {
+		return false;
+	}
+
 }
