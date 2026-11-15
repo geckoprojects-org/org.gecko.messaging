@@ -201,6 +201,13 @@ public final class WebSocketInstance extends AbstractMessagingInstance {
 		}
 	}
 
+	@Override
+	protected boolean isLinkUp() {
+		// a channel has its own session; the control session stands for the hub
+		ChannelSession c = control;
+		return c != null && c.isOpen();
+	}
+
 	private void ping() {
 		ChannelSession c = control;
 		if (c != null) {

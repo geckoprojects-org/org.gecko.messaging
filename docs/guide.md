@@ -133,11 +133,34 @@ Numbers may be given as numbers or as strings. All keys are optional except
 | `clientId` | instance name | several frameworks connect with the same instance name |
 | `connectTimeout` | `10000` ms | slow networks. Also bounds an MQTT subscribe and a WebSocket channel session. |
 | `reconnectDelay` | `1000` ms | first backoff after a lost connection |
-| `reconnectMaxDelay` | `30000` ms | largest backoff. A connection must hold this long before the backoff starts over. |
+| `reconnectMaxDelay` | `30000` ms | largest backoff. Larger on battery or metered links. |
+| `reconnectBackoff` | `exponential` | `linear` (adds `reconnectDelay` per attempt) or `fixed` |
+| `reconnectMultiplier` | `2` | factor of `exponential` |
+| `reconnectGrowthAttempts` | `0` | the backoff stops growing after so many attempts and stays at its last value; `0` grows up to `reconnectMaxDelay` |
+| `reconnectMaxAttempts` | `100` | the instance gives up after so many failed attempts in a row; `0` never gives up |
+| `reconnectStableAfter` | `30000` ms | a connection must hold this long before the backoff starts over |
 
-The instance reconnects by itself, with exponential backoff and jitter, and restores every
-subscription before it reports `CONNECTED` (§10). Failed authentication or authorisation is
-fatal: the instance goes to `CLOSED` and its streams fail.
+The instance reconnects by itself, with backoff and jitter, and restores every subscription
+before it reports `CONNECTED` (§10). A connection that breaks again while the subscriptions are
+restored ends none of them: streams, reply-to handlers and sessions are restored by the next
+attempt. Failed authentication or authorisation is fatal, and so is reaching
+`reconnectMaxAttempts`: the instance goes to `CLOSED` and its streams fail.
+
+With the defaults the instance gives up after roughly half an hour to an hour without broker. That is
+deliberate: an instance that can never reach its broker again should not retry unnoticed for
+ever. A device that must outlast a broker away for hours or a weekend says so:
+
+```
+reconnectMaxDelay = 600000      # at most every 10 minutes
+reconnectMaxAttempts = 0        # never give up (or a bound such as 1000)
+```
+
+Five growing attempts, then five more at the last interval, then give up:
+
+```
+reconnectGrowthAttempts = 5     # 1, 2, 4, 8, 16 s
+reconnectMaxAttempts = 10       # then 5 x 16 s
+```
 
 ### 3.2 TLS
 
@@ -746,6 +769,7 @@ Everything is safe without configuration. Each row says what you give up when yo
 | CloudEvents instances take CloudEvents only | `cloudEvents.acceptPlain=true` | messages without attributes reach code that expects them |
 | Bounded buffers, sizes, sessions, in-flight requests | raise `bufferSize`, `bufferBytes`, `maxMessageSize`, `maxSessions` | memory use a remote party controls |
 | A message re-queued at most once, only on queues | — (fixed) | — |
+| Reconnect gives up after 100 failed attempts in a row | `reconnectMaxAttempts`, `0` for never | an instance that can never reach its broker again (moved, decommissioned, wrong credentials that are not refused as such) keeps connecting unnoticed |
 | Broker certificate and host name always checked | `tls.truststore` for a private CA | — (no switch to turn it off) |
 | Passwords never in service properties, DTOs or logs | use `.password`, `.tls.*.password` | — |
 | Warning on credentials over a plain scheme | use `ssl://`, `wss://`, `amqps://` | — |
@@ -767,4 +791,5 @@ Everything is safe without configuration. Each row says what you give up when yo
 | Messages lost under load | `DISCARD_OLDEST` or QoS 0 chosen. For lossless delivery use QoS 1 and `BLOCK`. |
 | INFO "receiveMaximum … lowered to bufferSize" (or `prefetch`) | The window was above `bufferSize`. This is intended; raise `bufferSize` if you want the larger window. |
 | Instance goes to `CLOSED` at once | Authentication or authorisation refused (fatal). Check credentials and ACL. |
+| Instance goes to `CLOSED` after a long broker outage | `reconnectMaxAttempts` reached (default 100). Raise it, or `0` to never give up (§3.1). |
 | Activation fails naming a store path | TLS store missing, wrong password or type, or `tls.*` on a URI without TLS. |

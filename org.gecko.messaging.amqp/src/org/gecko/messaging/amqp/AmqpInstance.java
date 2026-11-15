@@ -257,6 +257,12 @@ public final class AmqpInstance extends AbstractMessagingInstance {
 		return "cloudEvents_";
 	}
 
+	@Override
+	protected boolean isLinkUp() {
+		Connection c = connection;
+		return c != null && c.isOpen();
+	}
+
 	private Connection connection() {
 		Connection c = connection;
 		if (c == null || !c.isOpen()) {

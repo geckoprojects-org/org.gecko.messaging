@@ -247,10 +247,21 @@ public final class Tck {
 	 * @param condition the condition
 	 */
 	public void await(String what, BooleanSupplier condition) {
-		long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeout);
+		await(what, timeout, condition);
+	}
+
+	/**
+	 * Waits until a condition holds, longer or shorter than the TCK timeout.
+	 *
+	 * @param what what is awaited, for the failure message
+	 * @param millis how long to wait
+	 * @param condition the condition
+	 */
+	public void await(String what, long millis, BooleanSupplier condition) {
+		long end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(millis);
 		while (!condition.getAsBoolean()) {
 			if (System.nanoTime() > end) {
-				throw new AssertionError("Timed out after " + timeout + " ms waiting for: " + what);
+				throw new AssertionError("Timed out after " + millis + " ms waiting for: " + what);
 			}
 			try {
 				Thread.sleep(10);

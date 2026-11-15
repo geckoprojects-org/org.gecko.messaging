@@ -39,4 +39,15 @@ public class Mqtt3BrokerControl extends TcpProxy {
 		stop();
 	}
 
+	@Override
+	public boolean dropOnNextSubscribe() {
+		return armDropOnSubscribe();
+	}
+
+	@Override
+	protected boolean isSubscribe(byte[] data, int length) {
+		// fixed header of a SUBSCRIBE packet: type 8, flags 0010
+		return length > 0 && (data[0] & 0xFF) == 0x82;
+	}
+
 }

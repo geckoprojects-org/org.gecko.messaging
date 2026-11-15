@@ -15,5 +15,5 @@
  * Optional services a TCK run can provide to unlock tests that need control over the broker.
  */
 @org.osgi.annotation.bundle.Export
-@org.osgi.annotation.versioning.Version("1.0.0")
+@org.osgi.annotation.versioning.Version("1.1.0")
 package org.gecko.messaging.tck.spi;

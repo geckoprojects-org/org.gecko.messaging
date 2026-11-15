@@ -40,6 +40,12 @@ public class InMemoryBrokerControl implements BrokerControl {
 	}
 
 	@Override
+	public boolean dropOnNextSubscribe() {
+		broker.dropOnNextSubscribe();
+		return true;
+	}
+
+	@Override
 	public void setAvailable(boolean available) {
 		broker.setAvailable(available);
 	}

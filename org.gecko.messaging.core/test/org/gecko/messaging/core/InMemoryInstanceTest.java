@@ -195,6 +195,68 @@ class InMemoryInstanceTest {
 	}
 
 	@Test
+	void aConnectionLostWhileRestoringKeepsTheSubscriptions() throws Exception {
+		InMemoryInstance i = start();
+		List<Message> first = collect(i.subscribe("restore/a"));
+		List<Message> second = collect(i.subscribe("restore/b"));
+		await(() -> i.getRuntimeDTO().subscriptions.length == 2);
+		List<ConnectionEvent> events = new CopyOnWriteArrayList<>();
+		i.addConnectionListener(e -> {
+			if (e.previousState() != null) {
+				events.add(e);
+			}
+		});
+		// the reconnect breaks at its first subscription, the protocol reports the loss later
+		i.broker().dropOnNextSubscribe();
+		i.broker().dropConnections();
+		await(() -> events.stream().anyMatch(ConnectionEvent::reconnect));
+		assertThat(i.getRuntimeDTO().subscriptions).as("no subscription ended").hasSize(2)
+				.allSatisfy(d -> assertThat(d.channel.connected).isTrue());
+		Thread.sleep(100); // a late loss report of the broken attempt changes nothing
+		assertThat(events).as("the broken attempt was never announced").extracting(ConnectionEvent::state)
+				.containsExactly(ConnectionState.DISCONNECTED, ConnectionState.CONNECTED);
+		assertThat(i.getConnectionState()).isEqualTo(ConnectionState.CONNECTED);
+		i.publish(text(i, "restore/a", "a"), null).getValue();
+		i.publish(text(i, "restore/b", "b"), null).getValue();
+		await(() -> first.size() == 1 && second.size() == 1);
+	}
+
+	@Test
+	void givesUpAfterReconnectMaxAttempts() throws Exception {
+		InMemoryInstance i = start(Map.of("reconnectMaxAttempts", 3, "reconnectDelay", 10L, "reconnectMaxDelay", 10L));
+		CountDownLatch ended = new CountDownLatch(1);
+		AtomicInteger failures = new AtomicInteger();
+		i.subscribe("gone").onError(t -> failures.incrementAndGet()).onClose(ended::countDown).forEach(m -> {
+		});
+		await(() -> i.getRuntimeDTO().subscriptions.length == 1);
+		i.broker().setAvailable(false);
+		await(() -> i.getConnectionState() == ConnectionState.CLOSED);
+		assertThat(ended.await(5, TimeUnit.SECONDS)).as("the subscription ended").isTrue();
+		assertThat(failures).hasValue(1);
+		assertThat(i.getRuntimeDTO().subscriptions).isEmpty();
+		i.broker().setAvailable(true);
+		Thread.sleep(100);
+		assertThat(i.getConnectionState()).as("no attempt after giving up").isEqualTo(ConnectionState.CLOSED);
+		// a stream opened later cannot connect, as on a stopped instance
+		assertThatThrownBy(() -> i.subscribe("late").forEach(m -> {
+		})).rootCause().isInstanceOf(MessagingException.class).hasMessageContaining("closed");
+	}
+
+	@Test
+	void stableAfterDecidesWhenTheBackoffStartsOver() throws Exception {
+		// a connection that drops at once keeps backing off: three drops of a just-made connection give up
+		InMemoryInstance i = start(Map.of("reconnectMaxAttempts", 3, "reconnectDelay", 10L, "reconnectMaxDelay", 10L,
+				"reconnectStableAfter", 60_000L));
+		for (int n = 0; n < 3; n++) {
+			long before = i.getRuntimeDTO().reconnects;
+			i.broker().dropConnections();
+			await(() -> i.getRuntimeDTO().reconnects > before);
+		}
+		i.broker().dropConnections();
+		await(() -> i.getConnectionState() == ConnectionState.CLOSED);
+	}
+
+	@Test
 	void unsupportedFeaturesFail() throws Exception {
 		Map<String, Object> props = new HashMap<>();
 		props.put(MESSAGING_NAME_PROPERTY, "limited");
@@ -208,6 +270,11 @@ class InMemoryInstanceTest {
 
 			@Override
 			protected void doDisconnect() {
+			}
+
+			@Override
+			protected boolean isLinkUp() {
+				return true;
 			}
 
 			@Override
@@ -272,6 +339,11 @@ class InMemoryInstanceTest {
 
 			@Override
 			protected void doDisconnect() {
+			}
+
+			@Override
+			protected boolean isLinkUp() {
+				return true;
 			}
 
 			@Override
